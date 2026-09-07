@@ -455,12 +455,12 @@ tasks:
       8. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `php artisan config:show kbms` lists all ten keys with the documented defaults
-      - [ ] `.env.example` contains `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES`, `KBMS_ICS_WINDOW_PAST_DAYS`, `KBMS_ICS_WINDOW_FUTURE_DAYS`, `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`, `KBMS_ALLOW_NON_LOOPBACK` — each with a default and a comment
-      - [ ] `config('app.timezone')` follows `KBMS_TIMEZONE`
-      - [ ] `php artisan schedule:list` shows the interval derived from `config('kbms.sync_minutes')`
-      - [ ] No `.env.example` value contains a real ICS URL or a real filesystem path
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `php artisan config:show kbms` lists all ten keys with the documented defaults
+      - [x] `.env.example` contains `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES`, `KBMS_ICS_WINDOW_PAST_DAYS`, `KBMS_ICS_WINDOW_FUTURE_DAYS`, `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`, `KBMS_ALLOW_NON_LOOPBACK` — each with a default and a comment
+      - [x] `config('app.timezone')` follows `KBMS_TIMEZONE`
+      - [x] `php artisan schedule:list` shows the interval derived from `config('kbms.sync_minutes')`
+      - [x] No `.env.example` value contains a real ICS URL or a real filesystem path
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -470,11 +470,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2
     dependencies:
       - TASK-04
+    commit:
+      sha: 0000ff01880fed7c85f6c668b59970f6e454410f
+      short_sha: 0000ff0
+      subject: 'feat(US-001): TASK-05 declare the KBMS configuration surface'
+      committed_at: '2026-09-07T20:56:28+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0000ff01880fed7c85f6c668b59970f6e454410f'
   -
     id: TASK-06
     title: 'Enforce loopback-only access and verify secret hygiene'
@@ -702,4 +708,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T18:55:29+00:00'
+updated_at: '2026-09-07T20:56:31+02:00'
