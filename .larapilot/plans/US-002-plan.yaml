@@ -356,11 +356,11 @@ tasks:
       8. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `php artisan kbms:doctor` prints exactly one status line per registered check
-      - [ ] Every non-passing check prints its remediation hint naming the configuration key at fault
-      - [ ] `NOT CONFIGURED` renders distinctly from `FAIL`
-      - [ ] Exit code is `0` only when every check passes, non-zero otherwise
-      - [ ] `larapilot:quality` green
+      - [x] `php artisan kbms:doctor` prints exactly one status line per registered check
+      - [x] Every non-passing check prints its remediation hint naming the configuration key at fault
+      - [x] `NOT CONFIGURED` renders distinctly from `FAIL`
+      - [x] Exit code is `0` only when every check passes, non-zero otherwise
+      - [x] `larapilot:quality` green
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -370,13 +370,19 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.0
     dependencies:
       - TASK-02
       - TASK-03
       - TASK-04
+    commit:
+      sha: e4003492d7cbda5ab67b69b05429d2889cdee09d
+      short_sha: e400349
+      subject: 'feat(US-002): TASK-05 build the kbms:doctor command with a gating exit code'
+      committed_at: '2026-09-07T22:00:13+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/e4003492d7cbda5ab67b69b05429d2889cdee09d'
   -
     id: TASK-06
     title: 'Cover the doctor command: all-pass, every failure mode and the exit-code gate'
@@ -452,4 +458,4 @@ tasks:
     estimate_hours: 1.0
     dependencies:
       - TASK-05
-updated_at: '2026-09-07T21:59:22+02:00'
+updated_at: '2026-09-07T22:00:14+02:00'
