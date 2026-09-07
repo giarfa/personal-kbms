@@ -107,7 +107,7 @@ specs:
       objective: 'The subscribed Outlook feed is mirrored locally with correct recurrence and timezone handling, and its freshness is always visible'
     priority: HIGH
     points: 8
-    status: 'IN PROGRESS'
+    status: REVIEW
     body: |
       #### US-003: Scheduled ICS calendar ingestion
 
@@ -144,6 +144,7 @@ specs:
     status_history:
       - { status: PLANNED, at: '2026-09-07T23:02:57+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-07T23:05:53+02:00' }
+      - { status: REVIEW, at: '2026-09-07T23:39:16+02:00' }
     rework: false
   -
     code: US-004
