@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             CalendarEventSeeder::class,
+            CalendarSyncRunSeeder::class,
         ]);
     }
 }
