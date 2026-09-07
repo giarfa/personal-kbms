@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Doctor\Checks\IcsFeedCheck;
 use App\Doctor\Checks\LauncherScriptCheck;
 use App\Doctor\Checks\TimezoneCheck;
 use App\Doctor\Checks\TranscriptsDirectoryCheck;
@@ -16,7 +17,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(CheckSuite::class, fn (): CheckSuite => new CheckSuite([
-            // TASK-03/TASK-04 insert the ICS feed check first and the queue/schedule checks before timezone.
+            // TASK-04 inserts the queue/schedule checks between LauncherScriptCheck and TimezoneCheck.
+            new IcsFeedCheck,
             new TranscriptsDirectoryCheck,
             new LauncherScriptCheck,
             new TimezoneCheck,

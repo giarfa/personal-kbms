@@ -158,10 +158,10 @@ tasks:
       6. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `EnvironmentCheck`, `CheckStatus`, `CheckResult`, `CheckSuite` exist with explicit return types and parameter type hints
-      - [ ] `CheckSuite::run()` catches `Throwable` per check — a throwing check yields a `Failed` result and the remaining checks still run
-      - [ ] `CheckSuiteTest` proves independence with a deliberately throwing stub check plus a passing one
-      - [ ] `larapilot:quality` green (Pint + Larastan level 5+)
+      - [x] `EnvironmentCheck`, `CheckStatus`, `CheckResult`, `CheckSuite` exist with explicit return types and parameter type hints
+      - [x] `CheckSuite::run()` catches `Throwable` per check — a throwing check yields a `Failed` result and the remaining checks still run
+      - [x] `CheckSuiteTest` proves independence with a deliberately throwing stub check plus a passing one
+      - [x] `larapilot:quality` green (Pint + Larastan level 5+)
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -171,11 +171,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
       - TASK-00
+    commit:
+      sha: 1575bb46c2ca99162ead12d34dd6befd636b3e3b
+      short_sha: 1575bb4
+      subject: 'feat(US-002): TASK-01 add the doctor check contract, result type and suite'
+      committed_at: '2026-09-07T21:56:38+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1575bb46c2ca99162ead12d34dd6befd636b3e3b'
   -
     id: TASK-02
     title: 'Implement the configuration and filesystem checks (timezone, transcripts, launcher)'
@@ -202,11 +208,11 @@ tasks:
       7. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Three checks implement `EnvironmentCheck` with explicit return types
-      - [ ] Unset config yields `NotConfigured`; configured-but-invalid yields `Failed` — never conflated
-      - [ ] Every non-passing `remediation` names its `KBMS_*` key
-      - [ ] A launcher script that exists without the executable bit fails with that specific reason
-      - [ ] Unit tests pass; `larapilot:quality` green
+      - [x] Three checks implement `EnvironmentCheck` with explicit return types
+      - [x] Unset config yields `NotConfigured`; configured-but-invalid yields `Failed` — never conflated
+      - [x] Every non-passing `remediation` names its `KBMS_*` key
+      - [x] A launcher script that exists without the executable bit fails with that specific reason
+      - [x] Unit tests pass; `larapilot:quality` green
 
       ## Test Data
       - N/A — no model or schema changes in this task; fixtures are per-test temp files
@@ -216,11 +222,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-01
+    commit:
+      sha: 4eeb9fd0da8cc6e4dc3195749b144505b0594199
+      short_sha: 4eeb9fd
+      subject: 'feat(US-002): TASK-02 add timezone, transcripts and launcher environment checks'
+      committed_at: '2026-09-07T21:57:47+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4eeb9fd0da8cc6e4dc3195749b144505b0594199'
   -
     id: TASK-03
     title: 'Implement the ICS feed reachability and iCalendar validation check'
@@ -428,4 +440,4 @@ tasks:
     estimate_hours: 1.0
     dependencies:
       - TASK-05
-updated_at: '2026-09-07T21:55:44+02:00'
+updated_at: '2026-09-07T21:57:47+02:00'
