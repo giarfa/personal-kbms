@@ -6,7 +6,7 @@ epic:
   objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
 priority: HIGH
 points: 3
-status: 'IN PROGRESS'
+status: REVIEW
 body: |
   #### US-002: Environment doctor command
 
@@ -40,4 +40,7 @@ status_history:
   -
     status: 'IN PROGRESS'
     at: '2026-09-07T21:54:07+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-07T22:08:18+02:00'
 rework: false
