@@ -505,14 +505,14 @@ tasks:
       7. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `EnsureLoopbackRequest` is registered globally in `bootstrap/app.php`
-      - [ ] A request from a non-loopback IP receives 403 and the reason view; `127.0.0.1` and `::1` pass
-      - [ ] `config('kbms.allow_non_loopback')` defaults to `false` and flipping it to `true` lifts the block
-      - [ ] A spoofed `X-Forwarded-For` header cannot influence the decision (no trusted proxies configured)
-      - [ ] Rejections write one structured warning to the log
-      - [ ] `.env` is untracked; no real ICS URL or filesystem path appears anywhere in tracked application files
-      - [ ] `http://personal-kbms.test` still serves the shell normally
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `EnsureLoopbackRequest` is registered globally in `bootstrap/app.php`
+      - [x] A request from a non-loopback IP receives 403 and the reason view; `127.0.0.1` and `::1` pass
+      - [x] `config('kbms.allow_non_loopback')` defaults to `false` and flipping it to `true` lifts the block
+      - [x] A spoofed `X-Forwarded-For` header cannot influence the decision (no trusted proxies configured)
+      - [x] Rejections write one structured warning to the log
+      - [x] `.env` is untracked; no real ICS URL or filesystem path appears anywhere in tracked application files
+      - [x] `http://personal-kbms.test` still serves the shell normally
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -522,11 +522,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes with the secret-hygiene grep results
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Lars
     estimate_hours: 2
     dependencies:
       - TASK-05
+    commit:
+      sha: 0c47e7affa89c1140ec07fbb4483e38068e507cc
+      short_sha: 0c47e7a
+      subject: 'feat(US-001): TASK-06 enforce loopback-only access and verify secret hygiene'
+      committed_at: '2026-09-07T20:57:43+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0c47e7affa89c1140ec07fbb4483e38068e507cc'
   -
     id: TASK-07
     title: 'Render an actionable message when SQLite is unavailable'
@@ -708,4 +714,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T20:56:31+02:00'
+updated_at: '2026-09-07T20:57:45+02:00'
