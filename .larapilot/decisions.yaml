@@ -181,4 +181,17 @@ decisions:
     source: askquestion
     spec: null
     supersedes: null
-updated_at: '2026-09-07T17:38:57+00:00'
+  -
+    id: badd0a5639cfb54e
+    ts: '2026-09-07T21:39:49+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'loopback access control'
+    label: 'loopback access control'
+    value: 'Enforced at the application layer via a global EnsureLoopbackRequest middleware (403 for non-127.0.0.1/::1), not a network bind; KBMS_ALLOW_NON_LOOPBACK=false ships as a documented escape hatch'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-001
+    supersedes: null
+updated_at: '2026-09-07T21:39:49+02:00'
