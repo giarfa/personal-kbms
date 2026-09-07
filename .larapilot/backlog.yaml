@@ -8,7 +8,7 @@ specs:
       objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
     priority: HIGH
     points: 5
-    status: 'IN PROGRESS'
+    status: REVIEW
     body: |
       #### US-001: Application scaffold and local environment
 
@@ -41,6 +41,7 @@ specs:
     status_history:
       - { status: PLANNED, at: '2026-09-07T18:21:34+00:00' }
       - { status: 'IN PROGRESS', at: '2026-09-07T18:44:24+00:00' }
+      - { status: REVIEW, at: '2026-09-07T21:20:44+02:00' }
     rework: false
   -
     code: US-002
