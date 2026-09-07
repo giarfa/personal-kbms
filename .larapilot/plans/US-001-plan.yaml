@@ -285,31 +285,37 @@ tasks:
       11. `php artisan test`, `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `composer show laravel/fortify` reports the package is not installed
-      - [ ] `php artisan route:list --except-vendor` contains no authentication, settings, or profile route
-      - [ ] `class_exists(App\Models\User::class)` is false; `app/Actions/Fortify/`, `resources/views/pages/auth/`, `resources/views/pages/settings/`, and `resources/views/layouts/auth/` do not exist
-      - [ ] `config/auth.php` and `config/fortify.php` do not exist and nothing references `config('auth.*')`
-      - [ ] `app/Console/Commands/InstallFeaturesCommand.php` is gone and `composer.json` has no `install:features` reference
-      - [ ] The rendered shell contains no avatar, initials, name placeholder, `Log out`, or `Settings` affordance
-      - [ ] `sessions` and `cache` migrations retained; `php artisan migrate:fresh --seed` succeeds
-      - [ ] `http://personal-kbms.test` serves without a login prompt and `/login` returns 404
-      - [ ] `php artisan test` and `php artisan larapilot:quality` pass
+      - [x] `composer show laravel/fortify` reports the package is not installed
+      - [x] `php artisan route:list --except-vendor` contains no authentication, settings, or profile route
+      - [x] `class_exists(App\Models\User::class)` is false; `app/Actions/Fortify/`, `resources/views/pages/auth/`, `resources/views/pages/settings/`, and `resources/views/layouts/auth/` do not exist
+      - [x] `config/auth.php` and `config/fortify.php` do not exist and nothing references `config('auth.*')`
+      - [x] `app/Console/Commands/InstallFeaturesCommand.php` is gone and `composer.json` has no `install:features` reference
+      - [x] The rendered shell contains no avatar, initials, name placeholder, `Log out`, or `Settings` affordance
+      - [x] `sessions` and `cache` migrations retained; `php artisan migrate:fresh --seed` succeeds
+      - [x] `http://personal-kbms.test` serves without a login prompt and `/login` returns 404
+      - [x] `php artisan test` and `php artisan larapilot:quality` pass
 
       ## Test Data
-      - [ ] `database/factories/UserFactory.php` deleted
-      - [ ] `database/seeders/DatabaseSeeder.php` reduced to a valid no-op `run()` with no user seeding
-      - [ ] `migrate:fresh --seed` verified green in this same task
+      - [x] `database/factories/UserFactory.php` deleted
+      - [x] `database/seeders/DatabaseSeeder.php` reduced to a valid no-op `run()` with no user seeding
+      - [x] `migrate:fresh --seed` verified green in this same task
 
       ## Git Deliverables
       - Commit: `refactor(US-001): TASK-02 remove starter-kit authentication surface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes with the removed-file inventory
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 4
     dependencies:
       - TASK-01
+    commit:
+      sha: 4254ba7649b9440d19bc340a6108d0b156952abb
+      short_sha: 4254ba7
+      subject: 'refactor(US-001): TASK-02 remove starter-kit authentication surface'
+      committed_at: '2026-09-07T20:53:13+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4254ba7649b9440d19bc340a6108d0b156952abb'
   -
     id: TASK-03
     title: 'Build the KBMS app shell, theme tokens and navigation'
@@ -690,4 +696,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T18:49:46+00:00'
+updated_at: '2026-09-07T18:53:16+00:00'
