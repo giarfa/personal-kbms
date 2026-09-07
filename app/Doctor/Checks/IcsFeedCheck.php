@@ -6,9 +6,16 @@ use App\Doctor\CheckResult;
 use App\Doctor\EnvironmentCheck;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Sabre\VObject\Component\VCalendar;
+use Sabre\VObject\Reader;
+use Throwable;
 
 final class IcsFeedCheck implements EnvironmentCheck
 {
+    private const CONNECT_TIMEOUT = 3;
+
+    private const TIMEOUT = 5;
+
     public function label(): string
     {
         return 'ICS calendar feed';
@@ -26,7 +33,7 @@ final class IcsFeedCheck implements EnvironmentCheck
         }
 
         try {
-            $response = Http::connectTimeout(3)->timeout(5)->get($url);
+            $response = Http::connectTimeout(self::CONNECT_TIMEOUT)->timeout(self::TIMEOUT)->get($url);
         } catch (ConnectionException) {
             return CheckResult::failed(
                 'the request did not complete within the bounded timeout',
@@ -41,37 +48,20 @@ final class IcsFeedCheck implements EnvironmentCheck
             );
         }
 
-        $body = $response->body();
+        try {
+            $document = Reader::read($response->body(), Reader::OPTION_FORGIVING);
+        } catch (Throwable) {
+            $document = null;
+        }
 
-        if (! str_contains($body, 'BEGIN:VCALENDAR')) {
+        if (! $document instanceof VCalendar) {
             return CheckResult::failed(
-                'the response body is not iCalendar',
-                'the feed responded 200 but the body is not iCalendar — an HTML sign-in page is the usual cause; re-copy the subscription URL into `KBMS_ICS_URL`'
+                'the response body is not a valid iCalendar document',
+                'the feed responded 200 but the body did not parse as iCalendar — an HTML sign-in page is the usual cause; re-copy the subscription URL into `KBMS_ICS_URL`'
             );
         }
 
-        if (! str_contains($body, 'VERSION:')) {
-            return CheckResult::failed(
-                'the iCalendar envelope is missing VERSION',
-                'the iCalendar envelope is malformed — `VERSION` is missing'
-            );
-        }
-
-        $eventCount = substr_count($body, 'BEGIN:VEVENT');
-
-        if ($eventCount === 0) {
-            return CheckResult::failed(
-                'the calendar contains no events',
-                'the feed parsed as iCalendar but contains no events — verify `KBMS_ICS_URL` points at a calendar with entries'
-            );
-        }
-
-        if (! str_contains($body, 'END:VCALENDAR')) {
-            return CheckResult::failed(
-                'the response body is truncated',
-                'the feed body is truncated — `END:VCALENDAR` is missing'
-            );
-        }
+        $eventCount = count($document->select('VEVENT'));
 
         return CheckResult::pass("HTTP {$response->status()}, {$eventCount} event(s)");
     }
