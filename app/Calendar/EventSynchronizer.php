@@ -45,14 +45,23 @@ final class EventSynchronizer
 
         $contentHash = $occurrence->contentHash();
 
+        // Eloquent's datetime cast reads naive DB digits back using PHP's
+        // default timezone (config('app.timezone'), the operator's
+        // KBMS_TIMEZONE) — so a UTC-labeled Carbon must be converted to
+        // that zone before storage, or the digits get silently relabeled
+        // and the DST-correct instant is lost on read-back. All-day dates
+        // are naive by design and must never be converted.
+        $storableStartsAt = $occurrence->isAllDay ? $occurrence->startsAt : $occurrence->startsAt->setTimezone(config('app.timezone'));
+        $storableEndsAt = $occurrence->isAllDay ? $occurrence->endsAt : $occurrence->endsAt->setTimezone(config('app.timezone'));
+
         $mirroredFields = [
             'summary' => $occurrence->summary,
             'description' => $occurrence->description,
             'location' => $occurrence->location,
             'organizer' => $occurrence->organizer,
             'attendees' => $occurrence->attendees,
-            'starts_at' => $occurrence->startsAt,
-            'ends_at' => $occurrence->endsAt,
+            'starts_at' => $storableStartsAt,
+            'ends_at' => $storableEndsAt,
             'is_all_day' => $occurrence->isAllDay,
             'timezone' => $occurrence->timezone,
             'join_url' => $occurrence->joinUrl,
