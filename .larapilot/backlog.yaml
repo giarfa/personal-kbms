@@ -59,7 +59,7 @@ specs:
       objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
     priority: HIGH
     points: 3
-    status: TODO
+    status: 'IN PROGRESS'
     body: |
       #### US-002: Environment doctor command
 
@@ -86,6 +86,10 @@ specs:
       - [ ] **Edge case:** a launcher script that exists but lacks the executable bit fails the check with that specific reason
       - [ ] **Edge case:** the ICS check validates that the response actually parses as iCalendar, not merely that HTTP returned 200
       - [ ] Feature test covers all-pass and each individual failure mode with faked HTTP and a temporary filesystem
+    status_history:
+      - { status: PLANNED, at: '2026-09-07T21:46:35+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-07T21:54:07+02:00' }
+    rework: false
   -
     code: US-003
     title: 'Scheduled ICS calendar ingestion'

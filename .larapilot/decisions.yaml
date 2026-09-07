@@ -194,4 +194,30 @@ decisions:
     source: askquestion
     spec: US-001
     supersedes: null
-updated_at: '2026-09-07T21:39:49+02:00'
+  -
+    id: 6b3a5c34afbd906c
+    ts: '2026-09-07T21:43:20+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'doctor ics parse validation'
+    label: 'doctor ICS parse validation'
+    value: 'Structural VCALENDAR envelope check in US-002 (BEGIN:VCALENDAR / VERSION / >=1 VEVENT / END:VCALENDAR); no composer change — US-003 swaps the check onto sabre/vobject when it installs it'
+    question: null
+    rationale: 'Keeps the ICS dependency with the spec that owns it (CLAUDE.md: no dependency changes without approval) while still failing a 200 that returns HTML or an empty body'
+    source: askquestion
+    spec: US-002
+    supersedes: null
+  -
+    id: acd25476b77a0386
+    ts: '2026-09-07T21:55:33+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-implement
+    topic: 'us-002 branch point'
+    label: 'US-002 branch point'
+    value: 'Branch feature/US-002-environment-doctor off feature/US-001-app-scaffold (US-001 still in REVIEW, not merged to develop); rebase onto develop once US-001 merges'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-002
+    supersedes: null
+updated_at: '2026-09-07T21:55:33+02:00'
