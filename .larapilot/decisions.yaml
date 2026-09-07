@@ -220,4 +220,17 @@ decisions:
     source: chat
     spec: US-002
     supersedes: null
-updated_at: '2026-09-07T21:55:33+02:00'
+  -
+    id: 08d39878ca6dd913
+    ts: '2026-09-07T22:36:09+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-002 residual risk: ics bounded-timeout test assertion'
+    label: 'US-002 residual risk: ICS bounded-timeout test assertion'
+    value: 'Accepted without adding the test — approved US-002 as delivered'
+    question: null
+    rationale: 'Operator approved at the review gate rather than requesting the Http::assertSent timeout assertion; timeout is correct in code (IcsFeedCheck), only unpinned by tests. Revisit at US-003 when sabre/vobject replaces the structural ICS validation.'
+    source: chat
+    spec: US-002
+    supersedes: null
+updated_at: '2026-09-07T22:36:09+02:00'
