@@ -261,11 +261,11 @@ tasks:
       9. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `composer.json` and `composer.lock` are **unchanged** by this task
-      - [ ] The request carries an explicit bounded timeout and a connection failure is reported, never thrown to the operator
-      - [ ] A 200 response with a non-iCalendar body **fails** the check
-      - [ ] Unset `KBMS_ICS_URL` yields `NotConfigured`, distinct from a reachable-but-invalid feed
-      - [ ] Unit tests cover all seven scenarios; `larapilot:quality` green
+      - [x] `composer.json` and `composer.lock` are **unchanged** by this task
+      - [x] The request carries an explicit bounded timeout and a connection failure is reported, never thrown to the operator
+      - [x] A 200 response with a non-iCalendar body **fails** the check
+      - [x] Unset `KBMS_ICS_URL` yields `NotConfigured`, distinct from a reachable-but-invalid feed
+      - [x] Unit tests cover all seven scenarios; `larapilot:quality` green
 
       ## Test Data
       - N/A — no model or schema changes; iCalendar fixtures are inline strings in the test
@@ -275,11 +275,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-01
+    commit:
+      sha: 1c473934ad6e2dd8184964fceeebf2a15a27b726
+      short_sha: 1c47393
+      subject: 'feat(US-002): TASK-03 add the ICS feed reachability and iCalendar validation check'
+      committed_at: '2026-09-07T21:58:37+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1c473934ad6e2dd8184964fceeebf2a15a27b726'
   -
     id: TASK-04
     title: 'Implement the queue connection and scheduler registration checks'
@@ -440,4 +446,4 @@ tasks:
     estimate_hours: 1.0
     dependencies:
       - TASK-05
-updated_at: '2026-09-07T21:57:47+02:00'
+updated_at: '2026-09-07T21:58:38+02:00'
