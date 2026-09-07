@@ -1,0 +1,776 @@
+code: US-003
+plan_body: |
+  ## Technical Solution
+
+  `US-003` builds the ingestion half of the calendar mirror: a queued job that fetches the subscribed `.ics` feed, expands recurrences into individually addressable occurrences, and upserts them into local storage without ever destroying an occurrence the operator may later annotate. `US-004` owns the reading surface for sync health; this spec owns the tables it will read.
+
+  ### Dependency — `sabre/vobject ^5.0`
+
+  Approved in the PRD (`## Technical Architecture` → Vendor policy) and named in the acceptance criteria: no Laravel first-party or Spatie package covers `RRULE` handling. Verified against the registry before planning:
+
+  | Field | Value |
+  | --- | --- |
+  | Version | `5.0.0` |
+  | License | BSD-3-Clause |
+  | Requires | `php ^8.2`, `ext-mbstring`, `ext-json`, `sabre/xml ^3.0 \|\| ^4.0` |
+
+  Compatible with the installed PHP 8.4.23. `composer audit` runs immediately after install (TASK-01). This is the **only** dependency this spec adds.
+
+  ### Components
+
+  New namespace `App\Calendar` — a sibling of the existing `App\Doctor`, not a new base folder.
+
+  | Class | Responsibility |
+  | --- | --- |
+  | `App\Calendar\SyncRunStatus` (enum) | `Running`, `Success`, `NotModified`, `Failed` — TitleCase keys per project PHP conventions |
+  | `App\Calendar\FeedResponse` (readonly DTO) | `httpStatus`, `body` (nullable), `etag`, `lastModified`, `notModified` |
+  | `App\Calendar\IcsFeedClient` | Conditional `GET` with bounded timeouts; emits `FeedResponse`; throws `FeedUnavailable` |
+  | `App\Calendar\ParsedOccurrence` (readonly DTO) | One expanded occurrence + `contentHash()` |
+  | `App\Calendar\IcsParser` | `sabre/vobject` wrapper; window-bounded `RRULE` expansion, `TZID` capture, all-day normalization, URL extraction; throws `FeedUnparsable` |
+  | `App\Calendar\EventSynchronizer` | Cancellation-safe upsert on (`source_uid`, `recurrence_id`), content-hash skip, window-scoped cancellation sweep |
+  | `App\Calendar\Exceptions\FeedUnavailable` | Transport failure: connection refused, timeout, non-2xx/304 status |
+  | `App\Calendar\Exceptions\FeedUnparsable` | The body is not usable iCalendar, or expansion failed |
+  | `App\Models\CalendarEvent` | `HasUuids`; the mirrored occurrence |
+  | `App\Models\CalendarSyncRun` | `HasUuids`; run lifecycle + carrier of the conditional-GET validators |
+  | `App\Jobs\SyncCalendarFeed` | `ShouldQueue` + `ShouldBeUnique`; orchestrates client → parser → synchronizer → run row |
+  | `App\Console\Commands\SyncCalendarCommand` | Replaces the US-002 stub; dispatches the job (`--sync` to run inline, `--force` to bypass conditional GET) |
+
+  The pipeline is deliberately three collaborators rather than one service: the client knows HTTP and nothing about calendars, the parser knows iCalendar and nothing about the database, and the synchronizer knows persistence and nothing about HTTP. Each is independently testable with no fakes beyond its own boundary, and `US-004`'s manual resync reuses the job untouched.
+
+  ### Schema
+
+  **`calendar_events`** — UUID primary key, plus the natural key from the feed.
+
+  | Column | Type | Notes |
+  | --- | --- | --- |
+  | `id` | uuid, primary | |
+  | `source_uid` | string, indexed | the `VEVENT` `UID` |
+  | `recurrence_id` | string, **NOT NULL** | see *Occurrence identity* below |
+  | `summary` | string, nullable | |
+  | `description` | text, nullable | |
+  | `location` | string, nullable | |
+  | `organizer` | string, nullable | |
+  | `attendees` | json, nullable | array of `{name, email}` |
+  | `starts_at` / `ends_at` | datetime | UTC for timed events; naive local date for all-day (see below) |
+  | `is_all_day` | boolean, default false | |
+  | `timezone` | string, nullable | the original `TZID`, captured before expansion |
+  | `join_url` / `event_url` | string, nullable | consumed by `US-005` |
+  | `content_hash` | string(64) | sha-256 over the normalized field set |
+  | `last_seen_at` | datetime | bumped every run the occurrence appears in the feed |
+  | `cancelled_at` | datetime, nullable | never a delete |
+
+  Indexes: **unique** (`source_uid`, `recurrence_id`); index on `starts_at`; index on `cancelled_at`.
+
+  **`calendar_sync_runs`** — `id` (uuid), `started_at`, `finished_at` (nullable), `status`, `http_status` (nullable), `etag` (nullable), `last_modified` (nullable), `events_upserted`, `events_cancelled`, `error` (nullable text). Indexes on `started_at` and (`status`, `finished_at`) — the latter is what `US-004` will query for "last successful sync".
+
+  `last_modified` is an addition to the column list the PRD sketches. `If-Modified-Since` is an explicit acceptance criterion and cannot be served from the `ETag` alone; TASK-10 records the addition in the PRD.
+
+  ### Occurrence identity — the contract the rest of the product hangs off
+
+  `recurrence_id` is a **non-nullable string**, normalized as:
+
+  - timed occurrence → `RECURRENCE-ID` in UTC, `Y-m-d\TH:i:s\Z`
+  - all-day occurrence → `Y-m-d`
+  - non-recurring event → **empty string `''`**
+
+  The empty string is not cosmetic. **SQLite treats `NULL`s as distinct inside a unique index**, so a nullable `recurrence_id` would silently permit unlimited duplicate rows for every single-occurrence event — the unique constraint would exist and never fire. This is the single most important schema decision in the spec.
+
+  This normalization is a **public contract**, not an implementation detail: `US-005` routes meeting detail pages on (`source_uid`, `recurrence_id`) and `US-006` keys notes on it. Changing the format later orphans every note. It is asserted directly in `EventSynchronizerTest`.
+
+  ### Recurrence expansion
+
+  `IcsParser` expands over the window `now() - KBMS_ICS_WINDOW_PAST_DAYS` … `now() + KBMS_ICS_WINDOW_FUTURE_DAYS` (default −90/+180) using `sabre/vobject`'s expansion API. That API is what makes the *unbounded series* acceptance criterion tractable: a series with no `UNTIL` and no `COUNT` is expanded only inside the requested range, so it cannot run away. `EXDATE` exclusions and `RECURRENCE-ID` overrides are handled by the library rather than reimplemented.
+
+  Three implementation traps, in order of how much time they cost if missed:
+
+  1. **Expansion discards `VTIMEZONE` and normalizes to UTC.** The `TZID` must be harvested from each master `VEVENT`'s `DTSTART` into a `UID → TZID` map **before** expanding; afterwards it is gone. This is how the `timezone` column gets populated at all.
+  2. **Expansion mutates the document.** The parsed `VCalendar` must not be read again after expansion. Verify the exact `expand()` signature and return semantics against the installed `vendor/sabre/vobject` before relying on either — the 4.x → 5.0 API moved, and this plan deliberately does not assert which shape 5.0 ships.
+  3. **Expansion must happen in the event's own timezone.** A weekly 09:00 Europe/Rome meeting must stay 09:00 across the March and October transitions, not drift by an hour. Expanding in UTC produces exactly that drift. The DST fixture (TASK-05) crosses `2026-03-29`, the real Europe/Rome spring transition.
+
+  The parser **yields** occurrences (generator) rather than materializing an array: a 270-day window across several long-running series is thousands of `VEVENT`s, and there is no reason to hold them all in memory.
+
+  ### All-day events
+
+  An all-day `VEVENT` carries `DTSTART;VALUE=DATE`. Storing that as midnight-local converted to UTC shifts the event to the previous day for any positive UTC offset — Europe/Rome is `+01:00`/`+02:00`, so this would be wrong every single time. Instead: `is_all_day = true`, `timezone = null`, and `starts_at` / `ends_at` hold the **naive dates** at `00:00:00` with no conversion applied in either direction. Every consumer formats `is_all_day` rows from the raw date and never timezone-converts them. `ends_at` keeps iCalendar's exclusive end date as-is.
+
+  ### Conditional GET
+
+  Validators live on the run rows, not in a separate cache. `IcsFeedClient` is handed the `etag` / `last_modified` from the most recent run whose status is `Success` or `NotModified` (a 304 carries the validators forward) and sends `If-None-Match` / `If-Modified-Since`. A `304` returns `FeedResponse` with `notModified: true`; the job writes a `NotModified` run and **returns before constructing the parser at all** — no parse, no upsert, no cancellation sweep.
+
+  If the app sits idle longer than the retention window and every run is pruned, the validators are lost and the next sync is a full fetch. Harmless, and cheaper than a second storage mechanism.
+
+  ### Cancellation, and what must never happen
+
+  Two paths mark `cancelled_at`, and neither ever deletes a row:
+
+  1. The `VEVENT` arrives with `STATUS:CANCELLED` → marked during upsert.
+  2. The occurrence stops appearing in the feed → marked by the post-upsert sweep.
+
+  The sweep is **scoped to the window**: `cancelled_at IS NULL` AND `starts_at` inside the current window AND `last_seen_at < $run->started_at`. Dropping the window predicate would cancel every event older than 90 days on the first run — a silent, total corruption of the annotated history the PRD exists to protect. An occurrence that reappears active after being swept is **un-cancelled** (`cancelled_at = null`), so an upstream flap does not leave a permanently struck-through meeting.
+
+  Upserts and the sweep run inside a single `DB::transaction`, and a parse failure aborts before any write — which is how the "malformed body must not partially wipe existing events" criterion is satisfied structurally rather than by careful ordering.
+
+  ### Content hashing
+
+  `content_hash` is sha-256 over the normalized user-visible field set (summary, description, location, organizer, sorted attendees, start, end, all-day flag, timezone, URLs, cancelled state). **Attendees are sorted before hashing** and `last_seen_at` is excluded — otherwise the hash flaps on every run and the write-skip optimization does nothing. When the hash matches, only `last_seen_at` is touched; the row does not count toward `events_upserted`.
+
+  ### Failure handling
+
+  Every failure path writes a `Failed` run with a legible `error` and leaves the previous mirror intact:
+
+  | Failure | Recorded |
+  | --- | --- |
+  | Connection refused / DNS / timeout | `FeedUnavailable`, `http_status` null |
+  | Non-2xx, non-304 | `FeedUnavailable`, `http_status` set |
+  | Body is not iCalendar, or expansion throws | `FeedUnparsable`, `http_status` set, zero writes |
+
+  `SyncCalendarFeed` sets `$tries = 1`: a retry would write a second run row for the same attempt and double-count, and the scheduler comes back in 15 minutes regardless. `ShouldBeUnique` prevents a duplicate queued run from stacking on top of one already in flight, complementing the `withoutOverlapping()` already registered on the schedule by US-001.
+
+  ### Run retention
+
+  Per the decision journal entry **"calendar sync run retention"** (2026-09-07): after each run the job deletes finished runs older than `KBMS_SYNC_RUN_RETENTION_DAYS` (default 30). At a 15-minute interval that bounds the table at roughly 2,900 rows while keeping a month of failure history for `US-004`. This is the only new configuration key the spec adds.
+
+  ### `kbms:doctor` — recorded decision, superseding US-002
+
+  Per the decision journal entry **"doctor ics parse validation"** (superseding `6b3a5c34`): now that `sabre/vobject` is installed, `IcsFeedCheck` drops its string-matching envelope validation and parses the body for real. A `ParseException` becomes a `Failed` result naming `KBMS_ICS_URL`; **a feed that parses cleanly with zero events now PASSES** rather than failing, because under a real parser an empty-but-valid calendar is a legitimate state rather than evidence of a wrong subscription URL. TASK-09 also lands the `Http::assertSent` bounded-timeout assertion that US-002 accepted as a residual risk.
+
+  ### Bounded timeouts
+
+  `IcsFeedClient` uses `connectTimeout(5)->timeout(30)` as class constants — deliberately more generous than the doctor's 3s/5s, because the doctor is an interactive gate and the sync is a background job against a feed that may be large. They are constants rather than env keys to keep the configuration surface at the one key the retention decision requires; promoting them later is a one-line change.
+
+  ### Non-goals
+
+  No UI of any kind — sync health and manual resync are `US-004`, agenda and detail are `US-005`. No `OutlookLinkBuilder` (`US-005` owns it; this spec only *captures* `join_url` / `event_url`). No transcript resolution, no FTS5, no notes. No new base directory. No dependency beyond `sabre/vobject`.
+
+  ## Git & Branching
+
+  - Mode: `GITFLOW` (from `settings.git_mode`) — Gitflow **without** automatic push
+  - Branch: `feature/US-003-ics-calendar-ingestion` from `develop` (US-001 and US-002 are both merged, so `develop` is the branch point — no repeat of the US-002 stacked-branch situation)
+  - TASK-00: bootstrap the branch and draft the internal PR description locally
+  - Per task: exactly one Conventional Commit `type(US-003): TASK-NN summary` — never batch tasks
+  - Push: **skip** — no `git push`, no remote PR, unless the operator asks in-session
+  - `php artisan larapilot:quality` (Pint + Larastan level 5+) green before every `task-done`
+  - `composer audit` immediately after the `sabre/vobject` install in TASK-01
+  - `CHANGELOG.md` Unreleased updated in TASK-10 — this spec changes user-visible behaviour (`kbms:sync-calendar` and `kbms:doctor`)
+  - Merge to `develop` only after human `/larapilot-review` approval
+
+  ## Test Data Strategy
+
+  This is the first spec in the project to introduce Eloquent models, so it also establishes `database/factories/` — the directory does not exist yet.
+
+  - **`CalendarEventFactory`** — domain-realistic Faker values (meeting-shaped summaries, real-looking organizer addresses, Europe/Rome timezone), never `lorem` filler. States: `allDay()`, `cancelled()`, `occurrenceOf(string $uid, string $recurrenceId)`, `withTeamsLink()`, `stale()` (an old `last_seen_at`, for sweep tests).
+  - **`CalendarSyncRunFactory`** — states: `successful()`, `failed()`, `notModified()`, `running()` (no `finished_at`).
+  - **Seeders** — `CalendarEventSeeder` and `CalendarSyncRunSeeder`, both called from `DatabaseSeeder`, producing a fixture calendar the `US-004`/`US-005` interface can be built against with no live feed:
+    - ~40 occurrences spread across −30 to +45 days
+    - one weekly recurring series of 12 occurrences sharing a `source_uid` with distinct `recurrence_id`s — the dataset that makes recurrence-isolation bugs visible by eye
+    - one occurrence of that series retitled, to stand in for a `RECURRENCE-ID` override
+    - two all-day events, three cancelled occurrences, four carrying a Teams `join_url`
+    - ~12 sync runs: mostly `Success`, one `Failed` with a legible error, one `NotModified`, so `US-004` has every state to render
+  - **Verify** `php artisan migrate:fresh --seed` before `task-done` on TASK-02, TASK-03, and TASK-07.
+  - **`.ics` fixtures** live in `tests/Fixtures/ics/` and are test inputs, not seed data: `recurring-weekly.ics`, `recurrence-override.ics`, `exdate.ics`, `cancelled.ics`, `all-day.ics`, `dst-transition.ics`, `unbounded-series.ics`, `truncated.ics`, `not-calendar.html`.
+
+  ## Test Strategy
+
+  - **Bar: `NORMAL`** (from `settings.testing`) — PHPUnit feature and unit tests. **No** Playwright, Dusk, Pest browser, or viewport matrix. This spec has no UI, so the question does not arise.
+  - Style follows the existing suite: PHPUnit classes with `public function test_snake_case(): void`, `Tests\TestCase`, `RefreshDatabase` where the database is touched, `Http::fake()` as already used in `QueueAndScheduleTest` and `IcsFeedCheckTest`.
+  - **Interleaved, not deferred:** TASK-04, TASK-05, TASK-06, TASK-07 and TASK-09 each ship their own tests in the same commit. TASK-08 adds only the cross-cutting end-to-end and error-case layer that cannot be written until the pipeline is assembled.
+  - Coverage map:
+
+  | Acceptance criterion | Covered by |
+  | --- | --- |
+  | Scheduled every `KBMS_ICS_SYNC_MINUTES`, `withoutOverlapping()` | `QueueAndScheduleTest` (already green from US-001) + `ShouldBeUnique` assertion in `SyncCalendarFeedJobTest` |
+  | Conditional GET; `304` short-circuits without parsing | `IcsFeedClientTest` (headers sent) + `SyncCalendarFeedJobTest` (a 304 run performs zero writes) |
+  | `RRULE` expansion across the configured window | `IcsParserTest` — `recurring-weekly.ics` |
+  | Upsert keyed on (`source_uid`, `recurrence_id`), siblings independent | `EventSynchronizerTest` — the highest-value assertion in this spec |
+  | `EXDATE` honored | `IcsParserTest` — `exdate.ics` |
+  | `RECURRENCE-ID` override not flattened | `IcsParserTest` — `recurrence-override.ics` (retitled single occurrence) |
+  | `TZID` preserved; correct across a DST boundary | `IcsParserTest` — `dst-transition.ics` crossing 2026-03-29 |
+  | All-day stored date-only, no day shift | `IcsParserTest` + `EventSynchronizerTest` — `all-day.ics` |
+  | Absent or `STATUS:CANCELLED` → `cancelled_at`, never deleted | `EventSynchronizerTest` — sweep scoping, un-cancel on reappearance, row-count assertions |
+  | Content hash skips unchanged writes | `EventSynchronizerTest` — second run reports `events_upserted: 0` and bumps only `last_seen_at` |
+  | `join_url` / `event_url` captured | `IcsParserTest` — `URL`, `X-MICROSOFT-SKYPETEAMSMEETINGURL`, and Teams-link-in-description paths |
+  | `calendar_sync_runs` row per run with full detail | `SyncCalendarFeedJobTest` |
+  | Runs as a queued job | `SyncCalendarCommandTest` — `Queue::assertPushed` |
+  | **Error:** unreachable / HTTP error / timeout leaves mirror intact | `SyncCalendarFeedJobTest` — pre-seeded events survive unchanged |
+  | **Error:** malformed / truncated body does not partially wipe | `SyncCalendarFeedJobTest` — `truncated.ics`, `not-calendar.html` |
+  | **Edge:** unbounded series bounded by the window | `IcsParserTest` — `unbounded-series.ics`, asserts a finite bounded count |
+  | Doctor parses with `sabre/vobject`; zero events passes | `IcsFeedCheckTest` (rewritten in TASK-09) |
+  | Bounded timeout never hangs (deferred from US-002) | `IcsFeedCheckTest` — `Http::assertSent` timeout assertion |
+
+  - Run `php artisan test --compact --filter=Calendar` during implement; full `php artisan test` before the final `task-done`.
+  - **Manual test handoff (NORMAL bar):** after TASK-08, point `KBMS_ICS_URL` at the operator's real Outlook subscription, run `php artisan kbms:sync-calendar --sync`, and confirm against Outlook that a known recurring series, a known all-day event, and a known cancelled meeting each landed correctly. Fixtures cannot prove the real feed's dialect.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and prepare the internal PR'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for this spec: create the feature branch from `develop` and prepare the internal PR description toward `develop`. Do **not** push — `settings.git_mode` is `GITFLOW`.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop` — US-001 and US-002 are both merged, so `develop` is the correct branch point (no stacked branch this time)
+      2. `git checkout -b feature/US-003-ics-calendar-ingestion`
+      3. Draft the internal PR title `US-003: Scheduled ICS calendar ingestion` and a body linking `.larapilot/plans/US-003-plan.yaml` plus the task list; keep it local
+      4. Anchor the branch: `git commit --allow-empty -m "chore(US-003): TASK-00 bootstrap feature branch"`
+
+      ## Completion Criteria
+      - [ ] Branch `feature/US-003-ics-calendar-ingestion` exists locally, branched from `develop`
+      - [ ] PR title and body drafted toward `develop` (not pushed)
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-003): TASK-00 bootstrap feature branch` (empty commit)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally — open the remote PR only if the operator asks
+    type: Impl
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+  -
+    id: TASK-01
+    title: 'Install sabre/vobject and add the run-retention config key'
+    body: |-
+      ## Description
+      Add the one dependency and the one configuration key this spec introduces, so every later task builds on a settled surface.
+
+      ## Files Involved
+      - composer.json / composer.lock
+      - config/kbms.php
+      - .env.example
+      - tests/Feature/ConfigurationSurfaceTest.php
+
+      ## Steps
+      1. `composer require sabre/vobject:^5.0` — approved in the PRD `## Technical Architecture` → Vendor policy and named in the acceptance criteria. Verified: `5.0.0`, BSD-3-Clause, requires `php ^8.2` + `ext-mbstring` + `ext-json`, compatible with the installed PHP 8.4.23
+      2. `composer audit` — must report no advisories before continuing
+      3. `config/kbms.php`: add `'sync_run_retention_days' => (int) env('KBMS_SYNC_RUN_RETENTION_DAYS', 30)` and extend the file-level `@return` array shape PHPDoc with the new key
+      4. `.env.example`: add `KBMS_SYNC_RUN_RETENTION_DAYS=30` under the `--- Personal KBMS ---` block, with a comment matching the existing style and citing US-003
+      5. `tests/Feature/ConfigurationSurfaceTest.php`: add the key to `test_every_kbms_config_key_resolves_with_its_documented_default` and to the `KBMS_*` list in `test_env_example_documents_every_kbms_key`
+      6. `php artisan test --compact --filter=ConfigurationSurface`
+      7. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `sabre/vobject ^5.0` in `composer.json` require block, lockfile updated
+      - [ ] `composer audit` clean
+      - [ ] `config('kbms.sync_run_retention_days')` resolves to `30` with no env override
+      - [ ] `.env.example` documents the key with its default
+      - [ ] `ConfigurationSurfaceTest` green
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-003): TASK-01 add sabre/vobject and sync run retention config`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 1
+    dependencies:
+      - TASK-00
+  -
+    id: TASK-02
+    title: 'Add the CalendarEvent model, migration, factory and seeder'
+    body: |-
+      ## Description
+      Add `CalendarEvent` — the mirrored occurrence — with the unique key that makes a single occurrence of a recurring series independently addressable. This is the first Eloquent model in the project, so it also creates `database/factories/`.
+
+      ## Files Involved
+      - app/Models/CalendarEvent.php
+      - database/migrations/xxxx_create_calendar_events_table.php
+      - database/factories/CalendarEventFactory.php
+      - database/seeders/CalendarEventSeeder.php
+      - database/seeders/DatabaseSeeder.php
+      - tests/Unit/Models/CalendarEventTest.php
+
+      ## Steps
+      1. `php artisan make:model CalendarEvent -mf --no-interaction`
+      2. Migration columns: `uuid('id')->primary()`, `string('source_uid')`, `string('recurrence_id')` **NOT NULL** (default `''`), `string('summary')->nullable()`, `text('description')->nullable()`, `string('location')->nullable()`, `string('organizer')->nullable()`, `json('attendees')->nullable()`, `dateTime('starts_at')`, `dateTime('ends_at')`, `boolean('is_all_day')->default(false)`, `string('timezone')->nullable()`, `string('join_url')->nullable()`, `string('event_url')->nullable()`, `string('content_hash', 64)`, `dateTime('last_seen_at')`, `dateTime('cancelled_at')->nullable()`, `timestamps()`
+      3. Indexes **in this same migration**: `unique(['source_uid', 'recurrence_id'])`, `index('starts_at')`, `index('cancelled_at')`. `recurrence_id` must **not** be nullable — SQLite treats `NULL`s as distinct inside a unique index, so a nullable column would let unlimited duplicate rows through for every non-recurring event while the constraint appears to exist
+      4. Model: `use HasUuids`, `$fillable` or `$guarded = []` matching project convention, casts for `attendees` (`array`), `starts_at` / `ends_at` / `last_seen_at` / `cancelled_at` (`datetime`), `is_all_day` (`boolean`). Add a `scopeInWindow(Builder $query, CarbonInterface $from, CarbonInterface $to)` — the cancellation sweep and `US-005` both need it. Explicit return types on every method
+      5. Factory: meeting-shaped Faker summaries (not `lorem`), realistic organizer addresses, `Europe/Rome` timezone, `starts_at` inside the window, `recurrence_id` defaulting to `''`. States: `allDay()`, `cancelled()`, `occurrenceOf(string $uid, string $recurrenceId)`, `withTeamsLink()`, `stale()` (old `last_seen_at`)
+      6. `CalendarEventSeeder`: ~40 occurrences from −30 to +45 days; one weekly series of 12 occurrences sharing a `source_uid` with distinct `recurrence_id`s; one of them retitled to stand in for a `RECURRENCE-ID` override; two all-day; three cancelled; four with a `join_url`. Register it in `DatabaseSeeder::run()`
+      7. `php artisan migrate:fresh --seed` — must succeed and produce that dataset
+      8. `tests/Unit/Models/CalendarEventTest.php`: assert the unique constraint actually fires for a duplicate (`''`) `recurrence_id`, and that casts resolve
+      9. `php artisan test --compact --filter=CalendarEvent` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Migration creates the table with the unique (`source_uid`, `recurrence_id`) index and both secondary indexes
+      - [ ] A second insert with the same `source_uid` and `recurrence_id = ''` is rejected by the database
+      - [ ] `CalendarEventFactory` produces domain-realistic records; every listed state works
+      - [ ] `migrate:fresh --seed` succeeds and yields the described fixture calendar
+      - [ ] Tests pass; `larapilot:quality` green
+
+      ## Test Data
+      - [ ] `database/factories/CalendarEventFactory.php` created with all five states
+      - [ ] `CalendarEventSeeder` registered in `DatabaseSeeder` with meaningful volumes
+      - [ ] Factory and seeder land in **this same commit** as the migration and model
+
+      ## Git Deliverables
+      - Commit: `feat(US-003): TASK-02 add CalendarEvent with factory and seeder`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Mike
+    estimate_hours: 3
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-03
+    title: 'Add the CalendarSyncRun model, status enum, migration, factory and seeder'
+    body: |-
+      ## Description
+      Add the per-run audit row that records every sync attempt and carries the conditional-GET validators forward. `US-004` reads this table; this task writes its shape.
+
+      ## Files Involved
+      - app/Calendar/SyncRunStatus.php
+      - app/Models/CalendarSyncRun.php
+      - database/migrations/xxxx_create_calendar_sync_runs_table.php
+      - database/factories/CalendarSyncRunFactory.php
+      - database/seeders/CalendarSyncRunSeeder.php
+      - database/seeders/DatabaseSeeder.php
+      - tests/Unit/Models/CalendarSyncRunTest.php
+
+      ## Steps
+      1. `php artisan make:enum` is not available — create `app/Calendar/SyncRunStatus.php` as a backed string enum with **TitleCase** keys per the project PHP conventions: `Running`, `Success`, `NotModified`, `Failed`
+      2. `php artisan make:model CalendarSyncRun -mf --no-interaction`
+      3. Migration: `uuid('id')->primary()`, `dateTime('started_at')`, `dateTime('finished_at')->nullable()`, `string('status')`, `unsignedSmallInteger('http_status')->nullable()`, `string('etag')->nullable()`, `string('last_modified')->nullable()`, `unsignedInteger('events_upserted')->default(0)`, `unsignedInteger('events_cancelled')->default(0)`, `text('error')->nullable()`, `timestamps()`. Indexes: `index('started_at')`, `index(['status', 'finished_at'])` — the composite is what `US-004` will use for "last successful sync"
+      4. Model: `use HasUuids`; cast `status` to `SyncRunStatus`, the three datetimes to `datetime`. Add:
+         - `public static function start(): self` — creates a `Running` row with `started_at = now()`
+         - `public function succeed(int $httpStatus, ?string $etag, ?string $lastModified, int $upserted, int $cancelled): void`
+         - `public function markNotModified(?string $etag, ?string $lastModified): void`
+         - `public function fail(string $error, ?int $httpStatus = null): void`
+         - `public static function latestValidators(): ?self` — the most recent run whose status is `Success` or `NotModified`, the source of the conditional-GET headers
+         Keeping the lifecycle on the model avoids a fourth collaborator class that would only forward calls
+      5. Factory states: `successful()`, `failed()` (legible error text, no `lorem`), `notModified()`, `running()` (null `finished_at`)
+      6. `CalendarSyncRunSeeder`: ~12 runs over the last few days — mostly `Success`, one `Failed` with a readable error, one `NotModified`, so `US-004` has every state to render. Register in `DatabaseSeeder::run()`
+      7. `php artisan migrate:fresh --seed`
+      8. `tests/Unit/Models/CalendarSyncRunTest.php`: lifecycle helpers set the right status and timestamps; `latestValidators()` prefers the most recent `Success`/`NotModified` and ignores `Failed` and `Running`
+      9. `php artisan test --compact --filter=CalendarSyncRun` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `SyncRunStatus` enum with TitleCase keys, cast on the model
+      - [ ] Migration creates the table with both indexes
+      - [ ] Lifecycle helpers behave as specified; `latestValidators()` ignores `Failed` and `Running` rows
+      - [ ] `migrate:fresh --seed` succeeds and yields runs in every status
+      - [ ] Tests pass; `larapilot:quality` green
+
+      ## Test Data
+      - [ ] `database/factories/CalendarSyncRunFactory.php` created with all four states
+      - [ ] `CalendarSyncRunSeeder` registered in `DatabaseSeeder`
+      - [ ] Factory and seeder land in **this same commit** as the migration and model
+
+      ## Git Deliverables
+      - Commit: `feat(US-003): TASK-03 add CalendarSyncRun with status enum, factory and seeder`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Mike
+    estimate_hours: 2
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-04
+    title: 'Build IcsFeedClient with conditional GET and bounded timeouts'
+    body: |-
+      ## Description
+      Fetch the feed over HTTPS with `ETag` / `If-Modified-Since` validators, bounded timeouts, and a typed failure. The client knows HTTP and nothing about calendars — it never sees a `VEVENT`.
+
+      ## Files Involved
+      - app/Calendar/FeedResponse.php
+      - app/Calendar/IcsFeedClient.php
+      - app/Calendar/Exceptions/FeedUnavailable.php
+      - tests/Unit/Calendar/IcsFeedClientTest.php
+
+      ## Steps
+      1. `FeedResponse` — `final readonly` class, constructor property promotion: `int $httpStatus`, `?string $body`, `?string $etag`, `?string $lastModified`, `bool $notModified`. Named constructors `ok()` and `notModified()`
+      2. `FeedUnavailable extends RuntimeException` with named constructors `connectionFailed(string $url, string $reason)`, `httpError(int $status)`, and a nullable `httpStatus` property so the job can record it on the run row
+      3. `IcsFeedClient::fetch(?string $etag, ?string $lastModified): FeedResponse`:
+         - read the URL from `config('kbms.ics_url')`; a null/empty URL throws `FeedUnavailable` naming `KBMS_ICS_URL`
+         - `Http::connectTimeout(self::CONNECT_TIMEOUT)->timeout(self::TIMEOUT)` — `5` and `30` as class constants, deliberately more generous than the doctor's interactive 3s/5s
+         - send `If-None-Match: {etag}` and `If-Modified-Since: {lastModified}` only when the value is non-null
+         - `304` → `FeedResponse::notModified()` carrying the validators forward (a 304 may or may not repeat them; fall back to the ones sent)
+         - `2xx` → `FeedResponse::ok()` with body plus the response `ETag` / `Last-Modified` headers
+         - anything else → `FeedUnavailable::httpError()`
+         - catch `Illuminate\Http\Client\ConnectionException` → `FeedUnavailable::connectionFailed()`; never let it escape as a raw client exception
+      4. Explicit return types and parameter type hints throughout; PHPDoc over inline comments per project PHP conventions
+      5. `tests/Unit/Calendar/IcsFeedClientTest.php` with `Http::fake()`:
+         - 200 captures body, `ETag`, `Last-Modified`
+         - 304 returns `notModified: true` with a null body
+         - validators are sent as `If-None-Match` / `If-Modified-Since` when supplied, and **omitted** when null (`Http::assertSent`)
+         - `Http::assertSent` asserts the bounded connect/total timeouts are applied
+         - a 500 throws `FeedUnavailable` carrying `httpStatus: 500`
+         - a thrown `ConnectionException` becomes `FeedUnavailable` with a null `httpStatus`
+         - an unset `KBMS_ICS_URL` throws with a message naming the key
+      6. `php artisan test --compact --filter=IcsFeedClient` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Conditional headers sent only when a validator exists
+      - [ ] `304` short-circuits with no body
+      - [ ] Every transport failure surfaces as `FeedUnavailable`, never a raw HTTP client exception
+      - [ ] Timeouts are bounded and asserted
+      - [ ] Tests pass; `larapilot:quality` green
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-003): TASK-04 add IcsFeedClient with conditional GET`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Matt
+    estimate_hours: 3
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-05
+    title: 'Build IcsParser: window-bounded recurrence expansion, TZID and all-day handling'
+    body: |-
+      ## Description
+      Turn an iCalendar body into a stream of individually addressable occurrences. This is the correctness centre of the spec — recurrence identity, timezone fidelity, and all-day handling all live or die here.
+
+      ## Files Involved
+      - app/Calendar/ParsedOccurrence.php
+      - app/Calendar/IcsParser.php
+      - app/Calendar/Exceptions/FeedUnparsable.php
+      - tests/Unit/Calendar/IcsParserTest.php
+      - tests/Fixtures/ics/recurring-weekly.ics
+      - tests/Fixtures/ics/recurrence-override.ics
+      - tests/Fixtures/ics/exdate.ics
+      - tests/Fixtures/ics/cancelled.ics
+      - tests/Fixtures/ics/all-day.ics
+      - tests/Fixtures/ics/dst-transition.ics
+      - tests/Fixtures/ics/unbounded-series.ics
+      - tests/Fixtures/ics/truncated.ics
+      - tests/Fixtures/ics/not-calendar.html
+
+      ## Steps
+      1. **Read `vendor/sabre/vobject` first.** The expansion API moved between 4.x and 5.0; confirm the exact `VCalendar::expand()` signature, whether it mutates in place or returns a new document, and how it reports failure, before writing against it. This plan deliberately does not assert which shape 5.0 ships
+      2. `ParsedOccurrence` — `final readonly`, promoted properties: `sourceUid`, `recurrenceId`, `summary`, `description`, `location`, `organizer`, `attendees` (array shape `array<int, array{name: ?string, email: ?string}>`, documented in PHPDoc), `startsAt`, `endsAt`, `isAllDay`, `timezone`, `joinUrl`, `eventUrl`, `isCancelled`. Plus `contentHash(): string` — sha-256 over the normalized user-visible fields with **attendees sorted** and `last_seen_at` excluded, so the hash does not flap between runs
+      3. `FeedUnparsable extends RuntimeException` with named constructors `notCalendar()` and `expansionFailed(string $reason)`
+      4. `IcsParser::parse(string $body, CarbonInterface $windowStart, CarbonInterface $windowEnd): Generator` — **yields**, never materializes an array; a 270-day window across several long series is thousands of `VEVENT`s
+      5. Order of operations inside `parse()`:
+         a. `Reader::read()` inside try/catch → `FeedUnparsable::notCalendar()` on `ParseException`, and also when the document is not a `VCalendar`
+         b. **Harvest `TZID` per `UID` from each master `VEVENT`'s `DTSTART` before expanding** — expansion normalizes to UTC and discards `VTIMEZONE`, so the original zone is unrecoverable afterwards. This map is the only source for the `timezone` column
+         c. Expand across the window in the event's own timezone, so a weekly 09:00 Europe/Rome meeting stays 09:00 across the March and October transitions instead of drifting an hour. `EXDATE` and `RECURRENCE-ID` overrides are the library's job — do not reimplement them
+         d. Wrap expansion in try/catch → `FeedUnparsable::expansionFailed()`; a malformed `RRULE` must become a recorded failure, not an uncaught throwable
+         e. Do not read the parsed document again after expansion — it may have been mutated
+      6. Per expanded `VEVENT`, build the `ParsedOccurrence`:
+         - `recurrenceId`: `RECURRENCE-ID` in UTC as `Y-m-d\TH:i:s\Z` (timed) or `Y-m-d` (all-day); **empty string `''`** for a non-recurring event. This normalization is a **contract** — `US-005` routes on it and `US-006` keys notes on it, so changing the format later orphans every note
+         - all-day (`DTSTART;VALUE=DATE`): `isAllDay = true`, `timezone = null`, `startsAt` / `endsAt` are the **naive dates** at `00:00:00` with **no** timezone conversion in either direction. Converting midnight-local to UTC shifts the event a day back for every positive offset, and Europe/Rome is always positive — this would be wrong every single time. Keep iCalendar's exclusive end date as-is
+         - timed: `startsAt` / `endsAt` in UTC, `timezone` from the harvested map
+         - `isCancelled`: `STATUS:CANCELLED`
+         - `eventUrl` ← the `URL` property
+         - `joinUrl` ← `X-MICROSOFT-SKYPETEAMSMEETINGURL`, falling back to a Teams meeting URL matched in `DESCRIPTION`
+         - `attendees` ← `ATTENDEE` properties, `CN` as name and the `mailto:` value as email
+      7. Fixtures: hand-write all nine files listed above. `dst-transition.ics` must cross **2026-03-29**, the real Europe/Rome spring transition. `unbounded-series.ics` carries an `RRULE` with neither `UNTIL` nor `COUNT`
+      8. `tests/Unit/Calendar/IcsParserTest.php` — one focused test per fixture:
+         - weekly series expands to the expected occurrence count inside the window, each with a distinct `recurrenceId`
+         - `EXDATE` date is absent from the yielded set
+         - the `RECURRENCE-ID` override yields its own retitled occurrence while its siblings keep the series title — **not** flattened to the series default
+         - a 09:00 Europe/Rome weekly series stays 09:00 local on both sides of 2026-03-29, and `timezone` is `Europe/Rome` on every occurrence
+         - the all-day event yields the exact calendar date with `isAllDay = true` and **no** day shift
+         - `STATUS:CANCELLED` yields `isCancelled = true`
+         - the unbounded series yields a finite count bounded by the window — assert an exact number, not merely "not empty"
+         - `truncated.ics` and `not-calendar.html` each throw `FeedUnparsable`
+         - `URL`, `X-MICROSOFT-SKYPETEAMSMEETINGURL`, and Teams-link-in-description each populate the right field
+         - `contentHash()` is stable across two parses of the same body and changes when the summary changes
+      9. `php artisan test --compact --filter=IcsParser` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `parse()` yields occurrences lazily and is bounded by the window even for a series with no `UNTIL`/`COUNT`
+      - [ ] `TZID` is captured before expansion and lands on every timed occurrence
+      - [ ] A DST-crossing weekly series keeps its local wall-clock time
+      - [ ] All-day events carry the correct date with no shift
+      - [ ] `EXDATE` and `RECURRENCE-ID` overrides are honored, not flattened
+      - [ ] `recurrenceId` normalization matches the documented contract exactly, including `''` for non-recurring
+      - [ ] Malformed and truncated bodies throw `FeedUnparsable`
+      - [ ] Tests pass; `larapilot:quality` green
+
+      ## Test Data
+      - N/A — no model or schema changes in this task; `.ics` fixtures are test inputs, not seed data
+
+      ## Git Deliverables
+      - Commit: `feat(US-003): TASK-05 add IcsParser with window-bounded recurrence expansion`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 6
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-06
+    title: 'Build EventSynchronizer: cancellation-safe upsert and window-scoped sweep'
+    body: |-
+      ## Description
+      Persist parsed occurrences without ever destroying one. This is where the PRD's promise that annotated history survives an upstream change is either kept or broken.
+
+      ## Files Involved
+      - app/Calendar/EventSynchronizer.php
+      - app/Calendar/SyncResult.php
+      - tests/Unit/Calendar/EventSynchronizerTest.php
+
+      ## Steps
+      1. `SyncResult` — `final readonly`: `int $upserted`, `int $cancelled`. The job writes these onto the run row
+      2. `EventSynchronizer::synchronize(iterable $occurrences, CarbonInterface $runStartedAt, CarbonInterface $windowStart, CarbonInterface $windowEnd): SyncResult`
+      3. Everything below runs inside a single `DB::transaction` — a mid-stream failure must leave the mirror exactly as it was
+      4. Per occurrence, match on (`source_uid`, `recurrence_id`):
+         - no row → insert, `last_seen_at = $runStartedAt`, count toward `upserted`
+         - row exists and `content_hash` matches → touch **only** `last_seen_at`; do **not** count toward `upserted`
+         - row exists and hash differs → update every mirrored field, count toward `upserted`
+         - `isCancelled` → set `cancelled_at` (preserve an existing value rather than overwriting the timestamp)
+         - previously cancelled and now arriving active → **un-cancel** (`cancelled_at = null`), so an upstream flap does not leave a permanently struck-through meeting
+         - **never** delete
+      5. Consume the generator in chunks rather than collecting it, so memory stays flat on a large feed
+      6. Cancellation sweep, after the upserts and inside the same transaction:
+         `cancelled_at IS NULL` AND `starts_at` between `$windowStart` and `$windowEnd` AND `last_seen_at < $runStartedAt` → set `cancelled_at = $runStartedAt`, counting into `cancelled`.
+         **The window predicate is not optional.** Without it the first run marks every event older than the past window as cancelled — a silent, total corruption of exactly the annotated history this product exists to protect
+      7. `tests/Unit/Calendar/EventSynchronizerTest.php` (`RefreshDatabase`, factories from TASK-02):
+         - two occurrences of one series with different `recurrence_id`s produce two rows; editing one leaves the other untouched — **the highest-value assertion in this spec**
+         - a non-recurring event round-trips with `recurrence_id = ''` and a second run does not duplicate it
+         - an unchanged second run reports `upserted: 0` and bumps only `last_seen_at`
+         - a changed summary reports `upserted: 1` and rewrites the row
+         - an occurrence that stops appearing gets `cancelled_at` set and **still exists** — assert the row count is unchanged
+         - an event outside the window with a stale `last_seen_at` is **not** swept
+         - `STATUS:CANCELLED` marks `cancelled_at` on the upsert path
+         - a cancelled occurrence reappearing active is un-cancelled
+         - a mid-stream throwable rolls the whole transaction back and leaves pre-existing rows untouched
+      8. `php artisan test --compact --filter=EventSynchronizer` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Occurrences of one series are independently addressable and independently writable
+      - [ ] Unchanged occurrences skip the write and only bump `last_seen_at`
+      - [ ] Disappearance and `STATUS:CANCELLED` both mark `cancelled_at`; nothing is ever deleted
+      - [ ] The sweep is scoped to the window and cannot touch rows outside it
+      - [ ] Reappearance un-cancels
+      - [ ] A failure mid-run rolls back cleanly
+      - [ ] Tests pass; `larapilot:quality` green
+
+      ## Test Data
+      - [ ] Reuses `CalendarEventFactory` from TASK-02 — no duplicate factory definitions in the test file
+      - [ ] No schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-003): TASK-06 add EventSynchronizer with cancellation-safe upsert`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 4
+    dependencies:
+      - TASK-02
+      - TASK-05
+  -
+    id: TASK-07
+    title: 'Assemble the SyncCalendarFeed job and replace the kbms:sync-calendar stub'
+    body: |-
+      ## Description
+      Wire client → parser → synchronizer behind a queued job, record the run, prune old runs, and turn the US-002 command stub into the real entry point.
+
+      ## Files Involved
+      - app/Jobs/SyncCalendarFeed.php
+      - app/Console/Commands/SyncCalendarCommand.php
+      - tests/Feature/SyncCalendarFeedJobTest.php
+      - tests/Feature/SyncCalendarCommandTest.php
+
+      ## Steps
+      1. `php artisan make:job SyncCalendarFeed --no-interaction`. `implements ShouldQueue, ShouldBeUnique`; `use Queueable`. Set `public int $tries = 1` — a retry would write a second run row for the same attempt and double-count, and the scheduler returns in 15 minutes anyway. Set `public int $timeout = 120`. `ShouldBeUnique` complements the `withoutOverlapping()` already registered on the schedule by US-001; do not touch `routes/console.php`
+      2. Constructor: `public function __construct(public bool $force = false) {}` — `--force` bypasses the conditional-GET validators
+      3. `handle(IcsFeedClient $client, IcsParser $parser, EventSynchronizer $synchronizer): void`:
+         a. `$run = CalendarSyncRun::start()`
+         b. resolve validators via `CalendarSyncRun::latestValidators()` unless `$this->force`
+         c. `$client->fetch(...)`; on `FeedUnavailable` → `$run->fail($e->getMessage(), $e->httpStatus)`, log at `warning` with structured context, return
+         d. `notModified` → `$run->markNotModified(...)` and **return before touching the parser** — no parse, no upsert, no sweep
+         e. compute the window from `config('kbms.window_past_days')` / `window_future_days` relative to `now()`
+         f. `$synchronizer->synchronize($parser->parse(...), ...)`; on `FeedUnparsable` → `$run->fail(...)` with the HTTP status, return — zero writes, previous mirror intact
+         g. `$run->succeed($httpStatus, $etag, $lastModified, $result->upserted, $result->cancelled)`
+         h. prune: delete runs with a non-null `finished_at` older than `config('kbms.sync_run_retention_days')` days — per the decision journal entry "calendar sync run retention"
+         i. structured `Log::info('kbms.calendar.sync', [...])` with run id, status, counts — matching the `kbms.*` log-key convention set by `QueueSelfTestJob`
+      4. Rewrite `SyncCalendarCommand`: keep the `#[Signature]` / `#[Description]` attribute style already used in the codebase. Signature `kbms:sync-calendar {--sync : Run inline instead of queueing} {--force : Ignore stored ETag/Last-Modified}`. Default dispatches to the queue (the acceptance criterion: no operator-facing path blocks on the fetch); `--sync` uses `dispatchSync` and prints the resulting run's status and counts. Exit `0` on dispatch or a successful inline run, `1` when an inline run ends `Failed`
+      5. `tests/Feature/SyncCalendarFeedJobTest.php` (`RefreshDatabase`, `Http::fake()`, fixtures from TASK-05):
+         - a successful run writes a `Success` row with `http_status`, `etag`, and both counts, and populates `calendar_events`
+         - a 304 writes a `NotModified` row and performs **zero** writes to `calendar_events`
+         - validators from the latest successful run are sent on the next fetch; `--force` omits them
+         - an unreachable feed writes `Failed` and leaves pre-seeded events **byte-identical**
+         - a 500 writes `Failed` with `http_status: 500` and leaves the mirror intact
+         - `truncated.ics` writes `Failed` and leaves the mirror intact — nothing partially wiped
+         - runs older than the retention window are pruned; newer ones survive
+         - the job is `ShouldBeUnique`
+      6. `tests/Feature/SyncCalendarCommandTest.php`: default invocation `Queue::assertPushed(SyncCalendarFeed::class)`; `--sync` runs inline and reports counts; a failed inline run exits non-zero
+      7. `php artisan migrate:fresh --seed`, `php artisan test --compact --filter=SyncCalendar`, `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Every run writes exactly one `calendar_sync_runs` row with start, finish, status, HTTP status, counts, and error
+      - [ ] A 304 short-circuits before the parser is constructed
+      - [ ] Unreachable, HTTP-error, and malformed-body paths all record a failure and leave the mirror intact
+      - [ ] Sync runs on the queue by default; `--sync` and `--force` behave as documented
+      - [ ] Runs older than `KBMS_SYNC_RUN_RETENTION_DAYS` are pruned
+      - [ ] The US-002 "not implemented" stub is gone
+      - [ ] Tests pass; `larapilot:quality` green
+
+      ## Test Data
+      - [ ] Reuses `CalendarEventFactory` and `CalendarSyncRunFactory` — no new factory definitions
+      - [ ] `migrate:fresh --seed` re-verified before `task-done`
+
+      ## Git Deliverables
+      - Commit: `feat(US-003): TASK-07 add SyncCalendarFeed job and implement kbms:sync-calendar`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 4
+    dependencies:
+      - TASK-03
+      - TASK-04
+      - TASK-06
+  -
+    id: TASK-08
+    title: 'Close the acceptance-criteria coverage gaps end to end'
+    body: |-
+      ## Description
+      Add the cross-cutting coverage that could not be written before the pipeline was assembled, and confirm every acceptance criterion in the spec maps to a passing assertion.
+
+      ## Files Involved
+      - tests/Feature/CalendarIngestionTest.php
+      - tests/Unit/Calendar/IcsParserTest.php (extend)
+      - tests/Feature/SyncCalendarFeedJobTest.php (extend)
+
+      ## Steps
+      1. Walk the spec's acceptance criteria against the coverage map in `plan_body` → `## Test Strategy` and write a test for anything not yet asserted
+      2. `tests/Feature/CalendarIngestionTest.php` — full-pipeline scenarios driven from `.ics` fixtures through `Http::fake()`, asserting rows in `calendar_events`:
+         - a recurring series lands as N independently addressable rows
+         - re-running against an identical feed reports `events_upserted: 0`
+         - re-running against a feed with one occurrence removed cancels exactly that occurrence and leaves its siblings active
+         - an all-day event's stored date matches the fixture date exactly — the day-shift regression guard
+         - a DST-crossing series renders at the same local wall-clock time on both sides of the transition when read back through `KBMS_TIMEZONE`
+      3. Confirm `QueueAndScheduleTest::test_the_calendar_sync_is_scheduled_with_the_configured_interval_and_no_overlap` still passes unchanged — US-001 registered the schedule and this spec must not have disturbed it
+      4. Full `php artisan test --compact` — the whole suite, not a filter
+      5. `php artisan larapilot:quality`
+      6. Do **not** add Playwright, Dusk, Pest browser, or viewport suites — `settings.testing` is `NORMAL`
+
+      ## Completion Criteria
+      - [ ] Every acceptance criterion in US-003 maps to at least one passing assertion
+      - [ ] The full suite is green, including the US-001 and US-002 tests
+      - [ ] No browser or E2E tooling introduced
+      - [ ] `larapilot:quality` green
+
+      ## Test Data
+      - [ ] Reuses existing factories and `.ics` fixtures — no new seed data
+
+      ## Git Deliverables
+      - Commit: `test(US-003): TASK-08 cover calendar ingestion end to end`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-07
+  -
+    id: TASK-09
+    title: 'Swap the doctor ICS check onto sabre/vobject and land the deferred timeout assertion'
+    body: |-
+      ## Description
+      Execute the recorded decision **"doctor ics parse validation"** (superseding `6b3a5c34` from US-002): now that `sabre/vobject` is installed, the doctor parses the feed for real instead of matching strings, and a valid-but-empty calendar passes. Also lands the `Http::assertSent` bounded-timeout assertion that US-002 accepted as a residual risk.
+
+      ## Files Involved
+      - app/Doctor/Checks/IcsFeedCheck.php
+      - tests/Unit/Doctor/IcsFeedCheckTest.php
+
+      ## Steps
+      1. Keep the check's existing shape: unset `KBMS_ICS_URL` → `notConfigured`; `ConnectionException` → `failed` with the timeout hint; non-2xx → `failed` carrying the status. The bounded `connectTimeout(3)->timeout(5)` stays as-is — the doctor is an interactive gate and must never hang
+      2. Replace the four `str_contains` body assertions with `Sabre\VObject\Reader::read($body)` inside try/catch:
+         - `ParseException`, or a document that is not a `VCalendar` → `failed`, hint naming `KBMS_ICS_URL` and calling out an HTML sign-in page as the usual cause of a 200 that will not parse
+         - parses cleanly → count `VEVENT` components and return `CheckResult::pass("HTTP {$status}, {$count} event(s)")`
+      3. **Zero events now PASSES.** Per the recorded decision, under a real parser an empty-but-valid calendar is a legitimate state, not evidence of a wrong subscription URL. Delete the zero-events failure branch — do not downgrade it to a warning, the `CheckStatus` enum has no such state
+      4. Update `tests/Unit/Doctor/IcsFeedCheckTest.php`:
+         - the HTML-sign-in-page-with-200 scenario still fails, now via `ParseException`
+         - a truncated body still fails
+         - **new expectation:** a valid calendar with zero `VEVENT`s now passes, with `0 event(s)` in the detail — this test inverts, so update it deliberately rather than deleting it
+         - **deferred assertion, now landed:** `Http::assertSent` verifies the connect and total timeouts are applied
+      5. `php artisan test --compact --filter=Doctor` — the whole doctor suite, since `DoctorCommandTest` exercises this check too
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `IcsFeedCheck` parses with `sabre/vobject`; no `str_contains` body assertions remain
+      - [ ] A parseable feed with zero events reports `PASS`
+      - [ ] A 200 returning HTML still reports `FAIL` with a hint naming `KBMS_ICS_URL`
+      - [ ] The bounded-timeout assertion exists and passes
+      - [ ] The full doctor suite, including `DoctorCommandTest`, is green
+      - [ ] `larapilot:quality` green
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `refactor(US-003): TASK-09 parse the doctor ICS check with sabre/vobject`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Lars
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-10
+    title: 'Document the sync pipeline in README, CHANGELOG and the PRD'
+    body: |-
+      ## Description
+      Baseline documentation only, per the recorded decision **"documentation scope"** — no OpenAPI (there is no public API), no diagrams, no runbooks.
+
+      ## Files Involved
+      - README.md
+      - CHANGELOG.md
+      - .larapilot/docs/PRD.md
+
+      ## Steps
+      1. `README.md`:
+         - document `KBMS_SYNC_RUN_RETENTION_DAYS` in the configuration surface section alongside the existing `KBMS_*` keys
+         - document `kbms:sync-calendar` for real, replacing any "not implemented" wording: what it does, that it queues by default and therefore needs `php artisan queue:work` running, and both `--sync` and `--force`
+         - note that the scheduler entry (`php artisan schedule:work`) is what drives the 15-minute cadence
+         - add a short troubleshooting line: a stale mirror is diagnosed with `kbms:doctor` first, then the latest `calendar_sync_runs` row
+      2. `CHANGELOG.md` → `Unreleased` → `Added`: scheduled ICS ingestion with recurrence expansion, conditional GET, and cancellation-safe upserts. → `Changed`: `kbms:doctor` now parses the feed with `sabre/vobject`, and a valid calendar with zero events passes where it previously failed — a deliberate behaviour change, worth a reader's attention
+      3. `.larapilot/docs/PRD.md` (living document):
+         - `## Technical Architecture` → **Configuration surface**: add `KBMS_SYNC_RUN_RETENTION_DAYS` (default `30`)
+         - `## Technical Architecture` → **Core Components**: add `last_modified` to the `calendar_sync_runs` column list — `If-Modified-Since` is an acceptance criterion and cannot be served from the `ETag` alone
+         - append a `## PRD Revision History` row: date, trigger `larapilot-plan US-003`, summary of both additions
+      4. Re-read the changed sections once for accuracy — Albert does not ship docs that describe an intention rather than the code
+
+      ## Completion Criteria
+      - [ ] README documents the new key, the command and its two flags, and the queue-worker requirement
+      - [ ] CHANGELOG Unreleased records the addition **and** the doctor behaviour change
+      - [ ] PRD configuration surface and `calendar_sync_runs` column list match the shipped code
+      - [ ] PRD Revision History has a new row
+      - [ ] No OpenAPI, diagrams, or runbooks added
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-003): TASK-10 document the calendar sync pipeline`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: finalize the local PR description
+    type: Impl
+    status: TODO
+    assignee: Albert
+    estimate_hours: 1
+    dependencies:
+      - TASK-07
+      - TASK-09
+updated_at: '2026-09-07T23:02:57+02:00'
