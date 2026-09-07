@@ -113,8 +113,8 @@ tasks:
       4. Anchor the branch: `git commit --allow-empty -m "chore(US-002): TASK-00 bootstrap feature branch"`
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-002-environment-doctor` exists locally, branched from `develop`
-      - [ ] PR title and body drafted toward `develop` (not pushed)
+      - [x] Branch `feature/US-002-environment-doctor` exists locally, branched from `develop`
+      - [x] PR title and body drafted toward `develop` (not pushed)
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -124,10 +124,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally — open the remote PR only if the operator asks
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
+    commit:
+      sha: 3a16fabe3e82423d3ef9c0017a5998675d600c2a
+      short_sha: 3a16fab
+      subject: 'chore(US-002): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-07T21:55:42+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/3a16fabe3e82423d3ef9c0017a5998675d600c2a'
   -
     id: TASK-01
     title: 'Define the doctor check contract, result type and suite'
@@ -422,4 +428,4 @@ tasks:
     estimate_hours: 1.0
     dependencies:
       - TASK-05
-updated_at: '2026-09-07T21:46:35+02:00'
+updated_at: '2026-09-07T21:55:44+02:00'
