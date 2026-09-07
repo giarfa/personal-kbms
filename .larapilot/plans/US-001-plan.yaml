@@ -171,11 +171,11 @@ tasks:
       6. Draft the internal PR title (`US-001: Application scaffold and local environment`) and body (link `.larapilot/plans/US-001-plan.yaml`, list TASK-00…TASK-10) into local notes — **do not push and do not open a remote PR**
 
       ## Completion Criteria
-      - [ ] `main` has exactly one commit containing the skeleton and `.larapilot/` artifacts
-      - [ ] `.env` and `database/database.sqlite` are **not** tracked (`git ls-files | grep -E '^\.env$|\.sqlite$'` is empty)
-      - [ ] `develop` exists and points at `main`
-      - [ ] `feature/US-001-app-scaffold` is checked out
-      - [ ] PR title/body drafted locally; no remote configured, nothing pushed
+      - [x] `main` has exactly one commit containing the skeleton and `.larapilot/` artifacts
+      - [x] `.env` and `database/database.sqlite` are **not** tracked (`git ls-files | grep -E '^\.env$|\.sqlite$'` is empty)
+      - [x] `develop` exists and points at `main`
+      - [x] `feature/US-001-app-scaffold` is checked out
+      - [x] PR title/body drafted locally; no remote configured, nothing pushed
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -185,10 +185,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepared locally toward `develop`; open remotely only if the operator asks
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 1
     dependencies: {}
+    commit:
+      sha: ef8a94887eae675a7561102d844203b9ade9a486
+      short_sha: ef8a948
+      subject: 'chore(US-001): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-07T20:44:48+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ef8a94887eae675a7561102d844203b9ade9a486'
   -
     id: TASK-01
     title: 'Install the Livewire + Flux starter kit as the application scaffold'
@@ -678,4 +684,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T18:21:34+00:00'
+updated_at: '2026-09-07T18:44:48+00:00'
