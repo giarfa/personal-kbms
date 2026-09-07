@@ -26,19 +26,16 @@ class CalendarEvent extends Model
     protected $guarded = [];
 
     /**
-     * @return array<string, string>
+     * @var array<string, string>
      */
-    protected function casts(): array
-    {
-        return [
-            'attendees' => 'array',
-            'starts_at' => 'datetime',
-            'ends_at' => 'datetime',
-            'is_all_day' => 'boolean',
-            'last_seen_at' => 'datetime',
-            'cancelled_at' => 'datetime',
-        ];
-    }
+    protected $casts = [
+        'attendees' => 'array',
+        'starts_at' => 'datetime',
+        'ends_at' => 'datetime',
+        'is_all_day' => 'boolean',
+        'last_seen_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+    ];
 
     /**
      * Scope to occurrences whose start falls within the given window.

@@ -19,16 +19,13 @@ class CalendarSyncRun extends Model
     protected $guarded = [];
 
     /**
-     * @return array<string, string>
+     * @var array<string, string>
      */
-    protected function casts(): array
-    {
-        return [
-            'status' => SyncRunStatus::class,
-            'started_at' => 'datetime',
-            'finished_at' => 'datetime',
-        ];
-    }
+    protected $casts = [
+        'status' => SyncRunStatus::class,
+        'started_at' => 'datetime',
+        'finished_at' => 'datetime',
+    ];
 
     /**
      * Create a new Running run, started now.
