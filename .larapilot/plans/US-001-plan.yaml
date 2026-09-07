@@ -667,13 +667,13 @@ tasks:
       6. `vendor/bin/pint --dirty --format agent` (no PHP touched, but run for consistency)
 
       ## Completion Criteria
-      - [ ] `README.md` covers Herd setup, the complete `.env` surface, the queue worker and scheduler, and the launcher's two-argument contract
-      - [ ] Every `KBMS_*` key documented in the README exists in `config/kbms.php` and `.env.example`, and vice versa
-      - [ ] Every command quoted in the README runs successfully as written
-      - [ ] `kbms:doctor` is presented as the first troubleshooting step, marked as arriving with US-002
-      - [ ] Baseline only: no OpenAPI, diagrams, runbook, or client manual
-      - [ ] `CHANGELOG.md` exists with an Unreleased section
-      - [ ] `SECURITY.md` and `security.txt` deliberately absent, with the reason recorded in the commit body
+      - [x] `README.md` covers Herd setup, the complete `.env` surface, the queue worker and scheduler, and the launcher's two-argument contract
+      - [x] Every `KBMS_*` key documented in the README exists in `config/kbms.php` and `.env.example`, and vice versa
+      - [x] Every command quoted in the README runs successfully as written
+      - [x] `kbms:doctor` is presented as the first troubleshooting step, marked as arriving with US-002
+      - [x] Baseline only: no OpenAPI, diagrams, runbook, or client manual
+      - [x] `CHANGELOG.md` exists with an Unreleased section
+      - [x] `SECURITY.md` and `security.txt` deliberately absent, with the reason recorded in the commit body
 
       ## Test Data
       - N/A — documentation only
@@ -683,11 +683,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 3
     dependencies:
       - TASK-07
+    commit:
+      sha: b85077e1df95431f177d1071686f8fedd0d2d5ab
+      short_sha: b85077e
+      subject: 'docs(US-001): TASK-09 write baseline README and CHANGELOG'
+      committed_at: '2026-09-07T21:15:07+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b85077e1df95431f177d1071686f8fedd0d2d5ab'
   -
     id: TASK-10
     title: 'Final quality gate and Laravel idiom review'
@@ -710,13 +716,13 @@ tasks:
       7. Confirm the branch history is one atomic commit per task with `type(US-001): TASK-NN` messages and nothing pushed: `git log --oneline develop..HEAD` and `git remote -v`
 
       ## Completion Criteria
-      - [ ] `php artisan larapilot:quality` passes with Larastan at level 5 or higher
-      - [ ] `composer audit` clean, or advisories recorded
-      - [ ] `php artisan test --compact` green
-      - [ ] `npm run build` clean
-      - [ ] No residual reference to Fortify, passkeys, two-factor, `auth()`, or a `User` anywhere in application code
-      - [ ] `route:list` and `schedule:list` outputs captured for review
-      - [ ] One atomic commit per task, Conventional Commit messages, no remote, nothing pushed
+      - [x] `php artisan larapilot:quality` passes with Larastan at level 5 or higher
+      - [x] `composer audit` clean, or advisories recorded
+      - [x] `php artisan test --compact` green
+      - [x] `npm run build` clean
+      - [x] No residual reference to Fortify, passkeys, two-factor, `auth()`, or a `User` anywhere in application code
+      - [x] `route:list` and `schedule:list` outputs captured for review
+      - [x] One atomic commit per task, Conventional Commit messages, no remote, nothing pushed
 
       ## Test Data
       - N/A — verification only
@@ -726,10 +732,10 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalize the local PR description toward `develop` with the gate outputs
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Andrew
     estimate_hours: 1
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T21:14:02+02:00'
+updated_at: '2026-09-07T21:15:51+02:00'

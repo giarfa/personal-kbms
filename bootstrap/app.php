@@ -1,7 +1,7 @@
 <?php
 
-use App\Exceptions\DatabaseUnavailableException;
 use App\Http\Middleware\EnsureLoopbackRequest;
+use App\Support\DatabaseUnavailability;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,6 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $exceptions->render(function (QueryException $e) {
+            // Laravel's SQLiteConnector throws SQLiteDatabaseDoesNotExistException
+            // (an InvalidArgumentException, not a QueryException) when the file is
+            // missing at connect time; Connection::runQueryCallback() catches that
+            // generic \Exception and rewraps it as a QueryException, which is why
+            // this message shows up here rather than in an InvalidArgumentException
+            // handler. If a future Laravel version stops rewrapping connector
+            // exceptions this way, the missing-file branch below stops matching.
             $isUnavailable = str_contains($e->getMessage(), 'unable to open database file')
                 || str_contains($e->getMessage(), 'does not exist. Ensure this is an absolute path');
 
@@ -36,11 +43,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // A long-lived FPM worker caches stat() results across requests.
             clearstatcache(true, $path);
 
-            $unavailable = new DatabaseUnavailableException($configured, missing: ! file_exists($path));
+            $unavailability = new DatabaseUnavailability($configured, missing: ! file_exists($path));
 
             return response()->view('errors.database-unavailable', [
-                'path' => $unavailable->path,
-                'missing' => $unavailable->missing,
+                'path' => $unavailability->path,
+                'missing' => $unavailability->missing,
             ], 503);
         });
     })->create();

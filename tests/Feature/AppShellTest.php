@@ -14,7 +14,7 @@ class AppShellTest extends TestCase
         $response = $this->get('/');
 
         $response->assertOk();
-        $response->assertSee('<h1', false);
+        $this->assertSame(1, substr_count($response->getContent(), '<h1'), 'expected exactly one <h1> on the Agenda page');
         $response->assertSeeText('Agenda');
         $response->assertSee('Workspace');
         $response->assertSee('Later');
@@ -28,6 +28,7 @@ class AppShellTest extends TestCase
         $response = $this->get('/calendar');
 
         $response->assertOk();
+        $this->assertSame(1, substr_count($response->getContent(), '<h1'), 'expected exactly one <h1> on the Calendar page');
         $response->assertSeeText('Calendar');
     }
 
