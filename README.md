@@ -73,7 +73,7 @@ osascript -e "tell application \"Terminal\" to do script \"claude '$2' --file '$
 
 ## Troubleshooting
 
-1. `php artisan kbms:doctor` — checks the whole integration surface in one shot (arrives with US-002).
+1. `php artisan kbms:doctor` — checks the whole integration surface in one shot: the ICS feed is reachable and actually parses as iCalendar, the transcripts directory exists and is readable, the launcher script exists and is executable (see the launcher two-argument contract above — the check only verifies the file exists and is executable, not that it honors the contract), the queue connection is reachable, `kbms:sync-calendar` is registered on the scheduler, and `KBMS_TIMEZONE` is a valid identifier. Every failing check prints a remediation hint naming the `KBMS_*` key at fault, and the command exits non-zero when any check fails, so it can gate a shell script. `NOT CONFIGURED` means the key was never set; `FAIL` means it was set to something the machine rejects — that distinction is the point of the command.
 2. `php artisan kbms:queue-test` then `php artisan queue:work --stop-when-empty` — proves the database queue worker processes a job.
 3. `php artisan schedule:list` — confirms the calendar sync entry and its interval.
 4. If `database/database.sqlite` is missing or unreadable, the shell shows an actionable message naming the exact remedy (`touch` + `migrate`, or a permissions fix) instead of a stack trace.
