@@ -615,23 +615,29 @@ tasks:
       10. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] All six feature tests pass via `php artisan test --compact`
-      - [ ] Coverage matches the `NORMAL` bar; no Playwright, Dusk, Pest browser, or viewport suite was added
-      - [ ] The auth-absence assertions fail if `App\Models\User` or any auth route is reintroduced (verify by temporarily re-adding one, then reverting)
-      - [ ] `.larapilot/docs/test-results/US-001.md` records the manual handoff steps
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] All six feature tests pass via `php artisan test --compact`
+      - [x] Coverage matches the `NORMAL` bar; no Playwright, Dusk, Pest browser, or viewport suite was added
+      - [x] The auth-absence assertions fail if `App\Models\User` or any auth route is reintroduced (verify by temporarily re-adding one, then reverting)
+      - [x] `.larapilot/docs/test-results/US-001.md` records the manual handoff steps
+      - [x] `php artisan larapilot:quality` passes
 
       ## Git Deliverables
       - Commit: `test(US-001): TASK-08 cover app scaffold, auth removal and loopback control`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes with the test command and its output
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 4
     dependencies:
       - TASK-03
       - TASK-07
+    commit:
+      sha: f7ad7c370283c80f6549aea532a7f0bcfae54abb
+      short_sha: f7ad7c3
+      subject: 'test(US-001): TASK-08 cover app scaffold, auth removal and loopback control'
+      committed_at: '2026-09-07T21:14:00+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/f7ad7c370283c80f6549aea532a7f0bcfae54abb'
   -
     id: TASK-09
     title: 'Write the baseline README and CHANGELOG'
@@ -726,4 +732,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T21:08:09+02:00'
+updated_at: '2026-09-07T21:14:02+02:00'
