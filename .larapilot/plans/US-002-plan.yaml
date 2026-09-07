@@ -309,11 +309,11 @@ tasks:
       6. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Queue check reads the configured connection at runtime and never hardcodes a driver
-      - [ ] An unreachable queue is reported as a failure with a remediation hint, not an uncaught exception
-      - [ ] Scheduler check detects both the registered and the missing `kbms:sync-calendar` entry
-      - [ ] All six checks are registered in `AppServiceProvider` in report order
-      - [ ] Unit tests pass; `larapilot:quality` green
+      - [x] Queue check reads the configured connection at runtime and never hardcodes a driver
+      - [x] An unreachable queue is reported as a failure with a remediation hint, not an uncaught exception
+      - [x] Scheduler check detects both the registered and the missing `kbms:sync-calendar` entry
+      - [x] All six checks are registered in `AppServiceProvider` in report order
+      - [x] Unit tests pass; `larapilot:quality` green
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -323,11 +323,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.0
     dependencies:
       - TASK-01
+    commit:
+      sha: bb071870c4332ce8846302aa51bed2bf1e40fb89
+      short_sha: bb07187
+      subject: 'feat(US-002): TASK-04 add the queue connection and scheduler registration checks'
+      committed_at: '2026-09-07T21:59:22+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/bb071870c4332ce8846302aa51bed2bf1e40fb89'
   -
     id: TASK-05
     title: 'Build the kbms:doctor command with per-check reporting and a gating exit code'
@@ -446,4 +452,4 @@ tasks:
     estimate_hours: 1.0
     dependencies:
       - TASK-05
-updated_at: '2026-09-07T21:58:38+02:00'
+updated_at: '2026-09-07T21:59:22+02:00'
