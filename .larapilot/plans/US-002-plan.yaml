@@ -446,10 +446,10 @@ tasks:
       5. Re-read the edited section end to end for accuracy against the shipped command output — no aspirational text.
 
       ## Completion Criteria
-      - [ ] No "arrives with US-002" placeholder remains anywhere in `README.md`
-      - [ ] README documents all six checks, the remediation behavior, and the exit-code gate
-      - [ ] `CHANGELOG.md` `[Unreleased] / Added` carries the doctor entry
-      - [ ] Documentation matches actual command behavior — verified by running `php artisan kbms:doctor`
+      - [x] No "arrives with US-002" placeholder remains anywhere in `README.md`
+      - [x] README documents all six checks, the remediation behavior, and the exit-code gate
+      - [x] `CHANGELOG.md` `[Unreleased] / Added` carries the doctor entry
+      - [x] Documentation matches actual command behavior — verified by running `php artisan kbms:doctor`
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -459,9 +459,15 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalize the local PR description for `develop`
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 1.0
     dependencies:
       - TASK-05
-updated_at: '2026-09-07T22:05:23+02:00'
+    commit:
+      sha: 2f5057bad21aab9c8c79c5ef673d9dc5fd3cc1d8
+      short_sha: 2f5057b
+      subject: 'docs(US-002): TASK-07 document kbms:doctor in the README and CHANGELOG'
+      committed_at: '2026-09-07T22:05:43+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/2f5057bad21aab9c8c79c5ef673d9dc5fd3cc1d8'
+updated_at: '2026-09-07T22:05:44+02:00'
