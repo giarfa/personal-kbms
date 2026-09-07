@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component states — Personal KBMS</title>
+  <meta name="description" content="Every loading, empty, error and blocked state the KBMS specs require, in one place.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.bunny.net">
+  <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet">
+  <link rel="stylesheet" href="starter-kit-tokens.css">
+  <link rel="stylesheet" href="kbms.css">
+</head>
+<body class="sk-mockup">
+  <a class="kb-skip" href="#main">Skip to content</a>
+
+  <div class="sk-layout">
+    <aside class="sk-sidebar" aria-label="Sidebar">
+      <div class="sk-sidebar__header">
+        <a href="index.html" class="sk-sidebar__logo">
+          <img src="favicon.svg" alt="" width="24" height="24" style="border-radius:6px">
+          Personal KBMS
+        </a>
+      </div>
+      <div class="sk-sidebar__group-label">Workspace</div>
+      <nav class="sk-sidebar__nav" aria-label="Main">
+        <a href="index.html">Agenda</a>
+        <a href="calendar.html">Calendar</a>
+      </nav>
+      <div class="sk-sidebar__group-label">Reference</div>
+      <nav class="sk-sidebar__nav" aria-label="Reference">
+        <a href="states.html" class="is-active" aria-current="page">Component states</a>
+        <a href="mobile.html">Narrow viewport</a>
+      </nav>
+      <div class="sk-sidebar__footer">
+        <div class="kb-sidebar-meta">
+          <strong style="color:var(--sidebar-foreground)">Local only</strong><br>
+          <code>127.0.0.1</code> &middot; Europe/Rome
+        </div>
+      </div>
+    </aside>
+
+    <div class="sk-inset">
+      <header class="sk-inset-header">
+        <button type="button" class="sk-sidebar-toggle" aria-label="Open navigation" aria-expanded="false">&#9776;</button>
+        <ol class="sk-breadcrumbs" aria-label="Breadcrumb">
+          <li><span>Component states</span></li>
+        </ol>
+        <div class="kb-header__spacer"></div>
+        <button type="button" class="kb-iconbtn" data-theme-toggle aria-pressed="false" aria-label="Toggle colour theme">
+          <span aria-hidden="true">&#9680;</span>
+          <span class="kb-sronly" data-theme-label>Dark</span>
+        </button>
+      </header>
+
+      <main class="kb-inset-content" id="main">
+        <div class="kb-page-head">
+          <div>
+            <h1>Component states</h1>
+            <p>Every state the acceptance criteria name &mdash; loading, empty, stale, blocked, broken. Press the theme button to check all of them in dark.</p>
+          </div>
+        </div>
+
+        <!-- ================================================ US-004 === -->
+        <section class="sk-card" style="margin-bottom:1rem">
+          <h2 class="sk-card__title">Sync status pill &mdash; US-004</h2>
+          <p class="sk-card__desc">Lives in the app header on every page. Relative time is the headline, absolute time the detail. <code>aria-live="polite"</code> so a state change is announced once, not on every tick.</p>
+
+          <div class="kb-stack">
+            <div class="kb-inline">
+              <p class="kb-sync kb-sync--ok" style="margin:0">
+                <span class="kb-sync__dot" aria-hidden="true"></span>
+                <span>Synced <span class="kb-sync__label">4 min ago</span> <span class="kb-note-inline">&middot; 12:36</span></span>
+                <button type="button" class="kb-sync__resync">Resync</button>
+              </p>
+              <span class="kb-note-inline">Healthy &mdash; last run succeeded inside the interval.</span>
+            </div>
+
+            <div class="kb-inline">
+              <p class="kb-sync kb-sync--syncing" style="margin:0">
+                <span class="kb-sync__dot" aria-hidden="true"></span>
+                <span>Syncing <span class="kb-sync__label">now&hellip;</span></span>
+              </p>
+              <span class="kb-note-inline">Run in progress. <strong>Resync is removed, not merely disabled</strong> &mdash; a second dispatch must not queue an overlapping run.</span>
+            </div>
+
+            <div class="kb-inline">
+              <p class="kb-sync kb-sync--stale" style="margin:0">
+                <span class="kb-sync__dot" aria-hidden="true"></span>
+                <span>Last sync <span class="kb-sync__label">52 min ago</span> <span class="kb-note-inline">&middot; stale</span></span>
+                <button type="button" class="kb-sync__resync">Resync</button>
+              </p>
+              <span class="kb-note-inline">Nothing failed, but no success for &gt;3&times; the interval. Flagged anyway.</span>
+            </div>
+
+            <div class="kb-inline">
+              <p class="kb-sync kb-sync--failed" style="margin:0">
+                <span class="kb-sync__dot" aria-hidden="true"></span>
+                <span>Sync <span class="kb-sync__label">failed</span> <span class="kb-note-inline">&middot; 11:48</span></span>
+                <button type="button" class="kb-sync__resync">Retry</button>
+              </p>
+              <span class="kb-note-inline">Last attempt errored. Previous mirror is intact and still shown.</span>
+            </div>
+
+            <div class="kb-inline">
+              <p class="kb-sync kb-sync--never" style="margin:0">
+                <span class="kb-sync__dot" aria-hidden="true"></span>
+                <span><span class="kb-sync__label">Never synced</span></span>
+                <button type="button" class="kb-sync__resync">Sync now</button>
+              </p>
+              <span class="kb-note-inline">No run recorded at all &mdash; explicitly &ldquo;never&rdquo;, never an empty value or &ldquo;56 years ago&rdquo;.</span>
+            </div>
+          </div>
+
+          <div class="kb-banner" role="alert" style="margin-top:1.25rem">
+            <span aria-hidden="true">&#9888;</span>
+            <span>
+              <strong>Last sync failed at 11:48</strong>
+              <code>cURL error 28: Operation timed out after 10000 milliseconds</code> &mdash; feed <code>KBMS_ICS_URL</code>. Showing the mirror from 11:33. Run <code>php&nbsp;artisan&nbsp;kbms:doctor</code> to check reachability.
+            </span>
+            <span class="kb-banner__actions">
+              <button type="button" class="sk-btn sk-btn--outline">Retry now</button>
+            </span>
+          </div>
+          <p class="kb-note-inline" style="margin:0.5rem 0 0">The full error is legible in the interface &mdash; the operator must never have to open <code>storage/logs</code> to learn why.</p>
+        </section>
+
+        <!-- ================================================ US-005 === -->
+        <section class="sk-card" style="margin-bottom:1rem">
+          <h2 class="sk-card__title">Agenda rows &amp; empty ranges &mdash; US-005</h2>
+          <p class="sk-card__desc">Coverage is stated in text as well as colour, so the agenda is scannable and legible to a screen reader without hovering.</p>
+
+          <ul class="kb-agenda" style="margin-bottom:1rem">
+            <li>
+              <a class="kb-row" href="meeting.html">
+                <span class="kb-row__time">09:30<small>60 min</small></span>
+                <span><span class="kb-row__title">Default row</span><span class="kb-row__meta"><span>Organiser: Chiara Fontana</span><span>Microsoft Teams</span></span></span>
+                <span class="kb-row__badges"><span class="kb-tag kb-tag--bare">Not annotated</span></span>
+              </a>
+            </li>
+            <li>
+              <a class="kb-row is-focused" href="meeting.html">
+                <span class="kb-row__time">10:00<small>30 min</small></span>
+                <span><span class="kb-row__title">Keyboard focus (frozen <code>:focus-visible</code>)</span><span class="kb-row__meta"><span>3&nbsp;px ring + border change, never outline-only</span></span></span>
+                <span class="kb-row__badges"><span class="kb-tag kb-tag--note">Notes</span></span>
+              </a>
+            </li>
+            <li>
+              <a class="kb-row kb-row--now" href="meeting.html">
+                <span class="kb-row__time">14:30<small>60 min</small></span>
+                <span><span class="kb-row__title">Next up (left rail marker)</span><span class="kb-row__meta"><span>First meeting after &ldquo;now&rdquo;</span></span></span>
+                <span class="kb-row__badges"><span class="kb-tag kb-tag--bare">Not annotated</span></span>
+              </a>
+            </li>
+            <li>
+              <a class="kb-row kb-row--cancelled" href="meeting.html">
+                <span class="kb-row__time">16:00<small>45 min</small></span>
+                <span><span class="kb-row__title">Cancelled upstream</span><span class="kb-row__meta"><span>Marked, never hidden &mdash; the notes on it still matter</span></span></span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--cancelled">Cancelled</span>
+                  <span class="kb-tag kb-tag--note">Notes</span>
+                </span>
+              </a>
+            </li>
+          </ul>
+
+          <div class="kb-stack">
+            <div class="kb-empty">
+              <h3>No meetings in this range</h3>
+              <p>Mon 14 &ndash; Sun 20 Sep is empty. Last successful sync 4 minutes ago, so this is a real gap rather than a missing mirror.</p>
+              <button type="button" class="sk-btn sk-btn--outline">Back to today</button>
+            </div>
+
+            <div class="kb-empty">
+              <h3>Nothing mirrored yet</h3>
+              <p>The calendar has never synced. Set <code>KBMS_ICS_URL</code>, then run <code>php artisan kbms:doctor</code> to confirm the feed is reachable.</p>
+              <button type="button" class="sk-btn sk-btn--primary">Sync now</button>
+            </div>
+
+            <div class="kb-empty">
+              <h3>That meeting is no longer in the mirror</h3>
+              <p>This occurrence fell outside the sync window or was removed from the feed. Notes written against it are retained and reachable from search once FR-013 lands.</p>
+              <a class="sk-btn sk-btn--outline" href="index.html">Back to agenda</a>
+            </div>
+          </div>
+
+          <h3 style="font-size:0.875rem;margin:1.25rem 0 0.5rem">Open in Outlook &mdash; link resolution order</h3>
+          <div class="kb-stack">
+            <div class="kb-inline">
+              <a class="sk-btn sk-btn--outline" href="#" target="_blank" rel="noopener"><span aria-hidden="true">&#8599;</span> Open in Outlook</a>
+              <span class="kb-tag kb-tag--ok">Feed-carried <code>event_url</code></span>
+              <span class="kb-note-inline">Preferred whenever the <code>VEVENT</code> carries one.</span>
+            </div>
+            <div class="kb-inline">
+              <a class="sk-btn sk-btn--outline" href="#" target="_blank" rel="noopener"><span aria-hidden="true">&#8599;</span> Open in Outlook</a>
+              <span class="kb-tag kb-tag--warn">Template fallback</span>
+              <span class="kb-note-inline">Opens the correct calendar <em>date</em>, not the exact item &mdash; no Graph id exists to deep-link with.</span>
+            </div>
+            <div class="kb-inline">
+              <button type="button" class="sk-btn sk-btn--outline" disabled aria-describedby="owa-why" style="opacity:0.5;cursor:not-allowed"><span aria-hidden="true">&#8599;</span> Open in Outlook</button>
+              <span class="kb-tag kb-tag--muted">Unavailable</span>
+              <span class="kb-note-inline" id="owa-why">No feed link and <code>KBMS_OUTLOOK_URL_TEMPLATE</code> is unset. Disabled with the reason attached &mdash; never a broken URL.</span>
+            </div>
+            <div class="kb-inline">
+              <a class="sk-btn sk-btn--outline" href="#" target="_blank" rel="noopener"><span aria-hidden="true">&#9654;</span> Join Teams meeting</a>
+              <span class="kb-note-inline">Always a <strong>distinct action</strong> from the calendar CTA, never merged into it.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================ US-006 === -->
+        <section class="sk-card" style="margin-bottom:1rem">
+          <h2 class="sk-card__title">Notes autosave &mdash; US-006</h2>
+          <p class="sk-card__desc">Autosave has no save button, so its state indicator is the whole contract. A failure must never look like a success.</p>
+
+          <div class="kb-stack">
+            <span class="kb-savestate kb-savestate--saving"><span class="kb-savestate__dot" aria-hidden="true"></span> Saving&hellip;</span>
+            <span class="kb-savestate"><span class="kb-savestate__dot" aria-hidden="true"></span> Saved 12:04</span>
+            <span class="kb-inline">
+              <span class="kb-savestate kb-savestate--error" role="alert"><span class="kb-savestate__dot" aria-hidden="true"></span> Not saved</span>
+              <button type="button" class="sk-btn sk-btn--outline">Retry</button>
+              <span class="kb-note-inline">Typed content stays in the editor. Nothing is discarded silently.</span>
+            </span>
+          </div>
+
+          <div class="kb-panel" style="margin-top:1rem;max-width:34rem">
+            <div class="kb-panel__head"><h3 style="margin:0;font-size:0.9375rem">Delete these notes?</h3></div>
+            <div class="kb-panel__body">
+              <p style="margin:0 0 0.75rem;font-size:0.8125rem">The note on <strong>Q4 roadmap review, Mon 7 Sep 09:30</strong> will be permanently removed. Only this occurrence is affected &mdash; other meetings in the series keep theirs.</p>
+              <p class="kb-note-inline" style="margin:0">The linked transcript file is not touched. The pipeline owns it.</p>
+            </div>
+            <div class="kb-panel__foot">
+              <button type="button" class="sk-btn sk-btn--destructive">Delete notes</button>
+              <button type="button" class="sk-btn sk-btn--ghost">Cancel</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================ US-007 === -->
+        <section class="sk-card" style="margin-bottom:1rem">
+          <h2 class="sk-card__title">Transcript link &mdash; US-007</h2>
+          <p class="sk-card__desc">Six states, and the distinctions between them are the spec. &ldquo;Missing&rdquo;, &ldquo;unreadable&rdquo; and &ldquo;unconfigured&rdquo; must not collapse into one message.</p>
+
+          <div class="kb-stack">
+            <div class="kb-inline">
+              <span class="kb-tag kb-tag--transcript">Linked by convention</span>
+              <span class="kb-note-inline">Pattern matched a single readable file.</span>
+            </div>
+            <div class="kb-inline">
+              <span class="kb-tag kb-tag--ok">Linked manually</span>
+              <span class="kb-note-inline">Operator's choice. <strong>Always wins</strong> over the convention, and a pattern change cannot dislodge it.</span>
+            </div>
+
+            <div class="kb-panel" style="max-width:44rem">
+              <div class="kb-panel__head">
+                <h3 style="margin:0;font-size:0.9375rem">Three candidates in the tolerance window</h3>
+                <div class="kb-panel__actions"><span class="kb-tag kb-tag--warn">Choose one</span></div>
+              </div>
+              <div class="kb-panel__body">
+                <p class="kb-note-inline" style="margin:0 0 0.75rem">Meeting starts 09:30; the recorder rarely starts on the calendar minute. The resolver does <strong>not</strong> guess &mdash; it surfaces the matches.</p>
+                <div class="kb-stack">
+                  <label class="kb-inline"><input type="radio" name="cand" checked><code style="font-size:0.75rem">2026-09-07-0930-q4-roadmap-review.md</code> <span class="kb-note-inline">exact prefix &middot; 18.4 KB</span></label>
+                  <label class="kb-inline"><input type="radio" name="cand"><code style="font-size:0.75rem">2026-09-07-0928-roadmap.md</code> <span class="kb-note-inline">&minus;2 min &middot; 17.9 KB</span></label>
+                  <label class="kb-inline"><input type="radio" name="cand"><code style="font-size:0.75rem">2026-09-07-0933-untitled-call.txt</code> <span class="kb-note-inline">+3 min &middot; 4.1 KB</span></label>
+                </div>
+              </div>
+              <div class="kb-panel__foot">
+                <button type="button" class="sk-btn sk-btn--primary">Link selected</button>
+                <button type="button" class="sk-btn sk-btn--ghost">Browse for another file&hellip;</button>
+              </div>
+            </div>
+
+            <div class="kb-banner" role="alert">
+              <span aria-hidden="true">&#9888;</span>
+              <span>
+                <strong>Linked file is gone</strong>
+                <code>/Users/operator/Recordings/transcripts/2026-09-04-1400-client-workshop.md</code> no longer exists. The link is kept so nothing is lost silently.
+              </span>
+              <span class="kb-banner__actions">
+                <button type="button" class="sk-btn sk-btn--outline">Relink&hellip;</button>
+                <button type="button" class="sk-btn sk-btn--ghost">Clear link</button>
+              </span>
+            </div>
+
+            <div class="kb-banner" role="alert">
+              <span aria-hidden="true">&#9888;</span>
+              <span>
+                <strong>File exists but is not readable</strong>
+                Permission denied on <code>2026-09-02-1100-1-1-sara.md</code>. This is reported <em>distinctly</em> from a missing file, because the fix is different: <code>chmod</code>, not relink.
+              </span>
+            </div>
+
+            <div class="kb-empty">
+              <h3>Transcripts directory not configured</h3>
+              <p>Set <code>KBMS_TRANSCRIPTS_PATH</code> in <code>.env</code> and re-run <code>php artisan kbms:doctor</code>. A configuration prompt &mdash; not an error page.</p>
+            </div>
+
+            <div class="kb-inline">
+              <span class="kb-tag kb-tag--warn">Bounded read</span>
+              <span class="kb-note-inline">A 40&nbsp;MB transcript renders its first bounded chunk with &ldquo;showing first 2&nbsp;MB &mdash; open the file for the rest&rdquo;. Reading is never unbounded.</span>
+            </div>
+
+            <div class="kb-inline">
+              <span class="kb-tag kb-tag--cancelled">Rejected</span>
+              <span class="kb-note-inline">A resolved path escaping <code>KBMS_TRANSCRIPTS_PATH</code> (via pattern or manual input) is refused outright, whether or not the file exists.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================ US-009 === -->
+        <section class="sk-card" style="margin-bottom:1rem">
+          <h2 class="sk-card__title">Launch bridge &mdash; US-009</h2>
+          <p class="sk-card__desc">Every blocked path states which precondition failed and which configuration key fixes it.</p>
+
+          <div class="kb-stack">
+            <div class="kb-inline">
+              <button type="button" class="sk-btn sk-btn--primary"><span aria-hidden="true">&#9654;</span> Launch session</button>
+              <span class="kb-tag kb-tag--ok">Launcher ready</span>
+              <span class="kb-note-inline">Transcript linked, script present and executable.</span>
+            </div>
+
+            <div class="kb-inline">
+              <button type="button" class="sk-btn sk-btn--primary" disabled style="opacity:0.5;cursor:not-allowed" aria-describedby="blk1"><span aria-hidden="true">&#9654;</span> Launch session</button>
+              <span class="kb-tag kb-tag--muted">Blocked</span>
+              <span class="kb-note-inline" id="blk1">No transcript linked &mdash; there would be no context file to pass as argument one. <a href="#">Link a transcript</a> first.</span>
+            </div>
+
+            <div class="kb-inline">
+              <button type="button" class="sk-btn sk-btn--primary" disabled style="opacity:0.5;cursor:not-allowed" aria-describedby="blk2"><span aria-hidden="true">&#9654;</span> Launch session</button>
+              <span class="kb-tag kb-tag--muted">Blocked</span>
+              <span class="kb-note-inline" id="blk2"><code>KBMS_CLAUDE_LAUNCHER</code> is not configured.</span>
+            </div>
+
+            <div class="kb-inline">
+              <button type="button" class="sk-btn sk-btn--primary" disabled style="opacity:0.5;cursor:not-allowed" aria-describedby="blk3"><span aria-hidden="true">&#9654;</span> Launch session</button>
+              <span class="kb-tag kb-tag--muted">Blocked</span>
+              <span class="kb-note-inline" id="blk3">Script found but not executable: <code>chmod +x /Users/operator/bin/kbms-claude.sh</code></span>
+            </div>
+
+            <div class="sk-field" style="max-width:34rem;margin-top:0.5rem">
+              <label for="q-err">Your question</label>
+              <textarea class="kb-textarea kb-textarea--sm" id="q-err" aria-invalid="true" aria-describedby="q-err-msg" style="border-color:var(--kb-danger)">   </textarea>
+              <p id="q-err-msg" role="alert" style="margin:0.375rem 0 0;font-size:0.75rem;color:var(--kb-danger)">Type a question first &mdash; whitespace only is rejected before anything is dispatched.</p>
+            </div>
+
+            <div class="kb-inline">
+              <span class="kb-tag kb-tag--ok">Dispatched</span>
+              <span class="kb-note-inline">Queued job accepted. The terminal window is owned by the OS: quitting <code>queue:work</code> does not close the operator's session.</span>
+            </div>
+
+            <div class="kb-banner" role="alert">
+              <span aria-hidden="true">&#9888;</span>
+              <span>
+                <strong>Launcher exited 127</strong>
+                Recorded on the launch row and shown here. Copy the invocation below and run it in a terminal to see the script's own output.
+              </span>
+            </div>
+
+            <div>
+              <p class="kb-note-inline" style="margin:0 0 0.375rem">Adversarial question text stays one argument &mdash; this is the security-critical criterion:</p>
+              <pre class="kb-command" aria-label="Example invocation with adversarial question text">/Users/operator/bin/kbms-claude.sh
+  <span class="kb-arg">'/Users/operator/Recordings/transcripts/2026-09-07-0930-q4-roadmap-review.md'</span>
+  <span class="kb-arg kb-arg--2">'What did $(whoami) decide; also `rm -rf ~`, and "why"?
+Include the second line too.'</span></pre>
+              <p class="kb-note-inline" style="margin:0.375rem 0 0">Built as an array. Nothing above is interpreted by a shell &mdash; the script receives it verbatim as <code>$2</code>.</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="kb-anno">
+          <strong>Contract for Anne</strong>
+          Each block above maps to a named acceptance criterion. The wording matters as much as the layout: &ldquo;never synced&rdquo; &ne; &ldquo;stale&rdquo;, &ldquo;missing file&rdquo; &ne; &ldquo;unreadable file&rdquo;, &ldquo;not configured&rdquo; &ne; &ldquo;configured but invalid&rdquo;. Feature tests should assert the distinguishing string, not just a non-200 or a generic error class.
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="theme.js"></script>
+</body>
+</html>

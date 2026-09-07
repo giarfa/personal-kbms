@@ -1,0 +1,39 @@
+code: US-006
+title: 'Personal notes on a meeting'
+epic:
+  code: EP-003
+  title: 'Meeting Workspace'
+  objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
+priority: HIGH
+points: 5
+status: TODO
+body: |
+  #### US-006: Personal notes on a meeting
+
+  **Epic:** EP-003 | **Priority:** HIGH | **Points:** 5 | **Status:** TODO
+  **Blocked by:** US-005
+
+  **Traces to:** FR-005 (MoSCoW: Must)
+
+  **User Story**
+  As the operator,
+  I want to write Markdown notes against any meeting and trust that they survive whatever the calendar feed does next,
+  so that the tool holds a layer of meaning that belongs to me rather than a disposable overlay on someone else's data.
+
+  **Demonstrates**
+  After implementing this spec, a note written on a meeting persists across calendar resyncs — including after the meeting is retitled, rescheduled, or cancelled upstream — and never appears on a sibling occurrence of the same recurring series.
+
+  **Acceptance Criteria**
+  - [ ] A Markdown note surface on the meeting detail page **autosaves** without an explicit save action, with a visible saved/saving indicator
+  - [ ] Notes are keyed on (`event_uid`, `event_recurrence_id`) — the occurrence identity, not the event row's surrogate id
+  - [ ] **A note written on one occurrence of a recurring series never appears on its siblings** — this is the highest-value test in the suite
+  - [ ] Notes are writable **before and after** the meeting; there is no state gate tied to whether it has happened
+  - [ ] A rendered Markdown preview is available alongside the raw editor
+  - [ ] Notes survive a resync that changes the meeting's title, time, or location
+  - [ ] Notes survive upstream **cancellation** and remain reachable on the cancelled occurrence
+  - [ ] An explicit **delete path** removes a meeting's notes, with confirmation (PRD privacy obligation 2)
+  - [ ] Note content is stored as plain text and rendered without executing embedded HTML or scripts
+  - [ ] Meetings carrying notes are flagged in the agenda so the list doubles as a coverage map
+  - [ ] **Error case:** an autosave failure surfaces a retry affordance and does not silently discard typed content
+  - [ ] **Edge case:** a note on an occurrence that later disappears from the feed window is retained, not orphaned or purged
+  - [ ] Feature test asserts recurrence isolation, resync durability across retitle/reschedule/cancel, and the delete path

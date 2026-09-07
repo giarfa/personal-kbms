@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calendar — Personal KBMS</title>
+  <meta name="description" content="Month, week and day views of the mirrored calendar with note and transcript coverage indicators.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.bunny.net">
+  <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet">
+  <link rel="stylesheet" href="starter-kit-tokens.css">
+  <link rel="stylesheet" href="kbms.css">
+</head>
+<body class="sk-mockup">
+  <a class="kb-skip" href="#main">Skip to content</a>
+
+  <div class="sk-layout">
+    <aside class="sk-sidebar" aria-label="Sidebar">
+      <div class="sk-sidebar__header">
+        <a href="index.html" class="sk-sidebar__logo">
+          <img src="favicon.svg" alt="" width="24" height="24" style="border-radius:6px">
+          Personal KBMS
+        </a>
+      </div>
+      <div class="sk-sidebar__group-label">Workspace</div>
+      <nav class="sk-sidebar__nav" aria-label="Main">
+        <a href="index.html">Agenda</a>
+        <a href="calendar.html" class="is-active" aria-current="page">Calendar</a>
+      </nav>
+      <div class="sk-sidebar__group-label">Reference</div>
+      <nav class="sk-sidebar__nav" aria-label="Reference">
+        <a href="states.html">Component states</a>
+        <a href="mobile.html">Narrow viewport</a>
+      </nav>
+      <div class="sk-sidebar__footer">
+        <div class="kb-sidebar-meta">
+          <strong style="color:var(--sidebar-foreground)">Local only</strong><br>
+          <code>127.0.0.1</code> &middot; Europe/Rome<br>
+          SQLite &middot; no accounts
+        </div>
+      </div>
+    </aside>
+
+    <div class="sk-inset">
+      <header class="sk-inset-header">
+        <button type="button" class="sk-sidebar-toggle" aria-label="Open navigation" aria-expanded="false">&#9776;</button>
+        <ol class="sk-breadcrumbs" aria-label="Breadcrumb">
+          <li><span>Calendar</span></li>
+        </ol>
+        <div class="kb-header__spacer"></div>
+        <p class="kb-sync kb-sync--stale" aria-live="polite" style="margin:0">
+          <span class="kb-sync__dot" aria-hidden="true"></span>
+          <span>Last sync <span class="kb-sync__label">52 min ago</span>
+            <span class="kb-note-inline">&middot; stale</span>
+          </span>
+          <button type="button" class="kb-sync__resync">Resync</button>
+        </p>
+        <button type="button" class="kb-iconbtn" data-theme-toggle aria-pressed="false" aria-label="Toggle colour theme">
+          <span aria-hidden="true">&#9680;</span>
+          <span class="kb-sronly" data-theme-label>Dark</span>
+        </button>
+      </header>
+
+      <main class="kb-inset-content" id="main">
+        <div class="kb-page-head">
+          <div>
+            <h1>Calendar</h1>
+            <p>Coverage map: which meetings you have already annotated, and where the gaps are.</p>
+          </div>
+          <div class="kb-page-head__actions">
+            <a class="sk-btn sk-btn--outline" href="index.html">Agenda view</a>
+          </div>
+        </div>
+
+        <div class="kb-banner kb-banner--warn" role="status">
+          <span aria-hidden="true">&#9888;</span>
+          <span>
+            <strong>Mirror may be stale</strong>
+            No successful sync for 52 minutes &mdash; more than three times the 15-minute interval. Nothing has failed; the scheduler may not be running.
+          </span>
+          <span class="kb-banner__actions">
+            <button type="button" class="sk-btn sk-btn--outline">Resync now</button>
+          </span>
+        </div>
+
+        <div class="kb-toolbar" role="group" aria-label="Calendar navigation">
+          <button type="button" class="kb-iconbtn" aria-label="Previous month">&#8249;</button>
+          <button type="button" class="kb-iconbtn" aria-label="Next month">&#8250;</button>
+          <button type="button" class="sk-btn sk-btn--outline">Today</button>
+          <span class="kb-toolbar__range" aria-live="polite">September 2026</span>
+
+          <span class="kb-toolbar__spacer"></span>
+
+          <div class="kb-segmented" role="group" aria-label="View">
+            <button type="button" aria-pressed="true">Month</button>
+            <button type="button" aria-pressed="false">Week</button>
+            <button type="button" aria-pressed="false">Day</button>
+          </div>
+        </div>
+
+        <p class="kb-legend" style="margin:0 0 1rem">
+          <span>Left edge marks coverage:</span>
+          <span class="kb-inline"><span class="kb-ev__mark kb-ev__mark--note" style="width:.6rem;height:.6rem" aria-hidden="true"></span> notes</span>
+          <span class="kb-inline"><span class="kb-ev__mark kb-ev__mark--transcript" style="width:.6rem;height:.6rem" aria-hidden="true"></span> transcript</span>
+          <span>both = two dots &middot; dashed + struck = cancelled &middot; every event also states its coverage in its accessible name</span>
+        </p>
+
+        <!-- =========================================== month (US-008) === -->
+        <section class="kb-cal" aria-label="September 2026, month view">
+          <div class="kb-cal__dow" aria-hidden="true">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+
+          <!-- week 1: 31 Aug – 6 Sep -->
+          <div class="kb-cal__weekrow">
+            <div class="kb-cal__numcell kb-cal__numcell--out"><span class="kb-cal__num">31</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">1</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">2</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">3</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">4</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">5</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">6</span></div>
+
+            <div class="kb-cal__spanlane" style="grid-column:1 / span 7"></div>
+
+            <div class="kb-cal__evcell kb-cal__evcell--out">
+              <a class="kb-ev" href="meeting.html"><span class="kb-ev__time">09:00</span> Sprint planning</a>
+            </div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="09:00 Board sync, has notes">
+                <span class="kb-ev__time">09:00</span> Board sync
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span></span>
+              </a>
+            </div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--transcript" href="meeting.html" aria-label="11:00 1:1 Sara Rinaldi, has transcript">
+                <span class="kb-ev__time">11:00</span> 1:1 Sara
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--transcript"></span></span>
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--both" href="meeting.html" aria-label="14:00 Client workshop, has notes and transcript">
+                <span class="kb-ev__time">14:00</span> Client workshop
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span><span class="kb-ev__mark kb-ev__mark--transcript"></span></span>
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell"></div>
+          </div>
+
+          <!-- week 2: 7 – 13 Sep (current week) -->
+          <div class="kb-cal__weekrow">
+            <div class="kb-cal__numcell kb-cal__numcell--today"><span class="kb-cal__num" aria-current="date">7</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">8</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">9</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">10</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">11</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">12</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">13</span></div>
+
+            <!-- all-day / multi-day lane: real span, not per-day continuation chips -->
+            <div class="kb-cal__spanlane" style="grid-column:1 / span 2">
+              <a class="kb-cal__span" href="meeting.html" aria-label="All day, 7 to 8 September, Company offsite planning window">Company offsite &mdash; planning window</a>
+            </div>
+            <div class="kb-cal__spanlane" style="grid-column:3 / span 5"></div>
+
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="08:45 Daily standup Platform, has notes">
+                <span class="kb-ev__time">08:45</span> Standup
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span></span>
+              </a>
+              <a class="kb-ev kb-ev--both" href="meeting.html" aria-label="09:30 Q4 roadmap review, has notes and transcript">
+                <span class="kb-ev__time">09:30</span> Q4 roadmap
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span><span class="kb-ev__mark kb-ev__mark--transcript"></span></span>
+              </a>
+              <a class="kb-ev kb-ev--transcript" href="meeting.html" aria-label="11:00 1:1 Sara Rinaldi, has transcript">
+                <span class="kb-ev__time">11:00</span> 1:1 Sara
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--transcript"></span></span>
+              </a>
+              <button type="button" class="kb-cal__more" aria-expanded="false">+2 more</button>
+            </div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--allday" href="meeting.html" aria-label="All day, Public holiday Lombardy">All day &middot; Public holiday</a>
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="10:00 Design sync agenda view, has notes">
+                <span class="kb-ev__time">10:00</span> Design sync
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span></span>
+              </a>
+              <a class="kb-ev" href="meeting.html" aria-label="15:00 Board prep H1 numbers, not annotated">
+                <span class="kb-ev__time">15:00</span> Board prep
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="08:45 Daily standup Platform, has notes">
+                <span class="kb-ev__time">08:45</span> Standup
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span></span>
+              </a>
+              <a class="kb-ev" href="meeting.html" aria-label="16:00 Vendor call Acme Analytics, not annotated">
+                <span class="kb-ev__time">16:00</span> Vendor call
+              </a>
+            </div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--both" href="meeting.html" aria-label="15:00 Sprint retro, has notes and transcript">
+                <span class="kb-ev__time">15:00</span> Sprint retro
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span><span class="kb-ev__mark kb-ev__mark--transcript"></span></span>
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell"></div>
+          </div>
+
+          <!-- week 3: 14 – 20 Sep, multi-day conference -->
+          <div class="kb-cal__weekrow">
+            <div class="kb-cal__numcell"><span class="kb-cal__num">14</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">15</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">16</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">17</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">18</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">19</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">20</span></div>
+
+            <div class="kb-cal__spanlane" style="grid-column:1 / span 1"></div>
+            <div class="kb-cal__spanlane" style="grid-column:2 / span 3">
+              <a class="kb-cal__span" href="meeting.html" aria-label="15 to 17 September, Industry conference, Berlin">Industry conference &mdash; Berlin</a>
+            </div>
+            <div class="kb-cal__spanlane" style="grid-column:5 / span 3"></div>
+
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="08:45 Daily standup Platform, has notes">
+                <span class="kb-ev__time">08:45</span> Standup
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span></span>
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--cancelled" href="meeting.html" aria-label="11:00 Vendor demo Acme Analytics, cancelled">
+                <span class="kb-ev__time">11:00</span> Vendor demo
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell"></div>
+          </div>
+
+          <!-- week 4: 21 – 27 Sep -->
+          <div class="kb-cal__weekrow">
+            <div class="kb-cal__numcell"><span class="kb-cal__num">21</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">22</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">23</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">24</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">25</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">26</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">27</span></div>
+
+            <div class="kb-cal__spanlane" style="grid-column:1 / span 7"></div>
+
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="08:45 Daily standup Platform, has notes">
+                <span class="kb-ev__time">08:45</span> Standup
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span></span>
+              </a>
+            </div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev" href="meeting.html" aria-label="14:00 Quarterly business review, not annotated">
+                <span class="kb-ev__time">14:00</span> QBR
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--transcript" href="meeting.html" aria-label="10:30 Client check-in, has transcript">
+                <span class="kb-ev__time">10:30</span> Client check-in
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--transcript"></span></span>
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell"></div>
+          </div>
+
+          <!-- week 5: 28 Sep – 4 Oct -->
+          <div class="kb-cal__weekrow">
+            <div class="kb-cal__numcell"><span class="kb-cal__num">28</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">29</span></div>
+            <div class="kb-cal__numcell"><span class="kb-cal__num">30</span></div>
+            <div class="kb-cal__numcell kb-cal__numcell--out"><span class="kb-cal__num">1</span></div>
+            <div class="kb-cal__numcell kb-cal__numcell--out"><span class="kb-cal__num">2</span></div>
+            <div class="kb-cal__numcell kb-cal__numcell--out"><span class="kb-cal__num">3</span></div>
+            <div class="kb-cal__numcell kb-cal__numcell--out"><span class="kb-cal__num">4</span></div>
+
+            <div class="kb-cal__spanlane" style="grid-column:1 / span 7"></div>
+
+            <div class="kb-cal__evcell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="08:45 Daily standup Platform, has notes">
+                <span class="kb-ev__time">08:45</span> Standup
+                <span class="kb-ev__marks" aria-hidden="true"><span class="kb-ev__mark kb-ev__mark--note"></span></span>
+              </a>
+            </div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell"></div>
+            <div class="kb-cal__evcell kb-cal__evcell--out"></div>
+            <div class="kb-cal__evcell kb-cal__evcell--out"></div>
+            <div class="kb-cal__evcell kb-cal__evcell--out"></div>
+            <div class="kb-cal__evcell kb-cal__evcell--out"></div>
+          </div>
+        </section>
+
+        <div class="kb-anno">
+          <strong>Mockup annotation &mdash; month view (US-008)</strong>
+          Each week is one grid with three rows: day numbers, an <em>all-day / multi-day lane</em>, then timed events. The offsite and the conference are single bars spanning their real day count &mdash; not per-day continuation chips. All-day events never render as midnight-to-midnight blocks. Overflow degrades to <code>+2 more</code>, which must expand rather than hide events silently, and only the visible range is queried.
+        </div>
+
+        <!-- ============================================ week view === -->
+        <h2 style="margin:2rem 0 0.75rem;font-size:1rem">Week &mdash; Mon 7 to Sun 13 Sep</h2>
+        <section class="kb-cal" aria-label="Week of 7 September 2026">
+          <div class="kb-week">
+            <div class="kb-week__corner"><span class="kb-sronly">Time</span></div>
+            <div class="kb-week__head kb-week__head--today">Mon 7</div>
+            <div class="kb-week__head">Tue 8</div>
+            <div class="kb-week__head">Wed 9</div>
+            <div class="kb-week__head">Thu 10</div>
+            <div class="kb-week__head">Fri 11</div>
+            <div class="kb-week__head">Sat 12</div>
+            <div class="kb-week__head">Sun 13</div>
+
+            <div class="kb-week__alldaylabel">All day</div>
+            <div class="kb-week__allday">
+              <a class="kb-ev kb-ev--allday" href="meeting.html" aria-label="All day, Company offsite planning window, 7 to 8 September">Company offsite &rarr;</a>
+            </div>
+            <div class="kb-week__allday">
+              <a class="kb-ev kb-ev--allday" href="meeting.html" aria-label="All day, Company offsite planning window continues">&rarr; offsite</a>
+              <a class="kb-ev kb-ev--allday" href="meeting.html" aria-label="All day, Public holiday Lombardy">Public holiday</a>
+            </div>
+            <div class="kb-week__allday"></div>
+            <div class="kb-week__allday"></div>
+            <div class="kb-week__allday"></div>
+            <div class="kb-week__allday"></div>
+            <div class="kb-week__allday"></div>
+
+            <div class="kb-week__hour">08:00</div>
+            <div class="kb-week__cell kb-week__cell--now">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="08:45 Daily standup, has notes"><span class="kb-ev__time">08:45</span> Standup</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="08:45 Daily standup, has notes"><span class="kb-ev__time">08:45</span> Standup</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+
+            <div class="kb-week__hour">09:00</div>
+            <div class="kb-week__cell kb-week__cell--now">
+              <a class="kb-ev kb-ev--both" href="meeting.html" aria-label="09:30 to 10:30 Q4 roadmap review, has notes and transcript"><span class="kb-ev__time">09:30</span> Q4 roadmap review</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+
+            <div class="kb-week__hour">10:00</div>
+            <div class="kb-week__cell kb-week__cell--now"></div>
+            <div class="kb-week__cell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="10:00 to 11:00 Design sync, has notes"><span class="kb-ev__time">10:00</span> Design sync</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+
+            <div class="kb-week__hour">11:00</div>
+            <div class="kb-week__cell kb-week__cell--now">
+              <a class="kb-ev kb-ev--transcript" href="meeting.html" aria-label="11:00 1:1 Sara Rinaldi, has transcript"><span class="kb-ev__time">11:00</span> 1:1 Sara</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+
+            <div class="kb-week__hour">14:00</div>
+            <div class="kb-week__cell kb-week__cell--now">
+              <a class="kb-ev" href="meeting.html" aria-label="14:30 to 15:30 Excellence client discovery call, not annotated"><span class="kb-ev__time">14:30</span> Discovery call</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell">
+              <a class="kb-ev kb-ev--both" href="meeting.html" aria-label="15:00 Sprint retro, has notes and transcript"><span class="kb-ev__time">15:00</span> Sprint retro</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+
+            <div class="kb-week__hour">16:00</div>
+            <div class="kb-week__cell kb-week__cell--now">
+              <a class="kb-ev kb-ev--cancelled" href="meeting.html" aria-label="16:00 Vendor demo Acme Analytics, cancelled"><span class="kb-ev__time">16:00</span> Vendor demo</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell">
+              <a class="kb-ev" href="meeting.html" aria-label="16:00 Vendor call, not annotated"><span class="kb-ev__time">16:00</span> Vendor call</a>
+            </div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+            <div class="kb-week__cell"></div>
+          </div>
+        </section>
+
+        <!-- ============================================= day view === -->
+        <h2 style="margin:2rem 0 0.75rem;font-size:1rem">Day &mdash; Mon 7 Sep</h2>
+        <section class="kb-cal" style="max-width:26rem" aria-label="7 September 2026, day view">
+          <div class="kb-week kb-week--day">
+            <div class="kb-week__corner"><span class="kb-sronly">Time</span></div>
+            <div class="kb-week__head kb-week__head--today">Mon 7 Sep &middot; today</div>
+
+            <div class="kb-week__alldaylabel">All day</div>
+            <div class="kb-week__allday">
+              <a class="kb-ev kb-ev--allday" href="meeting.html" aria-label="All day, Company offsite planning window">Company offsite &rarr;</a>
+            </div>
+
+            <div class="kb-week__hour">08:00</div>
+            <div class="kb-week__cell">
+              <a class="kb-ev kb-ev--note" href="meeting.html" aria-label="08:45 Daily standup, has notes"><span class="kb-ev__time">08:45</span> Standup &mdash; Platform</a>
+            </div>
+
+            <div class="kb-week__hour">09:00</div>
+            <div class="kb-week__cell">
+              <a class="kb-ev kb-ev--both" href="meeting.html" aria-label="09:30 Q4 roadmap review, has notes and transcript"><span class="kb-ev__time">09:30</span> Q4 roadmap review</a>
+            </div>
+
+            <div class="kb-week__hour">10:00</div>
+            <div class="kb-week__cell"></div>
+
+            <div class="kb-week__hour">11:00</div>
+            <div class="kb-week__cell">
+              <a class="kb-ev kb-ev--transcript" href="meeting.html" aria-label="11:00 1:1 Sara Rinaldi, has transcript"><span class="kb-ev__time">11:00</span> 1:1 &mdash; Sara Rinaldi</a>
+            </div>
+
+            <div class="kb-week__hour">12:00</div>
+            <div class="kb-week__cell kb-week__cell--now"><span class="kb-note-inline" style="padding:0.25rem">&larr; now 12:40</span></div>
+
+            <div class="kb-week__hour">14:00</div>
+            <div class="kb-week__cell">
+              <a class="kb-ev" href="meeting.html" aria-label="14:30 Excellence client discovery call, not annotated"><span class="kb-ev__time">14:30</span> Discovery call</a>
+            </div>
+
+            <div class="kb-week__hour">16:00</div>
+            <div class="kb-week__cell">
+              <a class="kb-ev kb-ev--cancelled" href="meeting.html" aria-label="16:00 Vendor demo, cancelled"><span class="kb-ev__time">16:00</span> Vendor demo</a>
+            </div>
+          </div>
+        </section>
+
+        <div class="kb-anno">
+          <strong>Mockup annotation &mdash; keyboard &amp; screen reader (US-008)</strong>
+          FullCalendar's defaults are not sufficient on their own. Every event must be a real focusable link whose accessible name carries <em>time, title and coverage</em> &mdash; the marks are <code>aria-hidden</code> decoration on top of that name, never the only signal. The grid needs arrow-key movement between days plus <code>Home</code>/<code>End</code>, the view switcher is a pressed-state button group, and view + date position must survive a round trip to a meeting and back.
+        </div>
+
+        <div class="kb-anno">
+          <strong>Mockup annotation &mdash; timezone (US-008)</strong>
+          Times render in <code>KBMS_TIMEZONE</code>. The DST boundary case (Europe/Rome, 25 Oct 2026) must be checked in week view: the 03:00 hour appears twice and neither copy may swallow the other's events.
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="theme.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+code: US-002
+title: 'Environment doctor command'
+epic:
+  code: EP-001
+  title: 'Foundation & Environment'
+  objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
+priority: HIGH
+points: 3
+status: TODO
+body: |
+  #### US-002: Environment doctor command
+
+  **Epic:** EP-001 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+  **Blocked by:** US-001
+
+  **Traces to:** FR-011 (MoSCoW: Must)
+
+  **User Story**
+  As the operator,
+  I want a single command that checks every assumption the product makes about my machine,
+  so that a misconfigured path, an unreachable feed, or a stopped worker is a stated failure rather than a silent one I discover days later.
+
+  **Demonstrates**
+  After implementing this spec, `php artisan kbms:doctor` prints one pass/fail line per check with a remediation hint on every failure, and exits non-zero when any check fails.
+
+  **Acceptance Criteria**
+  - [ ] `php artisan kbms:doctor` reports pass/fail independently for: ICS URL reachable and parseable; transcripts directory present and readable; launcher script present and **executable**; queue connection reachable; scheduler registered; `KBMS_TIMEZONE` a valid timezone identifier
+  - [ ] Every failing check prints a specific remediation hint naming the configuration key at fault
+  - [ ] Exit code is `0` when all checks pass and non-zero when any check fails, so it is usable as a gate
+  - [ ] Checks run independently — one failure does not abort the remaining checks
+  - [ ] **Error case:** an unset configuration value is reported as "not configured" and distinguished from "configured but invalid"
+  - [ ] **Error case:** the ICS reachability check applies a bounded timeout and never hangs the command
+  - [ ] **Edge case:** a launcher script that exists but lacks the executable bit fails the check with that specific reason
+  - [ ] **Edge case:** the ICS check validates that the response actually parses as iCalendar, not merely that HTTP returned 200
+  - [ ] Feature test covers all-pass and each individual failure mode with faked HTTP and a temporary filesystem

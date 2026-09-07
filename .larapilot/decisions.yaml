@@ -1,0 +1,184 @@
+decisions:
+  -
+    id: 0954638da7c7ebd3
+    ts: '2026-09-07T17:00:39+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'project kind'
+    label: 'Project Kind'
+    value: Personal
+    question: null
+    rationale: 'Solo productivity tool over own calendar and call transcripts'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 9d594647cdd159bb
+    ts: '2026-09-07T17:00:39+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'local development environment'
+    label: 'local development environment'
+    value: 'Laravel Herd'
+    question: null
+    rationale: 'Native macOS PHP; app must reach host filesystem and invoke the local claude CLI'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 85740d0c2fb85aa3
+    ts: '2026-09-07T17:15:24+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'delivery target'
+    label: 'Delivery Target'
+    value: MVP
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: cc0e4828160eb5d8
+    ts: '2026-09-07T17:15:24+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'delivery deadline'
+    label: 'delivery deadline'
+    value: 'None — no fixed date, milestone tracking off'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: eb7d27f2fcab3c0e
+    ts: '2026-09-07T17:15:24+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'llm bridge mechanism'
+    label: 'LLM bridge mechanism'
+    value: 'Launch user-owned .sh with two args (context file path + question); no headless API, no reply capture'
+    question: null
+    rationale: 'User interacts with Claude in a regular interactive shell; avoids API key cost'
+    source: chat
+    spec: null
+    supersedes: null
+  -
+    id: 2deaf85cb3b47934
+    ts: '2026-09-07T17:15:24+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'terminal launch mode'
+    label: 'terminal launch mode'
+    value: 'The .sh opens its own window; app fires it in background via Process::start'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: b34c12f6270bafa0
+    ts: '2026-09-07T17:15:31+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'frontend topology'
+    label: 'Frontend Topology'
+    value: Laravel-coupled
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 5a7436f61c31b55a
+    ts: '2026-09-07T17:15:32+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'ui stack / admin panel'
+    label: 'UI stack / admin panel'
+    value: 'Laravel Starter Kit (livewire + Flux) as scaffold; Livewire 3 + Alpine + FullCalendar'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 3d0cd6d4ff8f8f86
+    ts: '2026-09-07T17:15:32+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'access and authentication'
+    label: 'access and authentication'
+    value: 'Localhost only, no login at all (accepted risk, bind 127.0.0.1)'
+    question: null
+    rationale: 'Single-user local tool; user accepted no-auth trade-off'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 5633b6c55e8b5233
+    ts: '2026-09-07T17:15:32+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'data store'
+    label: 'data store'
+    value: 'SQLite (FTS5 for later search)'
+    question: null
+    rationale: 'Single-user local tool; zero-ops persistence'
+    source: chat
+    spec: null
+    supersedes: null
+  -
+    id: f57d0e2206c62e25
+    ts: '2026-09-07T17:15:32+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-inception
+    topic: 'budget sensitivity'
+    label: 'Budget Sensitivity'
+    value: Relaxed
+    question: null
+    rationale: 'Personal project default'
+    source: chat
+    spec: null
+    supersedes: null
+  -
+    id: d0418cd210a42d9c
+    ts: '2026-09-07T17:34:36+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-spec
+    topic: 'transcript filename convention'
+    label: 'transcript filename convention'
+    value: 'Date + time prefix (e.g. 2026-09-07-1430-standup.md); resolver keys off meeting start datetime'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 51752ac280096a0c
+    ts: '2026-09-07T17:34:36+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-spec
+    topic: 'documentation scope'
+    label: 'documentation scope'
+    value: 'Baseline only (README: Herd setup, .env surface, queue/scheduler, launcher two-arg contract, doctor)'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 1ddd71223246ae97
+    ts: '2026-09-07T17:38:57+00:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-design
+    topic: 'design mockup scope'
+    label: 'design mockup scope'
+    value: 'Full app UI set — one mockup folder (kbms-app) covering shell, sync health, agenda, meeting detail, calendar views, mobile companion'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+updated_at: '2026-09-07T17:38:57+00:00'

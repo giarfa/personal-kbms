@@ -1,0 +1,369 @@
+specs:
+  -
+    code: US-001
+    title: 'Application scaffold and local environment'
+    epic:
+      code: EP-001
+      title: 'Foundation & Environment'
+      objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
+    priority: HIGH
+    points: 5
+    status: 'IN PROGRESS'
+    body: |
+      #### US-001: Application scaffold and local environment
+
+      **Epic:** EP-001 | **Priority:** HIGH | **Points:** 5 | **Status:** TODO
+      **Blocked by:** -
+
+      **Traces to:** PRD `## Technical Architecture` (Stack, Security & access, Configuration surface, Documentation)
+
+      **User Story**
+      As the operator,
+      I want the application to boot on my own machine with its shell, storage, background workers, and configuration surface in place,
+      so that every later capability has somewhere to land instead of being blocked on setup.
+
+      **Demonstrates**
+      After implementing this spec, `http://personal-kbms.test` serves a themed application shell with light and dark modes and no login prompt, `php artisan queue:work` and `php artisan schedule:work` run clean, and the README describes every configuration value the product needs.
+
+      **Acceptance Criteria**
+      - [ ] The official Laravel **Livewire + Flux starter kit** is installed and its layout, navigation, and light/dark theming render at `http://personal-kbms.test` via Herd
+      - [ ] Starter-kit **authentication is removed, not left dormant**: no auth routes, no login/register views, no `User` model or migration, no password-reset scaffolding — no half-wired login surface remains
+      - [ ] The application binds explicitly to `127.0.0.1` and is not reachable on `0.0.0.0`
+      - [ ] SQLite is the configured database; migrations run from a clean checkout with no manual file creation
+      - [ ] `database` queue driver is configured and `php artisan queue:work` processes a test job
+      - [ ] The scheduler is registered and `php artisan schedule:list` shows the calendar sync entry
+      - [ ] Every configuration value from the PRD exists in `.env.example` with documented defaults: `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES` (15), `KBMS_ICS_WINDOW_PAST_DAYS` (90), `KBMS_ICS_WINDOW_FUTURE_DAYS` (180), `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`
+      - [ ] The real `.env` is git-ignored and no ICS URL or filesystem path is committed
+      - [ ] A minimal `favicon.svg` and application title are in place; no logo, OG image, or social assets
+      - [ ] `README.md` covers Herd setup, the full `.env` surface, starting the queue worker and scheduler, and the launcher script's two-argument contract — **baseline documentation only**, no OpenAPI, diagrams, or runbook
+      - [ ] `php artisan larapilot:quality` (Pint + Larastan) passes
+      - [ ] **Error case:** a missing or unreadable SQLite database file produces a clear actionable message, not a stack trace on the shell page
+    status_history:
+      - { status: PLANNED, at: '2026-09-07T18:21:34+00:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-07T18:44:24+00:00' }
+    rework: false
+  -
+    code: US-002
+    title: 'Environment doctor command'
+    epic:
+      code: EP-001
+      title: 'Foundation & Environment'
+      objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
+    priority: HIGH
+    points: 3
+    status: TODO
+    body: |
+      #### US-002: Environment doctor command
+
+      **Epic:** EP-001 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+      **Blocked by:** US-001
+
+      **Traces to:** FR-011 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want a single command that checks every assumption the product makes about my machine,
+      so that a misconfigured path, an unreachable feed, or a stopped worker is a stated failure rather than a silent one I discover days later.
+
+      **Demonstrates**
+      After implementing this spec, `php artisan kbms:doctor` prints one pass/fail line per check with a remediation hint on every failure, and exits non-zero when any check fails.
+
+      **Acceptance Criteria**
+      - [ ] `php artisan kbms:doctor` reports pass/fail independently for: ICS URL reachable and parseable; transcripts directory present and readable; launcher script present and **executable**; queue connection reachable; scheduler registered; `KBMS_TIMEZONE` a valid timezone identifier
+      - [ ] Every failing check prints a specific remediation hint naming the configuration key at fault
+      - [ ] Exit code is `0` when all checks pass and non-zero when any check fails, so it is usable as a gate
+      - [ ] Checks run independently — one failure does not abort the remaining checks
+      - [ ] **Error case:** an unset configuration value is reported as "not configured" and distinguished from "configured but invalid"
+      - [ ] **Error case:** the ICS reachability check applies a bounded timeout and never hangs the command
+      - [ ] **Edge case:** a launcher script that exists but lacks the executable bit fails the check with that specific reason
+      - [ ] **Edge case:** the ICS check validates that the response actually parses as iCalendar, not merely that HTTP returned 200
+      - [ ] Feature test covers all-pass and each individual failure mode with faked HTTP and a temporary filesystem
+  -
+    code: US-003
+    title: 'Scheduled ICS calendar ingestion'
+    epic:
+      code: EP-002
+      title: 'Calendar Mirror'
+      objective: 'The subscribed Outlook feed is mirrored locally with correct recurrence and timezone handling, and its freshness is always visible'
+    priority: HIGH
+    points: 8
+    status: TODO
+    body: |
+      #### US-003: Scheduled ICS calendar ingestion
+
+      **Epic:** EP-002 | **Priority:** HIGH | **Points:** 8 | **Status:** TODO
+      **Blocked by:** US-001
+
+      **Traces to:** FR-001 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want my subscribed Outlook `.ics` feed pulled and mirrored locally on a schedule,
+      so that every later view and note has a trustworthy local copy of my calendar to hang off, without any API access.
+
+      **Demonstrates**
+      After implementing this spec, `php artisan kbms:sync-calendar` populates `calendar_events` from the configured feed with recurring series expanded into individually addressable occurrences, and the scheduler repeats it every 15 minutes without overlapping runs.
+
+      **Acceptance Criteria**
+      - [ ] The feed is fetched from `KBMS_ICS_URL` on a schedule every `KBMS_ICS_SYNC_MINUTES` (default 15) with `withoutOverlapping()`
+      - [ ] Conditional GET sends stored `ETag` / `If-Modified-Since`; a `304 Not Modified` short-circuits without parsing
+      - [ ] Events are parsed with `sabre/vobject ^5.0` and `RRULE` recurrences expanded across the window `KBMS_ICS_WINDOW_PAST_DAYS` to `KBMS_ICS_WINDOW_FUTURE_DAYS`
+      - [ ] Upsert is keyed on (`source_uid`, `recurrence_id`) with a unique index, so **a single occurrence of a recurring series is addressable independently of its siblings**
+      - [ ] `EXDATE` exclusions and `RECURRENCE-ID` overrides (a moved or retitled single occurrence) are honored rather than flattened into the series default
+      - [ ] `TZID` is preserved and occurrences render correctly in `KBMS_TIMEZONE`, including **across a DST boundary**
+      - [ ] All-day events are stored as date-only, not midnight-local, and do not shift by a day
+      - [ ] Events absent from the feed, or carrying `STATUS:CANCELLED`, are marked `cancelled_at` — **never deleted**, so annotated history survives an upstream change
+      - [ ] A content hash skips writes for unchanged occurrences
+      - [ ] `join_url` and `event_url` are captured from the `VEVENT` when present (`URL`, `X-MICROSOFT-SKYPETEAMSMEETINGURL`, or a Teams link in the description) for later use by US-005
+      - [ ] Each run writes a `calendar_sync_runs` row with start, finish, status, HTTP status, events upserted, events cancelled, and error
+      - [ ] Sync runs as a queued job so no operator-facing request blocks on the fetch
+      - [ ] **Error case:** an unreachable feed, HTTP error, or timeout records a failed run and leaves the previous mirror intact
+      - [ ] **Error case:** a malformed or truncated `.ics` body records a failed run without partially wiping existing events
+      - [ ] **Edge case:** an unbounded recurring series (no `UNTIL`, no `COUNT`) is expanded only within the configured window and does not run away
+      - [ ] Tests use fixture `.ics` files covering a recurring series, a single-occurrence override, an `EXDATE`, a cancellation, an all-day event, and a DST transition; HTTP is faked
+  -
+    code: US-004
+    title: 'Calendar sync health and manual resync'
+    epic:
+      code: EP-002
+      title: 'Calendar Mirror'
+      objective: 'The subscribed Outlook feed is mirrored locally with correct recurrence and timezone handling, and its freshness is always visible'
+    priority: HIGH
+    points: 3
+    status: TODO
+    body: |
+      #### US-004: Calendar sync health and manual resync
+
+      **Epic:** EP-002 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+      **Blocked by:** US-003
+
+      **Traces to:** FR-010 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want to see when my calendar last synced successfully and to force a resync on demand,
+      so that I never trust a stale mirror without knowing it is stale — a silently outdated calendar is worse than an obviously broken one.
+
+      **Demonstrates**
+      After implementing this spec, the interface always shows the last successful sync time and the last failure if there was one, and a resync control refreshes the mirror without touching the terminal.
+
+      **Acceptance Criteria**
+      - [ ] The application shell shows the **last successful sync** timestamp in relative and absolute form
+      - [ ] When the most recent attempt failed, a distinct warning state shows the failure reason legibly — **without requiring the operator to open `storage/logs`**
+      - [ ] A manual resync control dispatches the sync job and reflects in-progress, success, and failure states
+      - [ ] A stale mirror (no successful sync for a configurable multiple of the sync interval) is visually flagged even when no run has explicitly failed
+      - [ ] **Error case:** triggering resync while a run is already in progress does not queue a duplicate or produce an overlapping run
+      - [ ] **Edge case:** with no sync run recorded at all, the interface shows "never synced" rather than an empty or misleading value
+      - [ ] Feature test covers success, failure, in-progress, stale, and never-synced states
+  -
+    code: US-005
+    title: 'Agenda view, meeting detail and Open in Outlook'
+    epic:
+      code: EP-003
+      title: 'Meeting Workspace'
+      objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
+    priority: HIGH
+    points: 10
+    status: TODO
+    body: |
+      #### US-005: Agenda view, meeting detail and Open in Outlook
+
+      **Epic:** EP-003 | **Priority:** HIGH | **Points:** 10 | **Status:** TODO
+      **Blocked by:** US-003
+
+      **Traces to:** FR-003, FR-004, FR-009 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want a chronological agenda I can scan and a canonical page per meeting that also gets me into Outlook when I need a real calendar action,
+      so that triaging my day and opening a specific meeting is one continuous motion instead of a hunt across tools.
+
+      **Demonstrates**
+      After implementing this spec, the agenda lists recent and upcoming meetings defaulting to today, each row opens a meeting detail page showing all mirrored feed data, and an "Open in Outlook" call-to-action reaches the right place in Outlook on the web.
+
+      **Acceptance Criteria**
+      - [ ] The agenda lists meetings chronologically, **defaults to today**, and supports date-range navigation forward and back
+      - [ ] The agenda is fully **keyboard navigable** with visible focus states, and rows are reachable without a pointer
+      - [ ] Each meeting occurrence has a canonical detail route addressed by (`source_uid`, `recurrence_id`) — **not** by a surrogate row id that a resync could change
+      - [ ] The detail page shows mirrored feed fields read-only: title, start, end, duration, location, organizer, attendees, description
+      - [ ] Mirrored feed data is **visually distinct** from operator-owned surfaces, so it is obvious which side can change under you on the next sync
+      - [ ] Cancelled occurrences are clearly marked in both agenda and detail rather than hidden
+      - [ ] "Open in Outlook" **prefers a feed-carried link** (`event_url`) when present, and otherwise falls back to the configurable `KBMS_OUTLOOK_URL_TEMPLATE` with the event's date and time substituted
+      - [ ] When a Teams join URL was captured, it is offered as a **distinct action** from the Outlook calendar call-to-action
+      - [ ] Both links open in a new tab and are safe against tab-nabbing (`rel="noopener"`)
+      - [ ] Layout is desktop-first, does not break below `768px`, and meets WCAG 2.2 AA contrast in both light and dark themes
+      - [ ] **Error case:** requesting a detail route for an occurrence that no longer exists returns a clear not-found state, not an exception
+      - [ ] **Edge case:** with `KBMS_OUTLOOK_URL_TEMPLATE` unset and no feed-carried link, the call-to-action is disabled with an explanatory tooltip rather than producing a broken URL
+      - [ ] **Edge case:** a date range containing no meetings shows an explicit empty state
+      - [ ] **Edge case:** overlapping and multi-day events render without collapsing into each other or being dropped
+      - [ ] Feature tests cover agenda ranges, detail rendering, link preference order, and the disabled call-to-action path
+  -
+    code: US-006
+    title: 'Personal notes on a meeting'
+    epic:
+      code: EP-003
+      title: 'Meeting Workspace'
+      objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
+    priority: HIGH
+    points: 5
+    status: TODO
+    body: |
+      #### US-006: Personal notes on a meeting
+
+      **Epic:** EP-003 | **Priority:** HIGH | **Points:** 5 | **Status:** TODO
+      **Blocked by:** US-005
+
+      **Traces to:** FR-005 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want to write Markdown notes against any meeting and trust that they survive whatever the calendar feed does next,
+      so that the tool holds a layer of meaning that belongs to me rather than a disposable overlay on someone else's data.
+
+      **Demonstrates**
+      After implementing this spec, a note written on a meeting persists across calendar resyncs — including after the meeting is retitled, rescheduled, or cancelled upstream — and never appears on a sibling occurrence of the same recurring series.
+
+      **Acceptance Criteria**
+      - [ ] A Markdown note surface on the meeting detail page **autosaves** without an explicit save action, with a visible saved/saving indicator
+      - [ ] Notes are keyed on (`event_uid`, `event_recurrence_id`) — the occurrence identity, not the event row's surrogate id
+      - [ ] **A note written on one occurrence of a recurring series never appears on its siblings** — this is the highest-value test in the suite
+      - [ ] Notes are writable **before and after** the meeting; there is no state gate tied to whether it has happened
+      - [ ] A rendered Markdown preview is available alongside the raw editor
+      - [ ] Notes survive a resync that changes the meeting's title, time, or location
+      - [ ] Notes survive upstream **cancellation** and remain reachable on the cancelled occurrence
+      - [ ] An explicit **delete path** removes a meeting's notes, with confirmation (PRD privacy obligation 2)
+      - [ ] Note content is stored as plain text and rendered without executing embedded HTML or scripts
+      - [ ] Meetings carrying notes are flagged in the agenda so the list doubles as a coverage map
+      - [ ] **Error case:** an autosave failure surfaces a retry affordance and does not silently discard typed content
+      - [ ] **Edge case:** a note on an occurrence that later disappears from the feed window is retained, not orphaned or purged
+      - [ ] Feature test asserts recurrence isolation, resync durability across retitle/reschedule/cancel, and the delete path
+  -
+    code: US-007
+    title: 'Transcript linking and in-place preview'
+    epic:
+      code: EP-003
+      title: 'Meeting Workspace'
+      objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
+    priority: HIGH
+    points: 8
+    status: TODO
+    body: |
+      #### US-007: Transcript linking and in-place preview
+
+      **Epic:** EP-003 | **Priority:** HIGH | **Points:** 8 | **Status:** TODO
+      **Blocked by:** US-005
+
+      **Traces to:** FR-006, FR-007 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want each meeting to resolve to the single transcript file my record-and-transcribe pipeline produced, and to read it without leaving the page,
+      so that the loose pile of `.md` and `.txt` files finally has a route back to the meeting it describes.
+
+      **Demonstrates**
+      After implementing this spec, opening a meeting that has a transcript shows the resolved absolute path and the readable transcript inline, and any meeting can be manually linked to or unlinked from a file.
+
+      **Acceptance Criteria**
+      - [ ] A configurable resolver maps a meeting to **at most one** candidate path under `KBMS_TRANSCRIPTS_PATH`, driven by `KBMS_TRANSCRIPT_PATTERN`
+      - [ ] The default pattern implements the **date-and-time-prefix convention** (e.g. `2026-09-07-1430-standup.md`), keyed primarily off the meeting's start datetime with the title slug as a secondary hint
+      - [ ] Matching tolerates the trailing slug portion varying freely — the prefix carries the identity
+      - [ ] Matching tolerates **start-time drift** within a configurable window, because a recording rarely starts on the exact calendar minute
+      - [ ] When the tolerance window yields **multiple candidates**, the resolver surfaces them for the operator to choose and **does not guess**
+      - [ ] The resolved path is verified to **exist and be readable** before it is offered
+      - [ ] A **manual override** lets the operator pick or clear the file for a meeting, and a manual link **always wins** over the convention
+      - [ ] Once linked, the path is persisted with `link_source` (`convention` or `manual`), so changing the pattern does not silently break existing links
+      - [ ] `.md` renders as Markdown and `.txt` renders as monospace, both scrollable within a bounded region without leaving the meeting page
+      - [ ] The resolved absolute path is displayed and copyable
+      - [ ] Transcript content is **read on demand** and never duplicated into the database (PRD privacy obligation 3)
+      - [ ] Clearing a link removes the association only — **the file itself is never deleted**, since the pipeline owns it (PRD privacy obligation 2)
+      - [ ] Meetings carrying a linked transcript are flagged in the agenda
+      - [ ] **Error case:** a linked file that has since been moved or deleted shows a clear broken-link state with a relink affordance, not an exception
+      - [ ] **Error case:** an unreadable file (permissions) is reported distinctly from a missing file
+      - [ ] **Edge case:** resolution never escapes `KBMS_TRANSCRIPTS_PATH` — path traversal via pattern or manual input is rejected
+      - [ ] **Edge case:** a very large transcript does not exhaust memory; reading is bounded
+      - [ ] **Edge case:** with `KBMS_TRANSCRIPTS_PATH` unset, the transcript panel shows a configuration prompt rather than an error
+      - [ ] Feature tests use a temporary filesystem covering exact match, drift match, ambiguous multi-candidate, manual override precedence, broken link, and traversal rejection
+  -
+    code: US-008
+    title: 'Calendar views: month, week and day'
+    epic:
+      code: EP-003
+      title: 'Meeting Workspace'
+      objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
+    priority: HIGH
+    points: 8
+    status: TODO
+    body: |
+      #### US-008: Calendar views: month, week and day
+
+      **Epic:** EP-003 | **Priority:** HIGH | **Points:** 8 | **Status:** TODO
+      **Blocked by:** US-006, US-007
+
+      **User Story**
+      As the operator,
+      I want month, week, and day views of my mirrored calendar that show me at a glance which meetings I have already annotated,
+      so that the calendar doubles as a coverage map and I can see where my knowledge base has gaps.
+
+      **Traces to:** FR-002 (MoSCoW: Must). Sequenced after US-006 and US-007 because the note and transcript presence indicators cannot be demonstrated until those surfaces exist.
+
+      **Demonstrates**
+      After implementing this spec, month, week, and day views render the mirrored calendar, meetings carrying notes or a linked transcript are visually distinguished from bare ones, and clicking any event opens its detail page.
+
+      **Acceptance Criteria**
+      - [ ] Month, week, and day views render mirrored events using FullCalendar **MIT core plugins only** — no premium plugins
+      - [ ] Meetings carrying notes and/or a linked transcript are **visually distinguished** from bare ones, with the distinction legible without hovering
+      - [ ] The indicator distinguishes "has notes", "has transcript", and "has both"
+      - [ ] Clicking or activating an event opens the US-005 detail route
+      - [ ] Views are **keyboard navigable** with visible focus, and the calendar grid carries deliberate screen-reader semantics — FullCalendar's defaults alone are not sufficient
+      - [ ] Events render in `KBMS_TIMEZONE` and remain correct across a DST boundary
+      - [ ] All-day events render in the all-day lane, not as midnight-to-midnight blocks
+      - [ ] Cancelled occurrences are visually distinct from active ones
+      - [ ] View and date position survive navigation to a meeting and back
+      - [ ] AA contrast holds for every event state in both light and dark themes
+      - [ ] Only the visible range is queried — the view does not load the whole mirror
+      - [ ] **Error case:** a range with no events renders an empty grid, not a broken layout
+      - [ ] **Edge case:** a day with many overlapping meetings degrades gracefully (stacking or a "+N more" affordance) without hiding events silently
+      - [ ] **Edge case:** multi-day events span correctly in month view
+  -
+    code: US-009
+    title: 'Claude Code session launch bridge'
+    epic:
+      code: EP-004
+      title: 'LLM Bridge'
+      objective: "A question typed against a meeting opens an interactive local Claude Code session preloaded with that meeting's transcript"
+    priority: HIGH
+    points: 8
+    status: TODO
+    body: |
+      #### US-009: Claude Code session launch bridge
+
+      **Epic:** EP-004 | **Priority:** HIGH | **Points:** 8 | **Status:** TODO
+      **Blocked by:** US-007
+
+      **Traces to:** FR-008 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want to type a question against a meeting and have the tool launch my own shell script with that meeting's transcript path and my question,
+      so that I get an interactive Claude Code session already loaded with the right context — without paying for an API key.
+
+      **Demonstrates**
+      After implementing this spec, typing a question on a meeting with a linked transcript and triggering the launch invokes the configured `.sh` with exactly two arguments — the transcript path and the question — and an interactive terminal session opens.
+
+      **Acceptance Criteria**
+      - [ ] A text input on the meeting detail page accepts the initial question
+      - [ ] Triggering the launch invokes the script at `KBMS_CLAUDE_LAUNCHER` with exactly two arguments, **in order**: (1) the resolved context file path from US-007, (2) the question text
+      - [ ] Arguments are passed as an **argument array**, never an interpolated shell string
+      - [ ] **Question text containing quotes, newlines, backticks, semicolons, `$(…)`, or other shell metacharacters reaches the script as a single intact argument** and cannot alter the command — this is the security-critical criterion of the spec
+      - [ ] Invocation happens inside a **queued job**, not the web request, because Symfony's `Process` destructor terminates its child and a request-scoped launch could kill the script mid-flight
+      - [ ] The script is expected to open its own terminal window; the application does not attempt to allocate a TTY or drive a terminal application
+      - [ ] The launch returns promptly and the spawned session's lifetime is independent of PHP — quitting the worker does not close the operator's terminal
+      - [ ] Each launch persists a `prompt_launches` row: occurrence keys, context path, question, resolved argument array, timestamp, status, error
+      - [ ] **The application does not attempt to capture Claude's reply** — the session is interactive and owned by the terminal; the meeting record holds the question, not the answer (PRD FR-018 defers this)
+      - [ ] The exact invocation is displayed and copyable, so the operator can run it manually instead
+      - [ ] **Error case:** launch is blocked with a specific reason when `KBMS_CLAUDE_LAUNCHER` is unset, the script is missing, or the script is not executable
+      - [ ] **Error case:** launch is blocked with a specific reason when the meeting has **no linked transcript**, since there would be no context file to pass
+      - [ ] **Error case:** a non-zero exit from the launcher is recorded on the launch row and surfaced in the interface
+      - [ ] **Edge case:** an empty or whitespace-only question is rejected before dispatch
+      - [ ] **Edge case:** a very long question is accepted or explicitly bounded — it must not fail opaquely against argument-length limits
+      - [ ] Tests use `Process::fake()` to assert the exact argument array for adversarial question strings, plus every blocked-launch precondition

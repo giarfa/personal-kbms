@@ -1,0 +1,32 @@
+project_kind: Personal
+project_origin: Greenfield
+delivery_target: MVP
+budget_sensitivity: Relaxed
+frontend_topology: Laravel-coupled
+deadlines: 'None — no fixed delivery date; milestone tracking off (Lucille logs effort only)'
+hierarchy_pattern: "N/A — the domain is flat (occurrences, notes, transcripts, launches); no tree pattern is warranted and none should be invented. **Search:** SQLite **FTS5** when FR-013 lands; no external search engine at any point in this product's roadmap."
+search: "SQLite **FTS5** when FR-013 lands; no external search engine at any point in this product's roadmap."
+admin_panel: 'Starter Kit (livewire) — used as application scaffold; authentication removed (see **Security & access**)'
+local_dev: '**Laravel Herd** (native macOS PHP/nginx). Herd is load-bearing rather than a preference: a Docker container could not see the host transcript directory or invoke the host launcher script without additional plumbing. Local URL `http://personal-kbms.test`.'
+settings:
+  effort: STANDARD
+  backlog: STANDARD
+  git_mode: GITFLOW
+  testing: NORMAL
+  auto_approve: 'NO'
+  lucille: 'YES'
+  decision_log: 'YES'
+  code_history: 'NO'
+  dashboard_auth: 'NO'
+  api_auth: 'NO'
+  security_scan: 'NO'
+  github: 'NO'
+  gitlab: 'NO'
+  bitbucket: 'NO'
+  azure: 'NO'
+  notifications: 'NO'
+  notify_slack: 'NO'
+  notify_discord: 'NO'
+  notify_telegram: 'NO'
+source: choices.yaml
+updated_at: '2026-09-07T17:18:30+00:00'

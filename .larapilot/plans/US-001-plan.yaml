@@ -1,0 +1,681 @@
+code: US-001
+plan_body: |
+  ## Technical Solution
+
+  Turn the bare `laravel/laravel` 13.30.1 skeleton in `/Users/excellence_innovation/dev-code/personal-kbms` into the application shell every later spec lands on: the official Livewire + Flux starter kit installed as scaffold, its authentication surface removed outright, SQLite + `database` queue + scheduler wired, the full `KBMS_*` configuration surface declared, and a loopback-only access control that makes the PRD's "binds to `127.0.0.1`" an enforced property rather than a README sentence.
+
+  **Delivery target is MVP** (PRD `## MVP Scope`), so architecture depth is a thin vertical slice: no service boundaries to design yet, no API surface, queues only where the PRD already requires them (calendar sync FR-001, launch bridge FR-008). There are **no Eloquent domain models in this spec** — `calendar_events`, `meeting_notes`, `meeting_transcripts`, `prompt_launches`, and `calendar_sync_runs` all belong to US-003 and later.
+
+  ### Starter-kit reality check (verified against upstream, not assumed)
+
+  `laravel/livewire-starter-kit@main` `composer.json` requires:
+
+  - `livewire/livewire ^4.1`, `livewire/flux ^2.13.1`, `livewire/blaze ^1.0`, `laravel/chisel ^0.1.0`, `laravel/fortify ^1.37.2`, `laravel/framework ^13.17`, `laravel/tinker ^3.0`
+
+  **Discrepancy with the PRD, recorded rather than absorbed:** the PRD `## Technical Architecture` states *"Livewire 3, Alpine, Tailwind 4"*. The kit ships **Livewire 4.1 with Flux 2**. This plan targets what the kit actually ships — the AC says "the official Laravel Livewire + Flux starter kit is installed", which is version-agnostic. The PRD stack line needs a revision entry; that is a PRD edit, not a task deliverable of this spec, and is raised for the human at review.
+
+  Two further upstream facts that shape tasks:
+
+  1. `livewire/flux` is Packagist-public and installs without credentials; its license field reads `proprietary` (free tier). **Flux Pro (`livewire/flux-pro`) is not used** — €0 recurring holds (Aurora).
+  2. The kit registers `@php artisan install:features` in `post-update-cmd` and ships `app/Console/Commands/InstallFeaturesCommand.php`. Left in place, a future `composer update` **re-scaffolds the authentication features this spec removes**. Neutralising that hook is an explicit deliverable of TASK-02, not an afterthought.
+
+  The kit's `require-dev` pins `phpunit/phpunit ^12.5` and includes `laravel/sail`. This project already runs **PHPUnit 13.3.2** and has chosen **Herd** (PRD `## Technical Architecture` → Local dev; decision journal `local development environment`). Neither is downgraded and Sail is not installed.
+
+  ### Installation strategy
+
+  The kit is a separate repository, not a package — there is no `artisan` installer for an existing app. Scaffold it into a throwaway directory with the Laravel Installer (5.31.1, present in Herd's bin) or a shallow `git clone`, then port the scaffold over the current skeleton while **preserving** the Larapilot and agent surfaces:
+
+  - Preserve: `.larapilot/`, `.ai/`, `.claude/`, `.agents/`, `.github/skills/`, `.codex/`, `.cursor/`, `.grok/`, `.junie/`, `.kiro/`, `.larapilot/`, `.mcp.json`, `AGENTS.md`, `CLAUDE.md`, `boost.json`, `phpstan.neon.dist`, `pint.json`, `phpunit.xml`, the existing `.env`, and the `andreapollastri/larapilot` + `larastan` + `pao` composer entries
+  - Take from the kit: `composer.json` `require` additions, `package.json`, `vite.config.js`, `resources/css`, `resources/js`, `resources/views`, `app/` scaffold, `config/` deltas, `routes/`, `database/` deltas
+
+  The kit is installed **whole, including Fortify** (TASK-01), and authentication is then removed in the immediately following atomic commit (TASK-02). This is deliberate: the AC demands authentication be *removed, not left dormant*, and installing-then-removing makes the removal a reviewable diff instead of an unverifiable absence. TASK-01 therefore commits a transient auth-bearing state on the feature branch; TASK-02 is not optional and the two must not be reordered.
+
+  ### Authentication removal inventory (verified file list)
+
+  Files confirmed present in the upstream kit tree and slated for deletion in TASK-02:
+
+  - Models / actions / concerns: `app/Models/User.php`, `app/Actions/Fortify/CreateNewUser.php`, `app/Actions/Fortify/ResetUserPassword.php`, `app/Concerns/PasswordValidationRules.php`, `app/Concerns/ProfileValidationRules.php`, `app/Livewire/Actions/Logout.php`
+  - Providers / config: `app/Providers/FortifyServiceProvider.php` (+ its `bootstrap/providers.php` entry), `config/fortify.php`, `config/auth.php`
+  - Console hook: `app/Console/Commands/InstallFeaturesCommand.php` + the `install:features` line in `composer.json` `post-update-cmd`
+  - Migrations: `0001_01_01_000000_create_users_table.php`, `2024_01_01_000000_create_passkeys_table.php`, `2025_08_14_170933_add_two_factor_columns_to_users_table.php`
+  - Factories / seeders: `database/factories/UserFactory.php`; `database/seeders/DatabaseSeeder.php` emptied of user seeding
+  - Views: `layouts/auth.blade.php`, `layouts/auth/{card,simple,split}.blade.php`, `pages/auth/*` (7 files), `pages/settings/*` (7 files), `partials/settings-heading.blade.php`, `components/auth-header.blade.php`, `components/auth-session-status.blade.php`, `components/desktop-user-menu.blade.php`, `components/passkey-registration.blade.php`, `components/passkey-verify.blade.php`
+  - Routes: `routes/settings.php` and its `require` in `routes/web.php`; the `['auth','verified']` middleware group
+  - JS: `resources/js/passkeys.js`
+  - Tests: `tests/Feature/Auth/*` (6 files), `tests/Feature/Settings/*` (2 files), `tests/Feature/DashboardTest.php`
+  - Composer: `composer remove laravel/fortify`
+
+  The kit's `layouts/app/sidebar.blade.php` calls `auth()->user()->name` / `->initials()` in three places and links `route('profile.edit')` / `route('logout')`. Those references die with the user menu — per `.ai/rules/views.md` and the mockup README, the menu is **deleted, not stubbed with a placeholder name**, and the sidebar footer carries the environment block instead.
+
+  The `sessions` and `cache` migrations **stay**: Livewire needs session and CSRF state even with no accounts. `SESSION_DRIVER=database` is retained.
+
+  ### Configuration surface
+
+  `config/kbms.php` declares all nine PRD values with their documented defaults; `.env.example` carries every key with an explanatory comment. No machine-specific value becomes a code constant, and `KBMS_TIMEZONE` feeds `config('app.timezone')`.
+
+  | Key | Default | Consumer spec |
+  | --- | --- | --- |
+  | `KBMS_ICS_URL` | *(none — required)* | US-003 |
+  | `KBMS_ICS_SYNC_MINUTES` | `15` | US-003 (scheduler here) |
+  | `KBMS_ICS_WINDOW_PAST_DAYS` | `90` | US-003 |
+  | `KBMS_ICS_WINDOW_FUTURE_DAYS` | `180` | US-003 |
+  | `KBMS_TRANSCRIPTS_PATH` | *(none — required)* | US-007 |
+  | `KBMS_TRANSCRIPT_PATTERN` | `{date}-{time}-{slug}` | US-007 |
+  | `KBMS_CLAUDE_LAUNCHER` | *(none — required)* | US-009 |
+  | `KBMS_OUTLOOK_URL_TEMPLATE` | *(none — optional)* | US-005 |
+  | `KBMS_TIMEZONE` | `Europe/Rome` | all |
+
+  Declaring keys is in scope; **validating** them is US-002 (`kbms:doctor`).
+
+  ### Loopback-only access control (Lars)
+
+  The PRD records **no authentication** as the operator's explicit choice (decision journal `access and authentication`) with the accepted risk that "anything able to reach the port reads every transcript". The standard Larapilot security baseline — Fortify 2FA, `Password::defaults()`, Argon2id, Socialite, UUID PKs on a `User` — is therefore **not applicable**, and this is a recorded PRD position rather than an omission.
+
+  The compensating control is made enforceable: `EnsureLoopbackRequest` middleware, registered globally in `bootstrap/app.php`, aborts `403` when `$request->ip()` is not `127.0.0.1` / `::1`, with a `kbms.allow_non_loopback` escape hatch defaulting to `false`. Under Herd the site is served on loopback via `http://personal-kbms.test`; the middleware is what makes the property hold if the port is ever bound wider, and it is what a test can assert.
+
+  ### Error surface (AC 12)
+
+  A missing or unreadable `database/database.sqlite` must not produce a stack trace on the shell page — and `APP_DEBUG=true` is the local default, so this cannot lean on Laravel's production error page. `withExceptions` maps `Illuminate\Database\QueryException` whose SQLSTATE/driver message indicates *unable to open database file* to a dedicated Blade view naming the offending `DB_DATABASE` value and the fix (`touch database/database.sqlite`, then `php artisan migrate`).
+
+  ### Scope boundaries — what US-001 deliberately does not build
+
+  Stated so the increment is reviewable against the right line:
+
+  - **Sync pill** — the mockup README puts it in the shell because US-004 requires it everywhere. US-001 ships the shell and a named slot; the Livewire component is **US-004**.
+  - **`kbms:sync-calendar`** — AC 6 requires `schedule:list` to show the calendar sync entry, so the command is created as a **registered stub** that exits non-zero with "not implemented — US-003". Its body is US-003.
+  - **`kbms:doctor`** — US-002. The README references it as the first troubleshooting step (a documented forward reference, not a stub).
+  - **`kbms:scan-transcripts`** — FR-014, future phase. Not created.
+  - Agenda and Calendar routes exist as **empty placeholder pages** only, so the nav is live and navigable; their content is US-005 and US-008.
+  - No domain models, migrations, factories, or seeders. The PRD's fixture-calendar seeder arrives with US-003.
+
+  ### Deliberate omissions, with reasons
+
+  - **`public/.well-known/security.txt` and `SECURITY.md`** — the Larapilot ship gate scopes both to *public apps*. This application binds to loopback, has no accounts, and is never deployed (PRD: no deploy platform). Not scaffolded; revisit only if FR-022 leaves the Won't list.
+  - **`robots.txt` / `sitemap.xml` / `llms.txt`** — N/A per the mockup README `## SEO & discoverability`. A `<meta name="robots" content="noindex, nofollow">` ships in the root layout as cheap insurance.
+  - **CI/CD pipeline** — no remote forge is enabled (`settings.github: NO`); `.github/` holds agent skills only, no workflows. `php artisan larapilot:quality` is the gate. Sarah has no pipeline YAML to author in this spec.
+  - **OpenAPI, diagrams, runbooks, client manuals** — decision journal `documentation scope`: baseline only.
+  - **Playwright / Dusk / viewport matrix** — `settings.testing: NORMAL`.
+
+  ## Git & Branching
+
+  - Mode: **`GITFLOW`** (`settings.git_mode`) — branch and atomic commits, internal PR prepared locally, **never auto-pushed**
+  - **Repository precondition (Sarah):** `git log` reports *"your current branch 'main' does not have any commits yet"* — there is no commit, no `develop`, and no remote. TASK-00 therefore creates the **initial commit on `main`**, branches `develop` from it, then branches the feature branch from `develop`. The standard TASK-00 template assumes `develop` exists; this is the documented deviation.
+  - Branch: `feature/US-001-app-scaffold` from `develop`
+  - Per task: one Conventional Commit `type(US-001): TASK-NN summary`; no batched multi-task commits
+  - Push: **skip** in every task. PR title/body toward `develop` prepared locally only
+  - Hygiene: `php artisan larapilot:quality` and the relevant tests green before each `task-done`; `composer audit` after every `composer require` / `composer remove`
+  - Merge to `develop` only after human `larapilot-review` approval
+
+  ## Test Data Strategy
+
+  - **No Eloquent domain models are introduced by this spec**, so there is no factory or seeder to create. Every Impl task carries `## Test Data — N/A` explicitly, except TASK-02, which **removes** `database/factories/UserFactory.php` and empties `database/seeders/DatabaseSeeder.php` of user seeding.
+  - `php artisan migrate:fresh --seed` must still succeed after TASK-02 against an empty seeder — a passing no-op seed is the check that the auth removal left no dangling reference.
+  - Demo volumes: none. The PRD's fixture calendar plus sample transcript files arrive with US-003; nothing here should pre-empt that shape.
+  - `phpunit.xml` already pins `DB_DATABASE=:memory:` and `QUEUE_CONNECTION=sync` for tests; queue-connection assertions read config rather than relying on the test environment.
+
+  ## Test Strategy
+
+  - Bar: **`NORMAL`** (`settings.testing`) — PHPUnit feature and unit tests. **No** Playwright, Dusk, Pest browser, or viewport E2E suites. Tests are created with `php artisan make:test --phpunit`.
+  - Interleaved, not deferred: TASK-02, TASK-04, TASK-06, and TASK-07 each verify their own outcome before `task-done`; TASK-08 is Anne's consolidating suite over the finished scaffold.
+
+  Anne's coverage, mapped to acceptance criteria:
+
+  | Assertion | AC |
+  | --- | --- |
+  | `GET /` returns 200 and renders the shell (`<h1>`, sidebar nav, skip link, `noindex` meta, `favicon.svg` link) | 1, 9 |
+  | Agenda and Calendar placeholder routes resolve by name and return 200 | 1 |
+  | `Route::has('login')`, `'register'`, `'logout'`, `'password.request'`, `'profile.edit'`, `'two-factor.login'` are **all false**; no route name matches `/^(auth\.|password\.|two-factor\.|settings\.)/` | 2 |
+  | `class_exists(App\Models\User::class)` is false; `app/Actions/Fortify` and `resources/views/pages/auth` do not exist; rendered shell HTML contains no `Log out` / `Settings` menu affordance | 2 |
+  | `EnsureLoopbackRequest` allows `127.0.0.1` and `::1`, aborts 403 for an external `REMOTE_ADDR`, and honours `kbms.allow_non_loopback` | 3 |
+  | `config('database.default') === 'sqlite'`; `migrate:fresh` succeeds against `:memory:`; `migrate:fresh --seed` succeeds | 4 |
+  | `config('queue.default') === 'database'`; the self-test job is queued to the `database` connection when not faked, and its handler writes the expected log line | 5 |
+  | The registered schedule contains a `kbms:sync-calendar` event with the interval derived from `KBMS_ICS_SYNC_MINUTES` and `withoutOverlapping` set | 6 |
+  | Every one of the nine `KBMS_*` keys resolves through `config('kbms.*')` with the documented default; `.env.example` contains all nine keys | 7 |
+  | A `QueryException` for an unopenable SQLite file renders the actionable view — asserting the `DB_DATABASE` path and the `touch database/database.sqlite` remedy, and **not** an exception trace — with `APP_DEBUG=true` | 12 |
+
+  **Manual test handoff** (UI, per `settings.testing: NORMAL` — Anne documents, the operator runs):
+
+  1. Keyboard-only pass: skip link → sidebar nav → placeholder pages; visible focus ring at every stop, never outline-only
+  2. Theme toggle both directions; confirm the kit's `@fluxAppearance` persists the choice and that `theme.js` was not ported
+  3. 375 px pass using `.larapilot/mockups/kbms-app/mobile.html` as the checklist: sidebar collapses to the toggle, no clipped controls, touch targets ≥ 44 px
+  4. Confirm `http://personal-kbms.test` serves without a login prompt and that no `/login` or `/register` URL resolves
+  5. Rename `database/database.sqlite` and reload — confirm the actionable message, then restore
+
+  ## Risks
+
+  | Risk | Mitigation |
+  | --- | --- |
+  | Porting the kit over an existing skeleton clobbers Larapilot artifacts | Explicit preserve list above; TASK-00's initial commit means every subsequent step is recoverable via `git checkout` |
+  | `composer update` silently re-scaffolds auth via `install:features` | TASK-02 deletes the command **and** the `post-update-cmd` hook; TASK-08 asserts no auth routes exist |
+  | Kit `require-dev` would downgrade PHPUnit 13 → 12 and add Sail | TASK-01 ports `require` only; `require-dev` is reconciled by hand and `composer audit` runs after |
+  | `laravel/chisel` and `livewire/blaze` are young dependencies (`^0.1`, `^1.0`) on the critical path | They are the kit's own choices, not ours; `composer audit` after install, and TASK-01 records resolved versions in the commit body |
+  | Livewire 4 page-component conventions differ from the PRD's Livewire 3 assumption | Flagged above; US-006/US-007/US-009 plans must be written against Livewire 4 |
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap repository history and Gitflow branches'
+    body: |
+      ## Description
+      Establish the Git baseline this spec's Gitflow discipline assumes. The repository currently has **no commits at all** (`git log` → *"your current branch 'main' does not have any commits yet"*), no `develop` branch, and no remote, so the standard TASK-00 template's `git checkout develop` cannot run. Create the initial commit on `main` from the current skeleton plus the Larapilot artifacts, branch `develop`, then branch the feature branch from `develop`. Nothing is pushed (`git_mode: GITFLOW`).
+
+      ## Files Involved
+      - (git only, plus a `.gitignore` verification pass — no application code)
+      - .gitignore
+
+      ## Steps
+      1. Verify `.gitignore` ignores `.env` (it does, line `.env`) and that `database/.gitignore` ignores `*.sqlite`; add `/database/*.sqlite*` if the kit's version is not yet in place
+      2. `git status --porcelain | grep -c '^??'` and confirm no `.env`, `vendor/`, `node_modules/`, or `*.sqlite` file is staged: `git add -A && git status --short | grep -E '\.env$|^A\s+vendor/|node_modules/|\.sqlite'` must return nothing
+      3. Initial commit on `main`: `git commit -m "chore: initial commit — Laravel 13 skeleton with Larapilot workflow artifacts"`
+      4. `git branch develop main`
+      5. `git checkout develop && git checkout -b feature/US-001-app-scaffold`
+      6. Draft the internal PR title (`US-001: Application scaffold and local environment`) and body (link `.larapilot/plans/US-001-plan.yaml`, list TASK-00…TASK-10) into local notes — **do not push and do not open a remote PR**
+
+      ## Completion Criteria
+      - [ ] `main` has exactly one commit containing the skeleton and `.larapilot/` artifacts
+      - [ ] `.env` and `database/database.sqlite` are **not** tracked (`git ls-files | grep -E '^\.env$|\.sqlite$'` is empty)
+      - [ ] `develop` exists and points at `main`
+      - [ ] `feature/US-001-app-scaffold` is checked out
+      - [ ] PR title/body drafted locally; no remote configured, nothing pushed
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore: initial commit — Laravel 13 skeleton with Larapilot workflow artifacts` (on `main`), then `chore(US-001): TASK-00 bootstrap feature branch` (empty commit allowed on the feature branch)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepared locally toward `develop`; open remotely only if the operator asks
+    type: Impl
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 1
+    dependencies: {}
+  -
+    id: TASK-01
+    title: 'Install the Livewire + Flux starter kit as the application scaffold'
+    body: |
+      ## Description
+      Install the official **Laravel Livewire + Flux starter kit** (`laravel/livewire-starter-kit`) over the existing bare `laravel/laravel` skeleton, preserving the Larapilot and agent surfaces. The kit is installed **whole, Fortify included** — TASK-02 removes authentication in the next atomic commit, which makes the removal a reviewable diff. Record the exact resolved versions in the commit body.
+
+      ## Files Involved
+      - composer.json, composer.lock
+      - package.json, vite.config.js
+      - app/ (kit scaffold: `Console/Commands/InstallFeaturesCommand.php`, `Actions/Fortify/*`, `Concerns/*`, `Livewire/Actions/Logout.php`, `Models/User.php`, `Providers/*`)
+      - bootstrap/app.php, bootstrap/providers.php
+      - config/ (`fortify.php` plus kit deltas to `app.php`, `auth.php`, `database.php`, `queue.php`, `session.php`)
+      - database/migrations/, database/factories/UserFactory.php, database/seeders/DatabaseSeeder.php
+      - resources/css/app.css, resources/js/app.js, resources/js/passkeys.js
+      - resources/views/ (layouts, pages, partials, components, flux icon overrides)
+      - routes/web.php, routes/settings.php, routes/console.php
+
+      ## Steps
+      1. Scaffold the kit into a throwaway directory outside the project: `laravel new kit-tmp --livewire --no-interaction` (Laravel Installer 5.31.1 is on PATH via Herd), or `git clone --depth=1 https://github.com/laravel/livewire-starter-kit.git kit-tmp`. Use the scratchpad, never a path inside the repo
+      2. Port the scaffold into the project. **Preserve and never overwrite:** `.larapilot/`, `.ai/`, `.claude/`, `.agents/`, `.github/`, `.codex/`, `.cursor/`, `.grok/`, `.junie/`, `.kiro/`, `.mcp.json`, `AGENTS.md`, `CLAUDE.md`, `boost.json`, `phpstan.neon.dist`, `pint.json`, `phpunit.xml`, `.env`
+      3. Merge `composer.json` `require` by hand — add `livewire/livewire ^4.1`, `livewire/flux ^2.13.1`, `livewire/blaze ^1.0`, `laravel/chisel ^0.1.0`, `laravel/fortify ^1.37.2`; keep `laravel/framework ^13.30`. **Do not** take the kit's `require-dev` wholesale: keep this project's `phpunit/phpunit ^13.3`, keep `andreapollastri/larapilot`, `larastan/larastan`, `laravel/pao`, `laravel/pail`, and **do not** add `laravel/sail` (PRD chose Herd)
+      4. Keep this project's existing `scripts` block (it already has `setup`, `dev`, `lint`, `analyse`, `test`). Take the kit's `post-update-cmd` **without** the `install:features` line — that hook re-scaffolds authentication on `composer update` and TASK-02 removes its command
+      5. `composer install`, then `composer audit` and record the result
+      6. `npm install && npm run build`
+      7. `php artisan migrate` against `database/database.sqlite`, then confirm `http://personal-kbms.test` renders the kit shell in both light and dark
+      8. `vendor/bin/pint --dirty --format agent`, then `php artisan larapilot:quality`
+      9. Record the resolved versions of `livewire/livewire`, `livewire/flux`, `livewire/blaze`, `laravel/chisel`, and `laravel/fortify` (`composer show --direct`) in the commit body
+
+      ## Completion Criteria
+      - [ ] `composer show --direct` lists `livewire/livewire ^4.x`, `livewire/flux ^2.x`, `livewire/blaze`, `laravel/chisel`
+      - [ ] `phpunit/phpunit` is still `13.x` and `laravel/sail` is absent
+      - [ ] `composer.json` `post-update-cmd` does **not** contain `install:features`
+      - [ ] `.larapilot/`, `.ai/`, `.claude/`, `phpstan.neon.dist`, `pint.json`, `phpunit.xml`, and `.env` are byte-identical to their pre-task state (`git diff --stat` shows no changes under those paths)
+      - [ ] `npm run build` succeeds and Vite writes `public/build`
+      - [ ] `http://personal-kbms.test` renders the kit shell in light and dark
+      - [ ] `composer audit` reports no advisory, or any advisory is recorded in the commit body
+      - [ ] `php artisan larapilot:quality` passes
+      - [ ] The throwaway scaffold directory is deleted and never committed
+
+      ## Test Data
+      - N/A — no model or schema changes authored by this task (the kit's own `UserFactory` arrives here and is deleted in TASK-02)
+
+      ## Git Deliverables
+      - Commit: `feat(US-001): TASK-01 install Livewire + Flux starter kit scaffold`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes with the resolved dependency versions
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 5
+    dependencies:
+      - TASK-00
+  -
+    id: TASK-02
+    title: 'Remove starter-kit authentication outright'
+    body: |
+      ## Description
+      Delete the starter kit's entire authentication surface so no half-wired login remains: no auth routes, no login/register views, no `User` model or migration, no password-reset or 2FA or passkey scaffolding, and no Fortify. Also neutralise the `install:features` hook that would silently re-scaffold all of it on a future `composer update`. Per `.ai/rules/views.md` and the mockup README, the sidebar user menu is **deleted, not stubbed** — a placeholder name would re-introduce a login surface.
+
+      ## Files Involved
+      - Delete: app/Models/User.php, app/Actions/Fortify/CreateNewUser.php, app/Actions/Fortify/ResetUserPassword.php, app/Concerns/PasswordValidationRules.php, app/Concerns/ProfileValidationRules.php, app/Livewire/Actions/Logout.php, app/Providers/FortifyServiceProvider.php, app/Console/Commands/InstallFeaturesCommand.php
+      - Delete: config/fortify.php, config/auth.php
+      - Delete: database/migrations/0001_01_01_000000_create_users_table.php, database/migrations/2024_01_01_000000_create_passkeys_table.php, database/migrations/2025_08_14_170933_add_two_factor_columns_to_users_table.php, database/factories/UserFactory.php
+      - Delete: resources/views/layouts/auth.blade.php, resources/views/layouts/auth/{card,simple,split}.blade.php, resources/views/pages/auth/ (7 files), resources/views/pages/settings/ (7 files), resources/views/partials/settings-heading.blade.php, resources/views/components/auth-header.blade.php, resources/views/components/auth-session-status.blade.php, resources/views/components/desktop-user-menu.blade.php, resources/views/components/passkey-registration.blade.php, resources/views/components/passkey-verify.blade.php
+      - Delete: resources/js/passkeys.js
+      - Delete: routes/settings.php
+      - Delete: tests/Feature/Auth/ (6 files), tests/Feature/Settings/ (2 files), tests/Feature/DashboardTest.php
+      - Edit: routes/web.php, bootstrap/providers.php, resources/views/layouts/app/sidebar.blade.php, resources/views/layouts/app/header.blade.php, resources/js/app.js, database/seeders/DatabaseSeeder.php, composer.json
+
+      ## Steps
+      1. `composer remove laravel/fortify`, then `composer audit`
+      2. Delete every file in the list above
+      3. Remove `App\Providers\FortifyServiceProvider::class` from `bootstrap/providers.php`
+      4. Rewrite `routes/web.php`: drop `require __DIR__.'/settings.php'` and the `->middleware(['auth', 'verified'])` group; leave `Route::view('/', 'welcome')` in place for now (TASK-03 replaces it with the Agenda route)
+      5. Strip the auth references from `resources/views/layouts/app/sidebar.blade.php` and `header.blade.php`: remove `<x-desktop-user-menu>`, the mobile `flux:dropdown` profile block, and every `auth()->user()->...`, `route('profile.edit')`, `route('logout')` reference. Leave the footer slot empty — TASK-03 fills it with the environment block
+      6. Remove the `passkeys.js` import from `resources/js/app.js`
+      7. Empty `database/seeders/DatabaseSeeder.php` of user seeding, leaving a valid no-op `run()`
+      8. Confirm the `sessions` and `cache` migrations are **retained** — Livewire needs session and CSRF state — and that `SESSION_DRIVER=database` is unchanged
+      9. Verify removal: `php artisan route:list --except-vendor` shows no auth route; `php artisan route:list | grep -iE 'login|register|logout|password|two-factor|profile|settings'` is empty; `grep -rn "auth()" app/ resources/views/ routes/` is empty; `grep -rn "App\\Models\\User\|Fortify" app/ config/ bootstrap/ database/ routes/ tests/` is empty
+      10. `php artisan migrate:fresh --seed` succeeds against the empty seeder
+      11. `php artisan test`, `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `composer show laravel/fortify` reports the package is not installed
+      - [ ] `php artisan route:list --except-vendor` contains no authentication, settings, or profile route
+      - [ ] `class_exists(App\Models\User::class)` is false; `app/Actions/Fortify/`, `resources/views/pages/auth/`, `resources/views/pages/settings/`, and `resources/views/layouts/auth/` do not exist
+      - [ ] `config/auth.php` and `config/fortify.php` do not exist and nothing references `config('auth.*')`
+      - [ ] `app/Console/Commands/InstallFeaturesCommand.php` is gone and `composer.json` has no `install:features` reference
+      - [ ] The rendered shell contains no avatar, initials, name placeholder, `Log out`, or `Settings` affordance
+      - [ ] `sessions` and `cache` migrations retained; `php artisan migrate:fresh --seed` succeeds
+      - [ ] `http://personal-kbms.test` serves without a login prompt and `/login` returns 404
+      - [ ] `php artisan test` and `php artisan larapilot:quality` pass
+
+      ## Test Data
+      - [ ] `database/factories/UserFactory.php` deleted
+      - [ ] `database/seeders/DatabaseSeeder.php` reduced to a valid no-op `run()` with no user seeding
+      - [ ] `migrate:fresh --seed` verified green in this same task
+
+      ## Git Deliverables
+      - Commit: `refactor(US-001): TASK-02 remove starter-kit authentication surface`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes with the removed-file inventory
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 4
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-03
+    title: 'Build the KBMS app shell, theme tokens and navigation'
+    body: |
+      ## Description
+      Turn the kit shell into the Personal KBMS shell per the agreed visual contract in `.larapilot/mockups/kbms-app/README.md`: sidebar with the favicon mark and the Workspace / Later nav groups, header strip with breadcrumbs and the theme toggle, environment block where the kit put the user menu, `--kb-*` tokens mapped into Tailwind 4, `favicon.svg` shipped, and `noindex` insurance in the root layout. Agenda and Calendar exist as **placeholder pages** so the nav is live — their content is US-005 and US-008.
+
+      ## Files Involved
+      - resources/views/layouts/app/sidebar.blade.php, resources/views/layouts/app/header.blade.php, resources/views/layouts/app.blade.php
+      - resources/views/partials/head.blade.php
+      - resources/views/pages/agenda.blade.php, resources/views/pages/calendar.blade.php (placeholders)
+      - resources/views/components/app-logo.blade.php, resources/views/components/app-logo-icon.blade.php
+      - resources/views/components/environment-block.blade.php (new)
+      - resources/css/app.css
+      - public/favicon.svg (copied from .larapilot/mockups/kbms-app/favicon.svg)
+      - routes/web.php
+      - config/app.php (APP_NAME), .env, .env.example (APP_NAME, APP_URL)
+      - Delete: resources/views/welcome.blade.php, resources/views/dashboard.blade.php, resources/views/components/placeholder-pattern.blade.php
+
+      ## Steps
+      1. Read `.larapilot/mockups/kbms-app/README.md` and open `index.html`, `dark.html`, and `mobile.html` at `/mockups/kbms-app` before touching a view — it is the agreed contract, not a suggestion
+      2. Copy `.larapilot/mockups/kbms-app/favicon.svg` to `public/favicon.svg`. In `partials/head.blade.php`: point the icon link at `/favicon.svg`, drop the `favicon.ico` / `apple-touch-icon.png` links (neither asset exists — no OG or social assets by PRD decision), and add `<meta name="robots" content="noindex, nofollow">`
+      3. Map the seven `--kb-*` token pairs from `.larapilot/mockups/kbms-app/kbms.css` into `resources/css/app.css` as Tailwind 4 `@theme` entries plus a `.dark` block that **flips lightness rather than reusing light values**. Add only `--kb-*`; never redefine a Flux/kit token. Port `--kb-mono`, `--kb-frame-max`, tabular numerals, and the `prefers-reduced-motion` neutraliser
+      4. Remove the hardcoded `class="dark"` from `<html>` in `layouts/app/sidebar.blade.php` and rely on the kit's `@fluxAppearance` light/dark/system setting. **Do not port `theme.js`** — delete it from consideration; the kit's own appearance setting is the implementation
+      5. Sidebar: `Personal KBMS` wordmark with `favicon.svg` as the 24×24 mark (`alt=""`); **Workspace** group → Agenda, Calendar; **Later** group → Search (FR-013) and Transcript inbox (FR-014) rendered **disabled with their FR tag**; drop the kit's Repository and Documentation items and the mockup-only Reference group
+      6. Sidebar footer: `<x-environment-block>` in place of the deleted user menu — `127.0.0.1`, `config('app.timezone')`, `SQLite`, `no accounts`. Reads config only; no user concept anywhere
+      7. Header strip: sidebar toggle, breadcrumbs, theme toggle, and a **named slot for the sync pill** left empty with a comment pointing at US-004. Do not build the pill here
+      8. Add the `.kb-skip` skip link as the first focusable element in the layout, targeting `#main`; wrap page content in `<main id="main">`; one `<h1>` per page; `header` / `nav` / `main` landmarks
+      9. `routes/web.php`: `Route::view('/', 'pages.agenda')->name('agenda')` and `Route::view('calendar', 'pages.calendar')->name('calendar')`, both as placeholder pages that state which spec fills them. Delete `welcome.blade.php`, `dashboard.blade.php`, and `components/placeholder-pattern.blade.php`
+      10. Set `APP_NAME="Personal KBMS"` and `APP_URL=http://personal-kbms.test` in `.env` and `.env.example`; per-page `<title>` follows the kit's `{{ $title }} - {{ config('app.name') }}` pattern
+      11. `npm run build`; smoke-check 375 / 768 / 1280 px in light and dark against `mobile.html`
+      12. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `http://personal-kbms.test` renders the KBMS shell with no login prompt, in both light and dark
+      - [ ] Sidebar shows Workspace (Agenda, Calendar) and Later (Search FR-013, Transcript inbox FR-014, disabled with FR tags); no Repository/Documentation/Reference items
+      - [ ] Sidebar footer shows the environment block; no avatar, initials, or name placeholder anywhere
+      - [ ] `public/favicon.svg` served; `<link rel="icon" href="/favicon.svg">` and `<meta name="robots" content="noindex, nofollow">` present; no dangling `favicon.ico` / `apple-touch-icon.png` links
+      - [ ] All seven `--kb-*` token pairs resolve in both themes; no kit token redefined; `theme.js` not ported
+      - [ ] Skip link is the first focusable element and reaches `#main`; every interactive element has a visible focus ring (never outline-only)
+      - [ ] Agenda and Calendar routes resolve by name and state which spec fills them
+      - [ ] Sync pill slot exists and is empty, with a comment naming US-004
+      - [ ] Nothing breaks at 375 px: sidebar collapses to the toggle, no clipped controls, touch targets ≥ 44 px
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-001): TASK-03 build KBMS app shell, theme tokens and navigation`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Joe
+    estimate_hours: 5
+    dependencies:
+      - TASK-02
+  -
+    id: TASK-04
+    title: 'Wire SQLite, the database queue and the scheduler'
+    body: |
+      ## Description
+      Make the persistence and background surfaces real: SQLite as the configured database with a clean-checkout migration path, the `database` queue driver processing a verifiable test job, and a registered scheduler entry for the calendar sync. `kbms:sync-calendar` is created as a **registered stub** so `schedule:list` shows the entry as the AC requires; US-003 implements its body.
+
+      ## Files Involved
+      - config/database.php, config/queue.php
+      - .env, .env.example (DB_CONNECTION, DB_DATABASE, QUEUE_CONNECTION)
+      - database/.gitignore
+      - routes/console.php
+      - app/Console/Commands/SyncCalendarCommand.php (new — stub)
+      - app/Console/Commands/QueueSelfTestCommand.php (new)
+      - app/Jobs/QueueSelfTestJob.php (new)
+      - composer.json (verify the `setup` script's sqlite touch)
+
+      ## Steps
+      1. Confirm `DB_CONNECTION=sqlite` and set `DB_DATABASE=database/database.sqlite` explicitly in `.env` and `.env.example`; confirm `database/.gitignore` ignores `*.sqlite*`
+      2. Verify the existing `composer.json` `setup` script already touches `database/database.sqlite` before `php artisan migrate --force`, so a clean checkout needs **no manual file creation**; test the claim end to end with `git clone` into the scratchpad + `composer setup`
+      3. Confirm `QUEUE_CONNECTION=database` in `.env` / `.env.example` and that the `jobs` / `job_batches` / `failed_jobs` migrations from the skeleton are present (`php artisan queue:table` only if missing)
+      4. `php artisan make:job QueueSelfTestJob` — implements `ShouldQueue`, writes a single structured `Log::info` line with a context array, no model dependency
+      5. `php artisan make:command QueueSelfTestCommand --command=kbms:queue-test` — dispatches `QueueSelfTestJob` and prints where to look for the log line. This is the operator's and the AC's demonstration that `queue:work` processes a job, and US-002's `kbms:doctor` reuses it
+      6. `php artisan make:command SyncCalendarCommand --command=kbms:sync-calendar` — **stub**: a PHPDoc block stating US-003 owns the implementation, and a `handle()` that reports `not implemented — US-003` and returns `Command::FAILURE`. No ICS logic here
+      7. In `routes/console.php`: `Schedule::command('kbms:sync-calendar')->cron(...)` driven by `config('kbms.sync_minutes')` — falling back to a literal `15` until TASK-05 introduces `config/kbms.php`, then reconciled there — with `->withoutOverlapping()`. Confirm `php artisan schedule:list` shows the entry
+      8. Verify: `php artisan migrate:fresh` clean; `php artisan kbms:queue-test` then `php artisan queue:work --stop-when-empty` processes it and the log line appears in `storage/logs`; `php artisan schedule:list` shows `kbms:sync-calendar`
+      9. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `php artisan config:show database.default` reports `sqlite` and `database.connections.sqlite.database` resolves to `database/database.sqlite`
+      - [ ] A fresh `git clone` + `composer setup` migrates with **no manual file creation**
+      - [ ] `php artisan config:show queue.default` reports `database`; `jobs`, `job_batches`, and `failed_jobs` tables exist after migrate
+      - [ ] `php artisan kbms:queue-test` + `php artisan queue:work --stop-when-empty` processes the job and writes the expected log line
+      - [ ] `php artisan schedule:list` shows `kbms:sync-calendar` at the configured interval with `withoutOverlapping`
+      - [ ] `php artisan kbms:sync-calendar` exits non-zero with the `not implemented — US-003` message — it does not pretend to sync
+      - [ ] `database/database.sqlite` is not tracked by git
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — no Eloquent domain model or schema of our own; only the framework's queue tables
+
+      ## Git Deliverables
+      - Commit: `feat(US-001): TASK-04 wire SQLite, database queue and calendar sync schedule`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Mike
+    estimate_hours: 3
+    dependencies:
+      - TASK-02
+  -
+    id: TASK-05
+    title: 'Declare the KBMS configuration surface'
+    body: |
+      ## Description
+      Give every machine-specific assumption from the PRD `## Configuration surface` a config entry and a documented `.env.example` line, so no later spec hardcodes a path, URL, or interval. Declaration only — **validating** these values is US-002 (`kbms:doctor`).
+
+      ## Files Involved
+      - config/kbms.php (new)
+      - config/app.php (timezone bound to KBMS_TIMEZONE)
+      - .env, .env.example
+      - routes/console.php (reconcile the TASK-04 interval fallback onto config('kbms.sync_minutes'))
+
+      ## Steps
+      1. `php artisan make:class` is not the right generator for config — create `config/kbms.php` by hand, returning a typed array with the nine PRD keys and their documented defaults: `ics_url` (`KBMS_ICS_URL`, null), `sync_minutes` (`KBMS_ICS_SYNC_MINUTES`, `15`), `window_past_days` (`KBMS_ICS_WINDOW_PAST_DAYS`, `90`), `window_future_days` (`KBMS_ICS_WINDOW_FUTURE_DAYS`, `180`), `transcripts_path` (`KBMS_TRANSCRIPTS_PATH`, null), `transcript_pattern` (`KBMS_TRANSCRIPT_PATTERN`, `{date}-{time}-{slug}`), `claude_launcher` (`KBMS_CLAUDE_LAUNCHER`, null), `outlook_url_template` (`KBMS_OUTLOOK_URL_TEMPLATE`, null), `timezone` (`KBMS_TIMEZONE`, `Europe/Rome`). Add `allow_non_loopback` (`KBMS_ALLOW_NON_LOOPBACK`, `false`) for TASK-06
+      2. Cast integers with `(int) env(...)` and booleans with `(bool) env(...)`; add an array-shape PHPDoc block at the top of the file
+      3. The default `transcript_pattern` follows the recorded decision journal entry `transcript filename convention` — *date + time prefix, resolver keys off meeting start datetime* (e.g. `2026-09-07-1430-standup.md`). Do not invent a different convention
+      4. Bind `config('app.timezone')` to `env('KBMS_TIMEZONE', 'Europe/Rome')` so the operator's timezone is set in one place
+      5. Add all ten keys to `.env.example`, each with a one-line comment naming its default and the spec that consumes it; group them under a `# --- Personal KBMS ---` header. Set real local values in `.env` only
+      6. Reconcile the TASK-04 scheduler interval onto `config('kbms.sync_minutes')` and re-run `php artisan schedule:list`
+      7. Verify every key resolves: `php artisan config:show kbms`
+      8. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `php artisan config:show kbms` lists all ten keys with the documented defaults
+      - [ ] `.env.example` contains `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES`, `KBMS_ICS_WINDOW_PAST_DAYS`, `KBMS_ICS_WINDOW_FUTURE_DAYS`, `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`, `KBMS_ALLOW_NON_LOOPBACK` — each with a default and a comment
+      - [ ] `config('app.timezone')` follows `KBMS_TIMEZONE`
+      - [ ] `php artisan schedule:list` shows the interval derived from `config('kbms.sync_minutes')`
+      - [ ] No `.env.example` value contains a real ICS URL or a real filesystem path
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-001): TASK-05 declare the KBMS configuration surface`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-04
+  -
+    id: TASK-06
+    title: 'Enforce loopback-only access and verify secret hygiene'
+    body: |
+      ## Description
+      Make the PRD's compensating control enforceable rather than aspirational. With no authentication by recorded operator choice, the only thing standing between the transcript surface and the network is that the application is reachable on loopback alone — so express it as middleware a test can assert, and verify on the branch that no ICS URL or filesystem path was ever committed.
+
+      ## Files Involved
+      - app/Http/Middleware/EnsureLoopbackRequest.php (new)
+      - bootstrap/app.php
+      - resources/views/errors/403.blade.php (new — plain, states the reason)
+      - .env.example (KBMS_ALLOW_NON_LOOPBACK comment)
+      - README.md is TASK-09's file — record the `php artisan serve --host=127.0.0.1` note in the commit body for Albert to pick up
+
+      ## Steps
+      1. `php artisan make:middleware EnsureLoopbackRequest` — abort `403` unless `$request->ip()` is in `['127.0.0.1', '::1']`, short-circuiting to allow when `config('kbms.allow_non_loopback')` is true. Type-hint `Request` and declare the `Response` return type
+      2. Register it globally in `bootstrap/app.php` via `$middleware->append(...)` inside `withMiddleware`, so no route can opt out by omission
+      3. Log a single structured warning on rejection (`Log::warning` with the rejected IP) — the operator should be able to see that something reached the port
+      4. Add a plain `resources/views/errors/403.blade.php` stating that this application serves loopback only and naming `KBMS_ALLOW_NON_LOOPBACK` as the deliberate override. No product voice; the copy tone recorded in the mockup README applies
+      5. Confirm the Herd site serves on loopback: `http://personal-kbms.test` resolves to `127.0.0.1` and the middleware allows it. Verify the reject path with `curl -H 'X-Forwarded-For: 203.0.113.7'` — and confirm it is **not** honoured, because no trusted-proxy configuration is in place (a spoofed header must not bypass or trigger the control)
+      6. Secret hygiene on the branch: `git ls-files | grep -E '^\.env$'` is empty; `git grep -nE 'https?://[^ ]*\.ics|/Users/[a-z_]+/' -- . ':!.larapilot' ':!*.lock'` returns nothing outside artifacts; `.env.example` carries placeholders only
+      7. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `EnsureLoopbackRequest` is registered globally in `bootstrap/app.php`
+      - [ ] A request from a non-loopback IP receives 403 and the reason view; `127.0.0.1` and `::1` pass
+      - [ ] `config('kbms.allow_non_loopback')` defaults to `false` and flipping it to `true` lifts the block
+      - [ ] A spoofed `X-Forwarded-For` header cannot influence the decision (no trusted proxies configured)
+      - [ ] Rejections write one structured warning to the log
+      - [ ] `.env` is untracked; no real ICS URL or filesystem path appears anywhere in tracked application files
+      - [ ] `http://personal-kbms.test` still serves the shell normally
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-001): TASK-06 enforce loopback-only access and verify secret hygiene`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes with the secret-hygiene grep results
+    type: Impl
+    status: TODO
+    assignee: Lars
+    estimate_hours: 2
+    dependencies:
+      - TASK-05
+  -
+    id: TASK-07
+    title: 'Render an actionable message when SQLite is unavailable'
+    body: |
+      ## Description
+      Satisfy the spec's error case: a missing or unreadable `database/database.sqlite` must produce a clear, actionable message on the shell page — not a stack trace. `APP_DEBUG=true` is the local default, so this cannot rely on Laravel's production error page and must be an explicit exception mapping.
+
+      ## Files Involved
+      - bootstrap/app.php (withExceptions)
+      - app/Exceptions/DatabaseUnavailableException.php (new)
+      - resources/views/errors/database-unavailable.blade.php (new)
+
+      ## Steps
+      1. In `withExceptions`, add a `render` callback for `Illuminate\Database\QueryException` that detects an unopenable SQLite file — match the driver message (`unable to open database file`) and/or SQLSTATE `HY000`, scoped to the `sqlite` connection so a genuine SQL error still surfaces normally
+      2. Map it to `resources/views/errors/database-unavailable.blade.php`, returning HTTP 503
+      3. The view names the resolved `config('database.connections.sqlite.database')` value and the remedy verbatim: `touch database/database.sqlite`, then `php artisan migrate`. Per the recorded copy tone, it names the configuration key and the fixing action — never "Something went wrong". Reuse the shell's tokens; do **not** depend on a database read to render
+      4. Distinguish the two cases the AC implies: **missing** file versus **present but unreadable** (permissions) — different sentences, both actionable, matching the `missing ≠ unreadable` distinction the mockup `states.html` contract requires elsewhere
+      5. Verify with `APP_DEBUG=true`: rename `database/database.sqlite`, load `http://personal-kbms.test`, confirm the actionable page and no trace; `chmod 000` the restored file and confirm the unreadable variant; restore and confirm normal service
+      6. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] With the SQLite file missing and `APP_DEBUG=true`, the shell page shows the actionable message and no exception trace
+      - [ ] With the file present but unreadable, a distinct and equally actionable message renders
+      - [ ] The message names the configured `DB_DATABASE` path and the `touch` + `migrate` remedy
+      - [ ] A genuine SQL error (e.g. a query against a missing table) still surfaces as a normal exception — the mapping is not a catch-all
+      - [ ] Restoring the file restores normal service with no cache clearing
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-001): TASK-07 render actionable message when SQLite is unavailable`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-06
+  -
+    id: TASK-08
+    title: 'PHPUnit coverage for the scaffold'
+    body: |
+      ## Description
+      Cover the scaffold at the `NORMAL` bar and, crucially, assert the **absences** this spec is defined by: no auth routes, no `User` model, no login affordance. An absence that no test guards will creep back on the next `composer update`. No browser, Dusk, or viewport suites at this bar; UI verification is a documented manual handoff.
+
+      ## Files Involved
+      - tests/Feature/AppShellTest.php (new)
+      - tests/Feature/AuthenticationRemovedTest.php (new)
+      - tests/Feature/LoopbackAccessTest.php (new)
+      - tests/Feature/ConfigurationSurfaceTest.php (new)
+      - tests/Feature/QueueAndScheduleTest.php (new)
+      - tests/Feature/DatabaseUnavailableTest.php (new)
+      - .larapilot/docs/test-results/US-001.md (manual test handoff)
+
+      ## Steps
+      1. Create each test with `php artisan make:test --phpunit {Name}` — no suite directory in the name. No factories exist to reuse and none should be created; this spec introduces no Eloquent model
+      2. `AppShellTest`: `GET /` is 200 and renders one `<h1>`, the sidebar nav groups, the skip link, `noindex, nofollow`, and the `/favicon.svg` link; the Agenda and Calendar routes resolve by name and return 200
+      3. `AuthenticationRemovedTest`: `Route::has('login')`, `'register'`, `'logout'`, `'password.request'`, `'profile.edit'`, `'two-factor.login'` are all false; no registered route name matches `/^(auth\.|password\.|two-factor\.|settings\.)/`; `class_exists(App\Models\User::class)` is false; `config('auth')` is absent; the rendered shell contains no `Log out` or `Settings` affordance; `GET /login` is 404
+      4. `LoopbackAccessTest`: `127.0.0.1` and `::1` pass; an external `REMOTE_ADDR` gets 403 with the reason view; `kbms.allow_non_loopback = true` lifts the block; a spoofed `X-Forwarded-For` does not change the outcome
+      5. `ConfigurationSurfaceTest`: each of the nine PRD keys resolves through `config('kbms.*')` with its documented default; assert `.env.example` file contents contain all nine key names (a string assertion, since `.env.example` is the operator's contract)
+      6. `QueueAndScheduleTest`: `config('queue.default')` is `database`; `Queue::fake()` proves `kbms:queue-test` dispatches `QueueSelfTestJob`, and a separate assertion proves the job's `handle()` writes the expected log line via `Log::spy()`; the registered schedule contains a `kbms:sync-calendar` event whose expression matches `config('kbms.sync_minutes')` and which has `withoutOverlapping` set
+      7. `DatabaseUnavailableTest`: point the sqlite connection at a nonexistent path, force `APP_DEBUG=true`, assert the response is 503, contains the configured path and the `touch` remedy, and does **not** contain a stack-trace marker; assert a genuine SQL error against a missing table still throws normally
+      8. `php artisan test --compact`; iterate until green. Re-run the narrowest filter after each edit
+      9. Write the manual test handoff to `.larapilot/docs/test-results/US-001.md`: keyboard-only pass (skip link → nav → placeholder pages, visible focus at every stop); theme toggle both directions with `@fluxAppearance` persistence; 375 px pass against `.larapilot/mockups/kbms-app/mobile.html`; no-login-prompt confirmation; rename-the-sqlite-file check
+      10. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] All six feature tests pass via `php artisan test --compact`
+      - [ ] Coverage matches the `NORMAL` bar; no Playwright, Dusk, Pest browser, or viewport suite was added
+      - [ ] The auth-absence assertions fail if `App\Models\User` or any auth route is reintroduced (verify by temporarily re-adding one, then reverting)
+      - [ ] `.larapilot/docs/test-results/US-001.md` records the manual handoff steps
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Git Deliverables
+      - Commit: `test(US-001): TASK-08 cover app scaffold, auth removal and loopback control`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes with the test command and its output
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 4
+    dependencies:
+      - TASK-03
+      - TASK-07
+  -
+    id: TASK-09
+    title: 'Write the baseline README and CHANGELOG'
+    body: |
+      ## Description
+      Replace the current Italian Larapilot scratch `README.md` with the operator-facing baseline the PRD and the decision journal call for — **baseline only**, per the recorded `documentation scope` choice: no OpenAPI, no diagrams, no runbook, no client manual. Add a minimal `CHANGELOG.md` with an Unreleased section so release discipline has somewhere to accumulate.
+
+      ## Files Involved
+      - README.md (rewritten)
+      - CHANGELOG.md (new)
+
+      ## Steps
+      1. Rewrite `README.md` in English, matching the PRD and backlog language, with these sections:
+         - **What this is** — local-first meeting knowledge cockpit; two sources (ICS feed, transcripts); never produces calendar entries or transcripts and never hosts the LLM
+         - **Requirements** — PHP 8.4, Laravel Herd, Node; a note that **Herd is load-bearing, not a preference**: a container could not read the host transcript directory or invoke the host launcher script
+         - **Setup** — clone, `composer setup` (installs, copies `.env`, generates the key, touches the SQLite file, migrates, builds assets), Herd site at `http://personal-kbms.test`
+         - **Configuration** — a table of all nine `KBMS_*` values plus `KBMS_ALLOW_NON_LOOPBACK`, each with its default, whether it is required, and which capability consumes it
+         - **Running the background processes** — `php artisan queue:work` and `php artisan schedule:work`, why both are needed (calendar sync and the launch bridge are queued jobs), and `composer dev` for the combined local loop
+         - **The launcher script contract** — the operator's `.sh` is invoked with **exactly two positional arguments, in order: (1) the resolved context file path, (2) the question text**. Arguments are passed as an argument array, never an interpolated shell string. The script opens its own terminal window and the application **never captures Claude's reply**. Include a minimal example script
+         - **Troubleshooting** — `php artisan kbms:doctor` as the first step (a forward reference: US-002 implements it), `php artisan kbms:queue-test` to prove the worker, `php artisan schedule:list` to confirm the sync entry, and the SQLite-missing message with its `touch` remedy
+         - **Access model** — no authentication by design; loopback-only enforcement; the recorded accepted risk that anything able to reach the port reads every transcript
+         - **Quality** — `php artisan larapilot:quality` (Pint + Larastan level 5) and `php artisan test`
+      2. Keep the tone recorded in the mockup README: plain, specific, operator-to-operator. No product voice
+      3. Create `CHANGELOG.md` in Keep a Changelog format with an `## [Unreleased]` section listing `Added` (application scaffold, configuration surface, loopback control) and `Removed` (starter-kit authentication). No version tag yet
+      4. Do **not** create `SECURITY.md` or `public/.well-known/security.txt` — the ship gate scopes both to public apps and this one binds to loopback and is never deployed. State that omission in the commit body so it reads as a decision, not an oversight
+      5. Cross-check every command and `.env` key in the README against the actual code — a README that documents a key `config/kbms.php` does not have is worse than no README
+      6. `vendor/bin/pint --dirty --format agent` (no PHP touched, but run for consistency)
+
+      ## Completion Criteria
+      - [ ] `README.md` covers Herd setup, the complete `.env` surface, the queue worker and scheduler, and the launcher's two-argument contract
+      - [ ] Every `KBMS_*` key documented in the README exists in `config/kbms.php` and `.env.example`, and vice versa
+      - [ ] Every command quoted in the README runs successfully as written
+      - [ ] `kbms:doctor` is presented as the first troubleshooting step, marked as arriving with US-002
+      - [ ] Baseline only: no OpenAPI, diagrams, runbook, or client manual
+      - [ ] `CHANGELOG.md` exists with an Unreleased section
+      - [ ] `SECURITY.md` and `security.txt` deliberately absent, with the reason recorded in the commit body
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-001): TASK-09 write baseline README and CHANGELOG`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Albert
+    estimate_hours: 3
+    dependencies:
+      - TASK-07
+  -
+    id: TASK-10
+    title: 'Final quality gate and Laravel idiom review'
+    body: |
+      ## Description
+      Close the spec on a verified gate rather than an assumed one: Pint and Larastan clean across the new scaffold, `composer audit` clean after this spec's dependency changes, the full test suite green, and a short Laravel-idiom pass over what the kit port left behind.
+
+      ## Files Involved
+      - phpstan.neon.dist (verify paths cover the new directories)
+      - composer.json (verify scripts are coherent after the kit port)
+      - Any file needing a fix surfaced by the gate
+
+      ## Steps
+      1. `php artisan larapilot:quality` — Pint plus Larastan level 5. Confirm `phpstan.neon.dist` `paths` still cover `app`, `bootstrap`, `config`, `database`, `routes`, `tests`, and that **level 5 was not lowered**
+      2. `composer audit` — clean, or any advisory recorded with its reasoning
+      3. `php artisan test --compact` — full suite green
+      4. `npm run build` — clean
+      5. Andrew's idiom pass over the ported scaffold: no business logic in routes; the loopback middleware and exception mapping sit in the right layers; the stub command is honest about being a stub; no leftover kit artifact referencing a user, Fortify, passkeys, or 2FA (`grep -rniE 'fortify|passkey|two.?factor|auth\(\)' app/ config/ resources/ routes/ tests/ bootstrap/` is empty); no dead Blade component or unused CSS token; `composer.json` scripts still coherent
+      6. `php artisan route:list --except-vendor` and `php artisan schedule:list` — capture both outputs for the review handoff
+      7. Confirm the branch history is one atomic commit per task with `type(US-001): TASK-NN` messages and nothing pushed: `git log --oneline develop..HEAD` and `git remote -v`
+
+      ## Completion Criteria
+      - [ ] `php artisan larapilot:quality` passes with Larastan at level 5 or higher
+      - [ ] `composer audit` clean, or advisories recorded
+      - [ ] `php artisan test --compact` green
+      - [ ] `npm run build` clean
+      - [ ] No residual reference to Fortify, passkeys, two-factor, `auth()`, or a `User` anywhere in application code
+      - [ ] `route:list` and `schedule:list` outputs captured for review
+      - [ ] One atomic commit per task, Conventional Commit messages, no remote, nothing pushed
+
+      ## Test Data
+      - N/A — verification only
+
+      ## Git Deliverables
+      - Commit: `chore(US-001): TASK-10 final quality gate and idiom review` (only if the gate required fixes; otherwise no commit and the outputs go in the PR notes)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: finalize the local PR description toward `develop` with the gate outputs
+    type: Impl
+    status: TODO
+    assignee: Andrew
+    estimate_hours: 1
+    dependencies:
+      - TASK-08
+      - TASK-09
+updated_at: '2026-09-07T18:21:34+00:00'

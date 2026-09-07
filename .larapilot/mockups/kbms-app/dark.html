@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agenda (dark) — Personal KBMS</title>
+  <meta name="description" content="Chronological triage surface for mirrored Outlook meetings, with note and transcript coverage inline.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.bunny.net">
+  <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet">
+  <link rel="stylesheet" href="starter-kit-tokens.css">
+  <link rel="stylesheet" href="kbms.css">
+</head>
+<body class="sk-mockup">
+  <a class="kb-skip" href="#main">Skip to content</a>
+
+  <div class="sk-layout">
+    <!-- =============================================== sidebar (US-001) === -->
+    <aside class="sk-sidebar" aria-label="Sidebar">
+      <div class="sk-sidebar__header">
+        <a href="index.html" class="sk-sidebar__logo">
+          <img src="favicon.svg" alt="" width="24" height="24" class="sk-sidebar__logo-mark" style="background:none;border-radius:6px">
+          Personal KBMS
+        </a>
+      </div>
+
+      <div class="sk-sidebar__group-label">Workspace</div>
+      <nav class="sk-sidebar__nav" aria-label="Main">
+        <a href="index.html" class="is-active" aria-current="page">Agenda</a>
+        <a href="calendar.html">Calendar</a>
+      </nav>
+
+      <div class="sk-sidebar__group-label">Reference</div>
+      <nav class="sk-sidebar__nav" aria-label="Reference">
+        <a href="states.html">Component states</a>
+        <a href="mobile.html">Narrow viewport</a>
+      </nav>
+
+      <div class="sk-sidebar__group-label">Later</div>
+      <nav class="sk-sidebar__nav" aria-label="Deferred">
+        <a href="#" class="is-later" aria-disabled="true" tabindex="-1">Search <span class="kb-tag kb-tag--muted" style="margin-left:auto">FR-013</span></a>
+        <a href="#" class="is-later" aria-disabled="true" tabindex="-1">Transcript inbox <span class="kb-tag kb-tag--muted" style="margin-left:auto">FR-014</span></a>
+      </nav>
+
+      <!-- No user menu: authentication is removed in US-001, there is no account. -->
+      <div class="sk-sidebar__footer">
+        <div class="kb-sidebar-meta">
+          <strong style="color:var(--sidebar-foreground)">Local only</strong><br>
+          <code>127.0.0.1</code> &middot; Europe/Rome<br>
+          SQLite &middot; no accounts
+        </div>
+      </div>
+    </aside>
+
+    <div class="sk-inset">
+      <!-- ========================================== header + sync (US-004) === -->
+      <header class="sk-inset-header">
+        <button type="button" class="sk-sidebar-toggle" aria-label="Open navigation" aria-expanded="false">&#9776;</button>
+        <ol class="sk-breadcrumbs" aria-label="Breadcrumb">
+          <li><span>Agenda</span></li>
+        </ol>
+
+        <div class="kb-header__spacer"></div>
+
+        <p class="kb-sync kb-sync--ok" aria-live="polite" style="margin:0">
+          <span class="kb-sync__dot" aria-hidden="true"></span>
+          <span>Synced <span class="kb-sync__label">4 min ago</span>
+            <span class="kb-note-inline">&middot; 12:36</span>
+          </span>
+          <button type="button" class="kb-sync__resync">Resync</button>
+        </p>
+
+        <button type="button" class="kb-iconbtn" data-theme-toggle aria-pressed="true" aria-label="Toggle colour theme">
+          <span aria-hidden="true">&#9680;</span>
+          <span class="kb-sronly" data-theme-label>Light</span>
+        </button>
+      </header>
+
+      <main class="kb-inset-content" id="main">
+        <div class="kb-page-head">
+          <div>
+            <h1>Agenda</h1>
+            <p>Recent and upcoming meetings mirrored from the Outlook feed. Notes and transcripts are yours; everything else can change on the next sync.</p>
+          </div>
+          <div class="kb-page-head__actions">
+            <a class="sk-btn sk-btn--outline" href="calendar.html">Calendar view</a>
+          </div>
+        </div>
+
+        <!-- ------------------------------------------------- range toolbar --- -->
+        <div class="kb-toolbar" role="group" aria-label="Date range">
+          <button type="button" class="kb-iconbtn" aria-label="Previous week">&#8249;</button>
+          <button type="button" class="kb-iconbtn" aria-label="Next week">&#8250;</button>
+          <button type="button" class="sk-btn sk-btn--outline">Today</button>
+          <span class="kb-toolbar__range" aria-live="polite">Mon 7 &ndash; Sun 13 Sep 2026</span>
+
+          <span class="kb-toolbar__spacer"></span>
+
+          <label class="kb-inline kb-note-inline" for="jump">
+            <span>Jump to</span>
+            <input class="sk-input" id="jump" type="date" value="2026-09-07" style="width:auto;min-height:2.25rem">
+          </label>
+        </div>
+
+        <p class="kb-legend" style="margin:0 0 1rem">
+          <span>Coverage:</span>
+          <span class="kb-tag kb-tag--note">
+            <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h5.2a1.5 1.5 0 0 1 1.06.44l2.3 2.3A1.5 1.5 0 0 1 13.5 4.8v8.7A1.5 1.5 0 0 1 12 15H4.5A1.5 1.5 0 0 1 3 13.5v-11Zm2.5 4a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5Zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"/></svg>
+            Notes
+          </span>
+          <span class="kb-tag kb-tag--transcript">
+            <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3ZM3.5 7.25a.75.75 0 0 0-1.5 0 6 6 0 0 0 5.25 5.95v1.05H5.75a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5H8.75V13.2A6 6 0 0 0 14 7.25a.75.75 0 0 0-1.5 0 4.5 4.5 0 0 1-9 0Z"/></svg>
+            Transcript
+          </span>
+          <span class="kb-tag kb-tag--bare">Not annotated</span>
+          <span class="kb-tag kb-tag--cancelled">Cancelled</span>
+        </p>
+
+        <!-- ============================================= today (US-005) === -->
+        <section class="kb-daygroup kb-daygroup--today" aria-labelledby="day-mon">
+          <div class="kb-daygroup__head">
+            <h2 id="day-mon">Today &middot; Mon 7 Sep</h2>
+            <span class="kb-count">5 meetings &middot; 3 annotated</span>
+          </div>
+
+          <ul class="kb-agenda">
+            <li>
+              <a class="kb-row" href="meeting.html">
+                <span class="kb-row__time">All day<small>Sep 7 &ndash; Sep 8</small></span>
+                <span>
+                  <span class="kb-row__title">Company offsite &mdash; planning window</span>
+                  <span class="kb-row__meta"><span>Organiser: Chiara Fontana</span><span>Milano, Sala Nord</span></span>
+                </span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--muted">All-day</span>
+                  <span class="kb-tag kb-tag--bare">Not annotated</span>
+                </span>
+              </a>
+            </li>
+
+            <li>
+              <a class="kb-row" href="meeting.html">
+                <span class="kb-row__time">08:45<small>15 min</small></span>
+                <span>
+                  <span class="kb-row__title">Daily standup &mdash; Platform</span>
+                  <span class="kb-row__meta"><span>Organiser: Marco Bianchi</span><span>Microsoft Teams</span><span>7 attendees</span></span>
+                </span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--note">
+                    <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h5.2a1.5 1.5 0 0 1 1.06.44l2.3 2.3A1.5 1.5 0 0 1 13.5 4.8v8.7A1.5 1.5 0 0 1 12 15H4.5A1.5 1.5 0 0 1 3 13.5v-11Zm2.5 4a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5Zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"/></svg>
+                    Notes
+                  </span>
+                </span>
+              </a>
+            </li>
+
+            <li>
+              <!-- Row with focus ring frozen on, so Alex/Anne can see the contract -->
+              <a class="kb-row is-focused" href="meeting.html">
+                <span class="kb-row__time">09:30<small>60 min</small></span>
+                <span>
+                  <span class="kb-row__title">Q4 roadmap review</span>
+                  <span class="kb-row__meta"><span>Organiser: Chiara Fontana</span><span>Microsoft Teams</span><span>12 attendees</span></span>
+                </span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--note">
+                    <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h5.2a1.5 1.5 0 0 1 1.06.44l2.3 2.3A1.5 1.5 0 0 1 13.5 4.8v8.7A1.5 1.5 0 0 1 12 15H4.5A1.5 1.5 0 0 1 3 13.5v-11Zm2.5 4a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5Zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"/></svg>
+                    Notes
+                  </span>
+                  <span class="kb-tag kb-tag--transcript">
+                    <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3ZM3.5 7.25a.75.75 0 0 0-1.5 0 6 6 0 0 0 5.25 5.95v1.05H5.75a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5H8.75V13.2A6 6 0 0 0 14 7.25a.75.75 0 0 0-1.5 0 4.5 4.5 0 0 1-9 0Z"/></svg>
+                    Transcript
+                  </span>
+                </span>
+              </a>
+            </li>
+
+            <li>
+              <a class="kb-row" href="meeting.html">
+                <span class="kb-row__time">11:00<small>30 min</small></span>
+                <span>
+                  <span class="kb-row__title">1:1 &mdash; Sara Rinaldi</span>
+                  <span class="kb-row__meta"><span>Organiser: you</span><span>Microsoft Teams</span><span>2 attendees</span></span>
+                </span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--transcript">
+                    <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3ZM3.5 7.25a.75.75 0 0 0-1.5 0 6 6 0 0 0 5.25 5.95v1.05H5.75a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5H8.75V13.2A6 6 0 0 0 14 7.25a.75.75 0 0 0-1.5 0 4.5 4.5 0 0 1-9 0Z"/></svg>
+                    Transcript
+                  </span>
+                </span>
+              </a>
+            </li>
+
+            <li aria-hidden="true">
+              <p class="kb-nowline"><span>Now &middot; 12:40</span></p>
+            </li>
+
+            <li>
+              <a class="kb-row kb-row--now" href="meeting.html">
+                <span class="kb-row__time">14:30<small>60 min</small></span>
+                <span>
+                  <span class="kb-row__title">Excellence &mdash; client discovery call</span>
+                  <span class="kb-row__meta"><span>Organiser: Luca Ferrero</span><span>Microsoft Teams</span><span>5 attendees</span></span>
+                </span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--bare">Not annotated</span>
+                </span>
+              </a>
+            </li>
+
+            <li>
+              <a class="kb-row kb-row--cancelled" href="meeting.html">
+                <span class="kb-row__time">16:00<small>45 min</small></span>
+                <span>
+                  <span class="kb-row__title">Vendor demo &mdash; Acme Analytics</span>
+                  <span class="kb-row__meta"><span>Organiser: Acme Sales</span><span>Cancelled upstream &middot; notes kept</span></span>
+                </span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--cancelled">Cancelled</span>
+                  <span class="kb-tag kb-tag--note">
+                    <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h5.2a1.5 1.5 0 0 1 1.06.44l2.3 2.3A1.5 1.5 0 0 1 13.5 4.8v8.7A1.5 1.5 0 0 1 12 15H4.5A1.5 1.5 0 0 1 3 13.5v-11Zm2.5 4a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5Zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"/></svg>
+                    Notes
+                  </span>
+                </span>
+              </a>
+            </li>
+          </ul>
+        </section>
+
+        <!-- ================================================= tomorrow === -->
+        <section class="kb-daygroup" aria-labelledby="day-tue">
+          <div class="kb-daygroup__head">
+            <h2 id="day-tue">Tomorrow &middot; Tue 8 Sep</h2>
+            <span class="kb-count">2 meetings &middot; 1 annotated</span>
+          </div>
+
+          <ul class="kb-agenda">
+            <li>
+              <a class="kb-row" href="meeting.html">
+                <span class="kb-row__time">10:00<small>60 min</small></span>
+                <span>
+                  <span class="kb-row__title">Design sync &mdash; agenda view</span>
+                  <span class="kb-row__meta"><span>Organiser: you</span><span>Microsoft Teams</span><span>3 attendees</span></span>
+                </span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--note">
+                    <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h5.2a1.5 1.5 0 0 1 1.06.44l2.3 2.3A1.5 1.5 0 0 1 13.5 4.8v8.7A1.5 1.5 0 0 1 12 15H4.5A1.5 1.5 0 0 1 3 13.5v-11Zm2.5 4a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5Zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"/></svg>
+                    Notes
+                  </span>
+                </span>
+              </a>
+            </li>
+
+            <li>
+              <a class="kb-row" href="meeting.html">
+                <span class="kb-row__time">15:00<small>60 min</small></span>
+                <span>
+                  <span class="kb-row__title">Board prep &mdash; H1 numbers</span>
+                  <span class="kb-row__meta"><span>Organiser: Chiara Fontana</span><span>Milano, Sala Nord</span><span>4 attendees</span></span>
+                </span>
+                <span class="kb-row__badges">
+                  <span class="kb-tag kb-tag--bare">Not annotated</span>
+                </span>
+              </a>
+            </li>
+          </ul>
+        </section>
+
+        <!-- ============================ empty day (US-005 edge case) === -->
+        <section class="kb-daygroup" aria-labelledby="day-wed">
+          <div class="kb-daygroup__head">
+            <h2 id="day-wed">Wed 9 Sep</h2>
+            <span class="kb-count">No meetings</span>
+          </div>
+          <div class="kb-empty">
+            <h3>Nothing on the calendar</h3>
+            <p>The mirror is current &mdash; this day is genuinely empty rather than unsynced. Last successful sync was 4 minutes ago.</p>
+          </div>
+        </section>
+
+        <div class="kb-anno">
+          <strong>Mockup annotation &mdash; dark theme</strong>
+          Exact dark twin of <code>index.html</code> so contrast can be judged side by side. Every coverage badge, the sync pill, and the cancelled row keep AA text contrast against <code>--card</code> in this theme &mdash; the <code>--kb-*</code> tokens flip lightness in <code>.dark</code> rather than reusing the light values. Open <code>states.html</code> and press the theme button to check the error and warning surfaces here too.
+        </div>
+
+        <div class="kb-anno">
+          <strong>Mockup annotation &mdash; US-005</strong>
+          Rows are real links to the occurrence route (<code>source_uid</code> + <code>recurrence_id</code>), so they are keyboard reachable with no JS. The third row shows the frozen <code>:focus-visible</code> ring: 3&nbsp;px <code>--ring</code> halo plus border change &mdash; never outline-only. The <em>Now</em> divider is decorative (<code>aria-hidden</code>); screen readers get times from each row instead.
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="theme.js"></script>
+</body>
+</html>

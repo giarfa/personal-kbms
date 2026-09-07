@@ -1,0 +1,33 @@
+code: US-004
+title: 'Calendar sync health and manual resync'
+epic:
+  code: EP-002
+  title: 'Calendar Mirror'
+  objective: 'The subscribed Outlook feed is mirrored locally with correct recurrence and timezone handling, and its freshness is always visible'
+priority: HIGH
+points: 3
+status: TODO
+body: |
+  #### US-004: Calendar sync health and manual resync
+
+  **Epic:** EP-002 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+  **Blocked by:** US-003
+
+  **Traces to:** FR-010 (MoSCoW: Must)
+
+  **User Story**
+  As the operator,
+  I want to see when my calendar last synced successfully and to force a resync on demand,
+  so that I never trust a stale mirror without knowing it is stale — a silently outdated calendar is worse than an obviously broken one.
+
+  **Demonstrates**
+  After implementing this spec, the interface always shows the last successful sync time and the last failure if there was one, and a resync control refreshes the mirror without touching the terminal.
+
+  **Acceptance Criteria**
+  - [ ] The application shell shows the **last successful sync** timestamp in relative and absolute form
+  - [ ] When the most recent attempt failed, a distinct warning state shows the failure reason legibly — **without requiring the operator to open `storage/logs`**
+  - [ ] A manual resync control dispatches the sync job and reflects in-progress, success, and failure states
+  - [ ] A stale mirror (no successful sync for a configurable multiple of the sync interval) is visually flagged even when no run has explicitly failed
+  - [ ] **Error case:** triggering resync while a run is already in progress does not queue a duplicate or produce an overlapping run
+  - [ ] **Edge case:** with no sync run recorded at all, the interface shows "never synced" rather than an empty or misleading value
+  - [ ] Feature test covers success, failure, in-progress, stale, and never-synced states

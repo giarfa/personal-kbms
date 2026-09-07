@@ -1,0 +1,46 @@
+code: US-001
+title: 'Application scaffold and local environment'
+epic:
+  code: EP-001
+  title: 'Foundation & Environment'
+  objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
+priority: HIGH
+points: 5
+status: 'IN PROGRESS'
+body: |
+  #### US-001: Application scaffold and local environment
+
+  **Epic:** EP-001 | **Priority:** HIGH | **Points:** 5 | **Status:** TODO
+  **Blocked by:** -
+
+  **Traces to:** PRD `## Technical Architecture` (Stack, Security & access, Configuration surface, Documentation)
+
+  **User Story**
+  As the operator,
+  I want the application to boot on my own machine with its shell, storage, background workers, and configuration surface in place,
+  so that every later capability has somewhere to land instead of being blocked on setup.
+
+  **Demonstrates**
+  After implementing this spec, `http://personal-kbms.test` serves a themed application shell with light and dark modes and no login prompt, `php artisan queue:work` and `php artisan schedule:work` run clean, and the README describes every configuration value the product needs.
+
+  **Acceptance Criteria**
+  - [ ] The official Laravel **Livewire + Flux starter kit** is installed and its layout, navigation, and light/dark theming render at `http://personal-kbms.test` via Herd
+  - [ ] Starter-kit **authentication is removed, not left dormant**: no auth routes, no login/register views, no `User` model or migration, no password-reset scaffolding — no half-wired login surface remains
+  - [ ] The application binds explicitly to `127.0.0.1` and is not reachable on `0.0.0.0`
+  - [ ] SQLite is the configured database; migrations run from a clean checkout with no manual file creation
+  - [ ] `database` queue driver is configured and `php artisan queue:work` processes a test job
+  - [ ] The scheduler is registered and `php artisan schedule:list` shows the calendar sync entry
+  - [ ] Every configuration value from the PRD exists in `.env.example` with documented defaults: `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES` (15), `KBMS_ICS_WINDOW_PAST_DAYS` (90), `KBMS_ICS_WINDOW_FUTURE_DAYS` (180), `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`
+  - [ ] The real `.env` is git-ignored and no ICS URL or filesystem path is committed
+  - [ ] A minimal `favicon.svg` and application title are in place; no logo, OG image, or social assets
+  - [ ] `README.md` covers Herd setup, the full `.env` surface, starting the queue worker and scheduler, and the launcher script's two-argument contract — **baseline documentation only**, no OpenAPI, diagrams, or runbook
+  - [ ] `php artisan larapilot:quality` (Pint + Larastan) passes
+  - [ ] **Error case:** a missing or unreadable SQLite database file produces a clear actionable message, not a stack trace on the shell page
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-07T18:21:34+00:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-07T18:44:24+00:00'
+rework: false

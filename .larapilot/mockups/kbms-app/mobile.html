@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Narrow viewport — Personal KBMS</title>
+  <meta name="description" content="How the desktop-first KBMS layout holds together at 375px: real screens rendered at phone width plus the navigation drawer.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.bunny.net">
+  <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet">
+  <link rel="stylesheet" href="starter-kit-tokens.css">
+  <link rel="stylesheet" href="kbms.css">
+</head>
+<body class="sk-mockup">
+  <main class="sk-gallery" id="main" style="max-width:80rem">
+    <h1>Narrow viewport &mdash; 375&nbsp;px</h1>
+    <p class="sk-gallery__intro">
+      This product is <strong>desktop-first by recorded decision</strong> (PRD &sect; UX &amp; frontend): it is a localhost tool driven from the machine that runs it, so no mobile-specific flow is designed. The contract is narrower &mdash; nothing may <em>break</em> below 768&nbsp;px. The frames below are the real screens rendered at phone width, not redraws, so they cannot drift from what Alex implements.
+    </p>
+
+    <div class="kb-frames">
+      <div class="kb-frame">
+        <p class="kb-frame__label">Agenda &mdash; index.html @ 375&times;720</p>
+        <iframe class="kb-frame__screen" src="index.html" title="Agenda at 375 pixels wide" loading="lazy" style="border:1px solid var(--border)"></iframe>
+      </div>
+
+      <div class="kb-frame">
+        <p class="kb-frame__label">Meeting detail &mdash; meeting.html @ 375&times;720</p>
+        <iframe class="kb-frame__screen" src="meeting.html" title="Meeting detail at 375 pixels wide" loading="lazy" style="border:1px solid var(--border)"></iframe>
+      </div>
+
+      <div class="kb-frame">
+        <p class="kb-frame__label">Calendar &mdash; calendar.html @ 375&times;720</p>
+        <iframe class="kb-frame__screen" src="calendar.html" title="Calendar at 375 pixels wide" loading="lazy" style="border:1px solid var(--border)"></iframe>
+      </div>
+
+      <div class="kb-frame">
+        <p class="kb-frame__label">Navigation drawer, open (static)</p>
+        <div class="kb-drawer-demo">
+          <div class="kb-drawer-demo__scrim"></div>
+          <div class="kb-drawer-demo__panel" role="dialog" aria-modal="true" aria-label="Navigation">
+            <div class="sk-sidebar__header">
+              <a href="index.html" class="sk-sidebar__logo">
+                <img src="favicon.svg" alt="" width="24" height="24" style="border-radius:6px">
+                Personal KBMS
+              </a>
+            </div>
+            <div class="sk-sidebar__group-label">Workspace</div>
+            <nav class="sk-sidebar__nav" aria-label="Main">
+              <a href="index.html" class="is-active" aria-current="page">Agenda</a>
+              <a href="calendar.html">Calendar</a>
+            </nav>
+            <div class="sk-sidebar__group-label">Later</div>
+            <nav class="sk-sidebar__nav" aria-label="Deferred">
+              <a href="#" class="is-later" aria-disabled="true" tabindex="-1">Search</a>
+              <a href="#" class="is-later" aria-disabled="true" tabindex="-1">Transcript inbox</a>
+            </nav>
+            <div class="sk-sidebar__footer">
+              <div class="kb-sidebar-meta">
+                <strong style="color:var(--sidebar-foreground)">Local only</strong><br>
+                <code>127.0.0.1</code> &middot; Europe/Rome
+              </div>
+            </div>
+            <button type="button" class="kb-drawer-demo__close" aria-label="Close navigation">&times;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="kb-anno" style="max-width:52rem">
+      <strong>Navigation pattern &mdash; one per app</strong>
+      Hamburger drawer, left-anchored, scrim over the content. It is the Starter Kit's own sidebar sheet: below 768&nbsp;px <code>.sk-sidebar</code> is hidden and <code>.sk-sidebar-toggle</code> appears in the header. When open it is a modal dialog &mdash; focus moves into the panel, <code>Esc</code> and the scrim both close it, focus returns to the trigger. No bottom bar, no tab bar; two destinations do not justify one.
+    </div>
+
+    <div class="kb-anno" style="max-width:52rem">
+      <strong>What reflows, what does not</strong>
+      Agenda rows drop from three columns to a stack (time inline above the title, badges left-aligned). The meeting detail's two columns collapse to one with the mirrored feed panel <em>first</em>, so the read-only context is read before the editors. The month grid keeps seven columns and gains <code>overflow-x-auto</code> &mdash; a calendar with fewer than seven day columns stops being a calendar, so this is the one place horizontal scroll is accepted. Event time labels drop out of month cells below 768&nbsp;px; the accessible name keeps them.
+    </div>
+
+    <div class="kb-anno" style="max-width:52rem">
+      <strong>Touch targets</strong>
+      Below 768&nbsp;px every <code>.kb-iconbtn</code>, <code>.sk-btn</code> and segmented-control button grows to a 44&nbsp;px minimum height. Calendar event chips stay small by necessity in month view &mdash; that is why the day cell itself is also tappable and week/day views exist.
+    </div>
+
+    <p class="kb-note-inline" style="max-width:52rem">
+      Breakpoints verified: <strong>320</strong> (agenda and detail readable, month grid scrolls), <strong>375</strong> (frames above), <strong>768</strong> (sidebar returns as a drawer trigger, detail still single column), <strong>1024</strong> (detail becomes two columns, sidebar pinned), <strong>1280</strong> (primary design width), <strong>1920</strong> (content capped at 88&nbsp;rem, left-aligned, no stretched line lengths). Portrait and landscape differ only in available height; nothing is height-dependent.
+    </p>
+  </main>
+
+  <script src="theme.js"></script>
+</body>
+</html>
