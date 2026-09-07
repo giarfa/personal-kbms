@@ -1,0 +1,13 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Personal KBMS//Test Fixtures//EN
+BEGIN:VEVENT
+UID:uid-cancelled-001
+DTSTAMP:20260301T000000Z
+DTSTART;TZID=Europe/Rome:20260305T100000
+DTEND;TZID=Europe/Rome:20260305T110000
+SUMMARY:Client kickoff
+DESCRIPTION:Join via Teams: https://teams.microsoft.com/l/meetup-join/19%3ameeting_fallback456
+STATUS:CANCELLED
+END:VEVENT
+END:VCALENDAR
