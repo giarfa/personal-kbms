@@ -554,12 +554,12 @@ tasks:
       6. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] With the SQLite file missing and `APP_DEBUG=true`, the shell page shows the actionable message and no exception trace
-      - [ ] With the file present but unreadable, a distinct and equally actionable message renders
-      - [ ] The message names the configured `DB_DATABASE` path and the `touch` + `migrate` remedy
-      - [ ] A genuine SQL error (e.g. a query against a missing table) still surfaces as a normal exception — the mapping is not a catch-all
-      - [ ] Restoring the file restores normal service with no cache clearing
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] With the SQLite file missing and `APP_DEBUG=true`, the shell page shows the actionable message and no exception trace
+      - [x] With the file present but unreadable, a distinct and equally actionable message renders
+      - [x] The message names the configured `DB_DATABASE` path and the `touch` + `migrate` remedy
+      - [x] A genuine SQL error (e.g. a query against a missing table) still surfaces as a normal exception — the mapping is not a catch-all
+      - [x] Restoring the file restores normal service with no cache clearing
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -569,11 +569,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2
     dependencies:
       - TASK-06
+    commit:
+      sha: b34be06d52622e1b41dd3dc452cce46c592210aa
+      short_sha: b34be06
+      subject: 'feat(US-001): TASK-07 render actionable message when SQLite is unavailable'
+      committed_at: '2026-09-07T21:01:51+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b34be06d52622e1b41dd3dc452cce46c592210aa'
   -
     id: TASK-08
     title: 'PHPUnit coverage for the scaffold'
@@ -714,4 +720,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T20:57:45+02:00'
+updated_at: '2026-09-07T21:01:53+02:00'
