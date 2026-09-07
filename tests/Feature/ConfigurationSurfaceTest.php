@@ -18,6 +18,7 @@ class ConfigurationSurfaceTest extends TestCase
         $this->assertNull(config('kbms.outlook_url_template'));
         $this->assertSame('Europe/Rome', config('kbms.timezone'));
         $this->assertFalse(config('kbms.allow_non_loopback'));
+        $this->assertSame(30, config('kbms.sync_run_retention_days'));
     }
 
     public function test_app_timezone_follows_kbms_timezone(): void
@@ -39,6 +40,7 @@ class ConfigurationSurfaceTest extends TestCase
             'KBMS_CLAUDE_LAUNCHER',
             'KBMS_OUTLOOK_URL_TEMPLATE',
             'KBMS_TIMEZONE',
+            'KBMS_SYNC_RUN_RETENTION_DAYS',
         ] as $key) {
             $this->assertStringContainsString($key, $contents, "{$key} missing from .env.example");
         }
