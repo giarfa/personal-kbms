@@ -217,8 +217,8 @@ tasks:
       4. Anchor the branch: `git commit --allow-empty -m "chore(US-003): TASK-00 bootstrap feature branch"`
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-003-ics-calendar-ingestion` exists locally, branched from `develop`
-      - [ ] PR title and body drafted toward `develop` (not pushed)
+      - [x] Branch `feature/US-003-ics-calendar-ingestion` exists locally, branched from `develop`
+      - [x] PR title and body drafted toward `develop` (not pushed)
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -228,10 +228,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally — open the remote PR only if the operator asks
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
+    commit:
+      sha: be74b2f8880504d7cdce1e2e5efffc3d46431271
+      short_sha: be74b2f
+      subject: 'chore(US-003): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-07T23:06:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/be74b2f8880504d7cdce1e2e5efffc3d46431271'
   -
     id: TASK-01
     title: 'Install sabre/vobject and add the run-retention config key'
@@ -255,11 +261,11 @@ tasks:
       7. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `sabre/vobject ^5.0` in `composer.json` require block, lockfile updated
-      - [ ] `composer audit` clean
-      - [ ] `config('kbms.sync_run_retention_days')` resolves to `30` with no env override
-      - [ ] `.env.example` documents the key with its default
-      - [ ] `ConfigurationSurfaceTest` green
+      - [x] `sabre/vobject ^5.0` in `composer.json` require block, lockfile updated
+      - [x] `composer audit` clean
+      - [x] `config('kbms.sync_run_retention_days')` resolves to `30` with no env override
+      - [x] `.env.example` documents the key with its default
+      - [x] `ConfigurationSurfaceTest` green
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -269,11 +275,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1
     dependencies:
       - TASK-00
+    commit:
+      sha: 02dbf2783aaec630e87645ca86556ac38e15ba36
+      short_sha: 02dbf27
+      subject: 'chore(US-003): TASK-01 add sabre/vobject and sync run retention config'
+      committed_at: '2026-09-07T23:06:47+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/02dbf2783aaec630e87645ca86556ac38e15ba36'
   -
     id: TASK-02
     title: 'Add the CalendarEvent model, migration, factory and seeder'
@@ -301,27 +313,33 @@ tasks:
       9. `php artisan test --compact --filter=CalendarEvent` and `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Migration creates the table with the unique (`source_uid`, `recurrence_id`) index and both secondary indexes
-      - [ ] A second insert with the same `source_uid` and `recurrence_id = ''` is rejected by the database
-      - [ ] `CalendarEventFactory` produces domain-realistic records; every listed state works
-      - [ ] `migrate:fresh --seed` succeeds and yields the described fixture calendar
-      - [ ] Tests pass; `larapilot:quality` green
+      - [x] Migration creates the table with the unique (`source_uid`, `recurrence_id`) index and both secondary indexes
+      - [x] A second insert with the same `source_uid` and `recurrence_id = ''` is rejected by the database
+      - [x] `CalendarEventFactory` produces domain-realistic records; every listed state works
+      - [x] `migrate:fresh --seed` succeeds and yields the described fixture calendar
+      - [x] Tests pass; `larapilot:quality` green
 
       ## Test Data
-      - [ ] `database/factories/CalendarEventFactory.php` created with all five states
-      - [ ] `CalendarEventSeeder` registered in `DatabaseSeeder` with meaningful volumes
-      - [ ] Factory and seeder land in **this same commit** as the migration and model
+      - [x] `database/factories/CalendarEventFactory.php` created with all five states
+      - [x] `CalendarEventSeeder` registered in `DatabaseSeeder` with meaningful volumes
+      - [x] Factory and seeder land in **this same commit** as the migration and model
 
       ## Git Deliverables
       - Commit: `feat(US-003): TASK-02 add CalendarEvent with factory and seeder`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Mike
     estimate_hours: 3
     dependencies:
       - TASK-01
+    commit:
+      sha: e9e1ed4b76d37890a10308b7f22933920496756d
+      short_sha: e9e1ed4
+      subject: 'feat(US-003): TASK-02 add CalendarEvent with factory and seeder'
+      committed_at: '2026-09-07T23:08:30+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/e9e1ed4b76d37890a10308b7f22933920496756d'
   -
     id: TASK-03
     title: 'Add the CalendarSyncRun model, status enum, migration, factory and seeder'
@@ -356,27 +374,33 @@ tasks:
       9. `php artisan test --compact --filter=CalendarSyncRun` and `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `SyncRunStatus` enum with TitleCase keys, cast on the model
-      - [ ] Migration creates the table with both indexes
-      - [ ] Lifecycle helpers behave as specified; `latestValidators()` ignores `Failed` and `Running` rows
-      - [ ] `migrate:fresh --seed` succeeds and yields runs in every status
-      - [ ] Tests pass; `larapilot:quality` green
+      - [x] `SyncRunStatus` enum with TitleCase keys, cast on the model
+      - [x] Migration creates the table with both indexes
+      - [x] Lifecycle helpers behave as specified; `latestValidators()` ignores `Failed` and `Running` rows
+      - [x] `migrate:fresh --seed` succeeds and yields runs in every status
+      - [x] Tests pass; `larapilot:quality` green
 
       ## Test Data
-      - [ ] `database/factories/CalendarSyncRunFactory.php` created with all four states
-      - [ ] `CalendarSyncRunSeeder` registered in `DatabaseSeeder`
-      - [ ] Factory and seeder land in **this same commit** as the migration and model
+      - [x] `database/factories/CalendarSyncRunFactory.php` created with all four states
+      - [x] `CalendarSyncRunSeeder` registered in `DatabaseSeeder`
+      - [x] Factory and seeder land in **this same commit** as the migration and model
 
       ## Git Deliverables
       - Commit: `feat(US-003): TASK-03 add CalendarSyncRun with status enum, factory and seeder`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Mike
     estimate_hours: 2
     dependencies:
       - TASK-01
+    commit:
+      sha: 0e49fa37c3a816a66da9f020d23cd0e4c7851aa0
+      short_sha: 0e49fa3
+      subject: 'feat(US-003): TASK-03 add CalendarSyncRun with status enum, factory and seeder'
+      committed_at: '2026-09-07T23:09:43+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0e49fa37c3a816a66da9f020d23cd0e4c7851aa0'
   -
     id: TASK-04
     title: 'Build IcsFeedClient with conditional GET and bounded timeouts'
@@ -413,11 +437,11 @@ tasks:
       6. `php artisan test --compact --filter=IcsFeedClient` and `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Conditional headers sent only when a validator exists
-      - [ ] `304` short-circuits with no body
-      - [ ] Every transport failure surfaces as `FeedUnavailable`, never a raw HTTP client exception
-      - [ ] Timeouts are bounded and asserted
-      - [ ] Tests pass; `larapilot:quality` green
+      - [x] Conditional headers sent only when a validator exists
+      - [x] `304` short-circuits with no body
+      - [x] Every transport failure surfaces as `FeedUnavailable`, never a raw HTTP client exception
+      - [x] Timeouts are bounded and asserted
+      - [x] Tests pass; `larapilot:quality` green
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -427,11 +451,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Matt
     estimate_hours: 3
     dependencies:
       - TASK-01
+    commit:
+      sha: ee8f375d51e64358cd37d602f105a6d52ed8aead
+      short_sha: ee8f375
+      subject: 'feat(US-003): TASK-04 add IcsFeedClient with conditional GET'
+      committed_at: '2026-09-07T23:11:49+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ee8f375d51e64358cd37d602f105a6d52ed8aead'
   -
     id: TASK-05
     title: 'Build IcsParser: window-bounded recurrence expansion, TZID and all-day handling'
@@ -488,14 +518,14 @@ tasks:
       9. `php artisan test --compact --filter=IcsParser` and `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `parse()` yields occurrences lazily and is bounded by the window even for a series with no `UNTIL`/`COUNT`
-      - [ ] `TZID` is captured before expansion and lands on every timed occurrence
-      - [ ] A DST-crossing weekly series keeps its local wall-clock time
-      - [ ] All-day events carry the correct date with no shift
-      - [ ] `EXDATE` and `RECURRENCE-ID` overrides are honored, not flattened
-      - [ ] `recurrenceId` normalization matches the documented contract exactly, including `''` for non-recurring
-      - [ ] Malformed and truncated bodies throw `FeedUnparsable`
-      - [ ] Tests pass; `larapilot:quality` green
+      - [x] `parse()` yields occurrences lazily and is bounded by the window even for a series with no `UNTIL`/`COUNT`
+      - [x] `TZID` is captured before expansion and lands on every timed occurrence
+      - [x] A DST-crossing weekly series keeps its local wall-clock time
+      - [x] All-day events carry the correct date with no shift
+      - [x] `EXDATE` and `RECURRENCE-ID` overrides are honored, not flattened
+      - [x] `recurrenceId` normalization matches the documented contract exactly, including `''` for non-recurring
+      - [x] Malformed and truncated bodies throw `FeedUnparsable`
+      - [x] Tests pass; `larapilot:quality` green
 
       ## Test Data
       - N/A — no model or schema changes in this task; `.ics` fixtures are test inputs, not seed data
@@ -505,11 +535,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 6
     dependencies:
       - TASK-01
+    commit:
+      sha: 08f636a0a36d698bf458d17e0d3ff52b7d885152
+      short_sha: 08f636a
+      subject: 'feat(US-003): TASK-05 add IcsParser with window-bounded recurrence expansion'
+      committed_at: '2026-09-07T23:21:37+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/08f636a0a36d698bf458d17e0d3ff52b7d885152'
   -
     id: TASK-06
     title: 'Build EventSynchronizer: cancellation-safe upsert and window-scoped sweep'
@@ -550,29 +586,35 @@ tasks:
       8. `php artisan test --compact --filter=EventSynchronizer` and `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Occurrences of one series are independently addressable and independently writable
-      - [ ] Unchanged occurrences skip the write and only bump `last_seen_at`
-      - [ ] Disappearance and `STATUS:CANCELLED` both mark `cancelled_at`; nothing is ever deleted
-      - [ ] The sweep is scoped to the window and cannot touch rows outside it
-      - [ ] Reappearance un-cancels
-      - [ ] A failure mid-run rolls back cleanly
-      - [ ] Tests pass; `larapilot:quality` green
+      - [x] Occurrences of one series are independently addressable and independently writable
+      - [x] Unchanged occurrences skip the write and only bump `last_seen_at`
+      - [x] Disappearance and `STATUS:CANCELLED` both mark `cancelled_at`; nothing is ever deleted
+      - [x] The sweep is scoped to the window and cannot touch rows outside it
+      - [x] Reappearance un-cancels
+      - [x] A failure mid-run rolls back cleanly
+      - [x] Tests pass; `larapilot:quality` green
 
       ## Test Data
-      - [ ] Reuses `CalendarEventFactory` from TASK-02 — no duplicate factory definitions in the test file
-      - [ ] No schema change in this task
+      - [x] Reuses `CalendarEventFactory` from TASK-02 — no duplicate factory definitions in the test file
+      - [x] No schema change in this task
 
       ## Git Deliverables
       - Commit: `feat(US-003): TASK-06 add EventSynchronizer with cancellation-safe upsert`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 4
     dependencies:
       - TASK-02
       - TASK-05
+    commit:
+      sha: 012ee75b4bbbdd2543f5c5058d5f3869e979aa5c
+      short_sha: 012ee75
+      subject: 'feat(US-003): TASK-06 add EventSynchronizer with cancellation-safe upsert'
+      committed_at: '2026-09-07T23:23:54+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/012ee75b4bbbdd2543f5c5058d5f3869e979aa5c'
   -
     id: TASK-07
     title: 'Assemble the SyncCalendarFeed job and replace the kbms:sync-calendar stub'
@@ -613,30 +655,36 @@ tasks:
       7. `php artisan migrate:fresh --seed`, `php artisan test --compact --filter=SyncCalendar`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Every run writes exactly one `calendar_sync_runs` row with start, finish, status, HTTP status, counts, and error
-      - [ ] A 304 short-circuits before the parser is constructed
-      - [ ] Unreachable, HTTP-error, and malformed-body paths all record a failure and leave the mirror intact
-      - [ ] Sync runs on the queue by default; `--sync` and `--force` behave as documented
-      - [ ] Runs older than `KBMS_SYNC_RUN_RETENTION_DAYS` are pruned
-      - [ ] The US-002 "not implemented" stub is gone
-      - [ ] Tests pass; `larapilot:quality` green
+      - [x] Every run writes exactly one `calendar_sync_runs` row with start, finish, status, HTTP status, counts, and error
+      - [x] A 304 short-circuits before the parser is constructed
+      - [x] Unreachable, HTTP-error, and malformed-body paths all record a failure and leave the mirror intact
+      - [x] Sync runs on the queue by default; `--sync` and `--force` behave as documented
+      - [x] Runs older than `KBMS_SYNC_RUN_RETENTION_DAYS` are pruned
+      - [x] The US-002 "not implemented" stub is gone
+      - [x] Tests pass; `larapilot:quality` green
 
       ## Test Data
-      - [ ] Reuses `CalendarEventFactory` and `CalendarSyncRunFactory` — no new factory definitions
-      - [ ] `migrate:fresh --seed` re-verified before `task-done`
+      - [x] Reuses `CalendarEventFactory` and `CalendarSyncRunFactory` — no new factory definitions
+      - [x] `migrate:fresh --seed` re-verified before `task-done`
 
       ## Git Deliverables
       - Commit: `feat(US-003): TASK-07 add SyncCalendarFeed job and implement kbms:sync-calendar`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 4
     dependencies:
       - TASK-03
       - TASK-04
       - TASK-06
+    commit:
+      sha: 414b9e51ca42cba2a271c9070aa3898725c38288
+      short_sha: 414b9e5
+      subject: 'feat(US-003): TASK-07 add SyncCalendarFeed job and implement kbms:sync-calendar'
+      committed_at: '2026-09-07T23:26:35+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/414b9e51ca42cba2a271c9070aa3898725c38288'
   -
     id: TASK-08
     title: 'Close the acceptance-criteria coverage gaps end to end'
@@ -663,24 +711,30 @@ tasks:
       6. Do **not** add Playwright, Dusk, Pest browser, or viewport suites — `settings.testing` is `NORMAL`
 
       ## Completion Criteria
-      - [ ] Every acceptance criterion in US-003 maps to at least one passing assertion
-      - [ ] The full suite is green, including the US-001 and US-002 tests
-      - [ ] No browser or E2E tooling introduced
-      - [ ] `larapilot:quality` green
+      - [x] Every acceptance criterion in US-003 maps to at least one passing assertion
+      - [x] The full suite is green, including the US-001 and US-002 tests
+      - [x] No browser or E2E tooling introduced
+      - [x] `larapilot:quality` green
 
       ## Test Data
-      - [ ] Reuses existing factories and `.ics` fixtures — no new seed data
+      - [x] Reuses existing factories and `.ics` fixtures — no new seed data
 
       ## Git Deliverables
       - Commit: `test(US-003): TASK-08 cover calendar ingestion end to end`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 3
     dependencies:
       - TASK-07
+    commit:
+      sha: a5bcf62a9305c81fdea878010647345154b484c0
+      short_sha: a5bcf62
+      subject: 'test(US-003): TASK-08 cover calendar ingestion end to end'
+      committed_at: '2026-09-07T23:31:38+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a5bcf62a9305c81fdea878010647345154b484c0'
   -
     id: TASK-09
     title: 'Swap the doctor ICS check onto sabre/vobject and land the deferred timeout assertion'
@@ -707,12 +761,12 @@ tasks:
       6. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `IcsFeedCheck` parses with `sabre/vobject`; no `str_contains` body assertions remain
-      - [ ] A parseable feed with zero events reports `PASS`
-      - [ ] A 200 returning HTML still reports `FAIL` with a hint naming `KBMS_ICS_URL`
-      - [ ] The bounded-timeout assertion exists and passes
-      - [ ] The full doctor suite, including `DoctorCommandTest`, is green
-      - [ ] `larapilot:quality` green
+      - [x] `IcsFeedCheck` parses with `sabre/vobject`; no `str_contains` body assertions remain
+      - [x] A parseable feed with zero events reports `PASS`
+      - [x] A 200 returning HTML still reports `FAIL` with a hint naming `KBMS_ICS_URL`
+      - [x] The bounded-timeout assertion exists and passes
+      - [x] The full doctor suite, including `DoctorCommandTest`, is green
+      - [x] `larapilot:quality` green
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -722,11 +776,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Lars
     estimate_hours: 1.5
     dependencies:
       - TASK-01
+    commit:
+      sha: 096622e5844df8cca6479465f2d02b55b9f4d495
+      short_sha: 096622e
+      subject: 'refactor(US-003): TASK-09 parse the doctor ICS check with sabre/vobject'
+      committed_at: '2026-09-07T23:33:37+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/096622e5844df8cca6479465f2d02b55b9f4d495'
   -
     id: TASK-10
     title: 'Document the sync pipeline in README, CHANGELOG and the PRD'
@@ -753,11 +813,11 @@ tasks:
       4. Re-read the changed sections once for accuracy — Albert does not ship docs that describe an intention rather than the code
 
       ## Completion Criteria
-      - [ ] README documents the new key, the command and its two flags, and the queue-worker requirement
-      - [ ] CHANGELOG Unreleased records the addition **and** the doctor behaviour change
-      - [ ] PRD configuration surface and `calendar_sync_runs` column list match the shipped code
-      - [ ] PRD Revision History has a new row
-      - [ ] No OpenAPI, diagrams, or runbooks added
+      - [x] README documents the new key, the command and its two flags, and the queue-worker requirement
+      - [x] CHANGELOG Unreleased records the addition **and** the doctor behaviour change
+      - [x] PRD configuration surface and `calendar_sync_runs` column list match the shipped code
+      - [x] PRD Revision History has a new row
+      - [x] No OpenAPI, diagrams, or runbooks added
 
       ## Test Data
       - N/A — documentation only
@@ -767,10 +827,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalize the local PR description
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 1
     dependencies:
       - TASK-07
       - TASK-09
-updated_at: '2026-09-07T23:02:57+02:00'
+    commit:
+      sha: 11d4cd1db7cbae7875ccc691f4e54550695cd4f5
+      short_sha: 11d4cd1
+      subject: 'docs(US-003): TASK-10 document the calendar sync pipeline'
+      committed_at: '2026-09-07T23:34:40+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/11d4cd1db7cbae7875ccc691f4e54550695cd4f5'
+updated_at: '2026-09-07T23:34:40+02:00'
