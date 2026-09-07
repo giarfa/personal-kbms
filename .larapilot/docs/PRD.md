@@ -274,6 +274,7 @@ Every machine-specific assumption is a `.env` value, never a code constant:
 - `KBMS_CLAUDE_LAUNCHER`
 - `KBMS_OUTLOOK_URL_TEMPLATE`
 - `KBMS_TIMEZONE`
+- `KBMS_SYNC_RUN_RETENTION_DAYS` (default `30`) — days a finished `calendar_sync_runs` row is kept before pruning
 
 ### Privacy & data handling _(Violet)_
 
@@ -302,7 +303,7 @@ Concrete obligations for this release:
 - `meeting_notes` — `event_uid`, `event_recurrence_id`, `body` (Markdown), timestamps. Keyed to the occurrence, not to the event row's surrogate id, so a resync cannot orphan a note.
 - `meeting_transcripts` — `event_uid`, `event_recurrence_id`, `path`, `link_source` (`convention` \| `manual`), `file_size`, `file_mtime`, `linked_at`.
 - `prompt_launches` — `event_uid`, `event_recurrence_id`, `context_path`, `question`, `command` (JSON argument array), `launched_at`, `status`, `error`.
-- `calendar_sync_runs` — `started_at`, `finished_at`, `status`, `http_status`, `etag`, `events_upserted`, `events_cancelled`, `error`.
+- `calendar_sync_runs` — `started_at`, `finished_at`, `status`, `http_status`, `etag`, `last_modified`, `events_upserted`, `events_cancelled`, `error`.
 
 **Services:**
 
@@ -347,3 +348,4 @@ Baseline set only, matching a personal project: a `README.md` covering Herd setu
 | Date | Trigger | Summary |
 | --- | --- | --- |
 | 2026-09-07 | larapilot-inception | Initial PRD — Personal / MVP: ICS mirror, agenda + calendar, meeting notes, transcript linking, local Claude Code launch bridge, Outlook CTA |
+| 2026-09-07 | larapilot-plan US-003 | Added `KBMS_SYNC_RUN_RETENTION_DAYS` to the configuration surface; added `last_modified` to the `calendar_sync_runs` column list (required to serve `If-Modified-Since` on the next conditional GET) |

@@ -42,6 +42,7 @@ Every machine-specific assumption is a `.env` value, never a code constant. All 
 | `KBMS_OUTLOOK_URL_TEMPLATE` | — | No | US-005 ("Open in Outlook" fallback) |
 | `KBMS_TIMEZONE` | `Europe/Rome` | No | US-001 (also binds `app.timezone`) |
 | `KBMS_ALLOW_NON_LOOPBACK` | `false` | No | US-001 (loopback-only override) |
+| `KBMS_SYNC_RUN_RETENTION_DAYS` | `30` | No | US-003 (`calendar_sync_runs` pruning) |
 
 ## Running the background processes
 
@@ -53,6 +54,15 @@ php artisan schedule:work      # fires kbms:sync-calendar on the configured inte
 ```
 
 `composer dev` runs the server, queue listener, log tailer, and Vite dev server together for local iteration.
+
+## Calendar sync
+
+`php artisan kbms:sync-calendar` fetches the feed at `KBMS_ICS_URL`, expands recurring series into individually addressable occurrences, and upserts them into `calendar_events` — never deleting a row, only marking `cancelled_at` when an occurrence disappears or is cancelled upstream. Every run writes a `calendar_sync_runs` row (status, HTTP status, counts, error); runs older than `KBMS_SYNC_RUN_RETENTION_DAYS` are pruned after each run.
+
+By default the command **dispatches to the queue**, so `php artisan queue:work` must be running for it to actually process. The scheduler entry (`php artisan schedule:work`) is what drives the `KBMS_ICS_SYNC_MINUTES` cadence. Flags:
+
+- `--sync` — run inline instead of queueing, and print the resulting run's status and counts.
+- `--force` — ignore the stored `ETag`/`Last-Modified` validators and force a full fetch instead of a conditional GET.
 
 ## The launcher script contract
 
@@ -77,6 +87,7 @@ osascript -e "tell application \"Terminal\" to do script \"claude '$2' --file '$
 2. `php artisan kbms:queue-test` then `php artisan queue:work --stop-when-empty` — proves the database queue worker processes a job.
 3. `php artisan schedule:list` — confirms the calendar sync entry and its interval.
 4. If `database/database.sqlite` is missing or unreadable, the shell shows an actionable message naming the exact remedy (`touch` + `migrate`, or a permissions fix) instead of a stack trace.
+5. A stale calendar mirror: run `kbms:doctor` first to confirm the feed itself is reachable and parses, then check the latest `calendar_sync_runs` row for the actual failure reason.
 
 ## Access model
 
