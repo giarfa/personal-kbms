@@ -350,16 +350,16 @@ tasks:
       12. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `http://personal-kbms.test` renders the KBMS shell with no login prompt, in both light and dark
-      - [ ] Sidebar shows Workspace (Agenda, Calendar) and Later (Search FR-013, Transcript inbox FR-014, disabled with FR tags); no Repository/Documentation/Reference items
-      - [ ] Sidebar footer shows the environment block; no avatar, initials, or name placeholder anywhere
-      - [ ] `public/favicon.svg` served; `<link rel="icon" href="/favicon.svg">` and `<meta name="robots" content="noindex, nofollow">` present; no dangling `favicon.ico` / `apple-touch-icon.png` links
-      - [ ] All seven `--kb-*` token pairs resolve in both themes; no kit token redefined; `theme.js` not ported
-      - [ ] Skip link is the first focusable element and reaches `#main`; every interactive element has a visible focus ring (never outline-only)
-      - [ ] Agenda and Calendar routes resolve by name and state which spec fills them
-      - [ ] Sync pill slot exists and is empty, with a comment naming US-004
-      - [ ] Nothing breaks at 375 px: sidebar collapses to the toggle, no clipped controls, touch targets ≥ 44 px
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `http://personal-kbms.test` renders the KBMS shell with no login prompt, in both light and dark
+      - [x] Sidebar shows Workspace (Agenda, Calendar) and Later (Search FR-013, Transcript inbox FR-014, disabled with FR tags); no Repository/Documentation/Reference items
+      - [x] Sidebar footer shows the environment block; no avatar, initials, or name placeholder anywhere
+      - [x] `public/favicon.svg` served; `<link rel="icon" href="/favicon.svg">` and `<meta name="robots" content="noindex, nofollow">` present; no dangling `favicon.ico` / `apple-touch-icon.png` links
+      - [x] All seven `--kb-*` token pairs resolve in both themes; no kit token redefined; `theme.js` not ported
+      - [x] Skip link is the first focusable element and reaches `#main`; every interactive element has a visible focus ring (never outline-only)
+      - [x] Agenda and Calendar routes resolve by name and state which spec fills them
+      - [x] Sync pill slot exists and is empty, with a comment naming US-004
+      - [x] Nothing breaks at 375 px: sidebar collapses to the toggle, no clipped controls, touch targets ≥ 44 px
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -369,11 +369,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 5
     dependencies:
       - TASK-02
+    commit:
+      sha: e56ed6d525fb86674725e281dca51ffefd7c62a6
+      short_sha: e56ed6d
+      subject: 'feat(US-001): TASK-03 build the KBMS app shell, theme tokens and navigation'
+      committed_at: '2026-09-07T21:08:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/e56ed6d525fb86674725e281dca51ffefd7c62a6'
   -
     id: TASK-04
     title: 'Wire SQLite, the database queue and the scheduler'
@@ -720,4 +726,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T21:01:53+02:00'
+updated_at: '2026-09-07T21:08:09+02:00'

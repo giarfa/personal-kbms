@@ -15,7 +15,7 @@
  * }
  */
 return [
-    'ics_url' => env('KBMS_ICS_URL'),
+    'ics_url' => env('KBMS_ICS_URL') ?: null,
 
     'sync_minutes' => (int) env('KBMS_ICS_SYNC_MINUTES', 15),
 
@@ -23,14 +23,14 @@ return [
 
     'window_future_days' => (int) env('KBMS_ICS_WINDOW_FUTURE_DAYS', 180),
 
-    'transcripts_path' => env('KBMS_TRANSCRIPTS_PATH'),
+    'transcripts_path' => env('KBMS_TRANSCRIPTS_PATH') ?: null,
 
     // Date + time prefix; the resolver keys off the meeting start datetime (decision journal: "transcript filename convention").
     'transcript_pattern' => env('KBMS_TRANSCRIPT_PATTERN', '{date}-{time}-{slug}'),
 
-    'claude_launcher' => env('KBMS_CLAUDE_LAUNCHER'),
+    'claude_launcher' => env('KBMS_CLAUDE_LAUNCHER') ?: null,
 
-    'outlook_url_template' => env('KBMS_OUTLOOK_URL_TEMPLATE'),
+    'outlook_url_template' => env('KBMS_OUTLOOK_URL_TEMPLATE') ?: null,
 
     'timezone' => env('KBMS_TIMEZONE', 'Europe/Rome'),
 
