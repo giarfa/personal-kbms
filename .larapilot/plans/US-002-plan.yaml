@@ -404,23 +404,29 @@ tasks:
       8. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] All-pass scenario asserts exit code `0`
-      - [ ] Each of the six checks has at least one failing scenario asserting a non-zero exit code
-      - [ ] A test proves two simultaneous failures are both reported
-      - [ ] A test proves `NOT CONFIGURED` and `FAIL` are distinguishable
-      - [ ] Full `php artisan test` green; `larapilot:quality` green
-      - [ ] No Playwright, Dusk, Pest browser, or viewport suites added
+      - [x] All-pass scenario asserts exit code `0`
+      - [x] Each of the six checks has at least one failing scenario asserting a non-zero exit code
+      - [x] A test proves two simultaneous failures are both reported
+      - [x] A test proves `NOT CONFIGURED` and `FAIL` are distinguishable
+      - [x] Full `php artisan test` green; `larapilot:quality` green
+      - [x] No Playwright, Dusk, Pest browser, or viewport suites added
 
       ## Git Deliverables
       - Commit: `test(US-002): TASK-06 cover the doctor command's pass, failure and exit-code behavior`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 2.5
     dependencies:
       - TASK-05
+    commit:
+      sha: 4559c01f1210b8132977721153ff240f680caa81
+      short_sha: 4559c01
+      subject: "test(US-002): TASK-06 cover the doctor command's pass, failure and exit-code behavior"
+      committed_at: '2026-09-07T22:05:22+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4559c01f1210b8132977721153ff240f680caa81'
   -
     id: TASK-07
     title: 'Document kbms:doctor in the README and CHANGELOG'
@@ -458,4 +464,4 @@ tasks:
     estimate_hours: 1.0
     dependencies:
       - TASK-05
-updated_at: '2026-09-07T22:00:14+02:00'
+updated_at: '2026-09-07T22:05:23+02:00'
