@@ -225,15 +225,15 @@ tasks:
       9. Record the resolved versions of `livewire/livewire`, `livewire/flux`, `livewire/blaze`, `laravel/chisel`, and `laravel/fortify` (`composer show --direct`) in the commit body
 
       ## Completion Criteria
-      - [ ] `composer show --direct` lists `livewire/livewire ^4.x`, `livewire/flux ^2.x`, `livewire/blaze`, `laravel/chisel`
-      - [ ] `phpunit/phpunit` is still `13.x` and `laravel/sail` is absent
-      - [ ] `composer.json` `post-update-cmd` does **not** contain `install:features`
-      - [ ] `.larapilot/`, `.ai/`, `.claude/`, `phpstan.neon.dist`, `pint.json`, `phpunit.xml`, and `.env` are byte-identical to their pre-task state (`git diff --stat` shows no changes under those paths)
-      - [ ] `npm run build` succeeds and Vite writes `public/build`
-      - [ ] `http://personal-kbms.test` renders the kit shell in light and dark
-      - [ ] `composer audit` reports no advisory, or any advisory is recorded in the commit body
-      - [ ] `php artisan larapilot:quality` passes
-      - [ ] The throwaway scaffold directory is deleted and never committed
+      - [x] `composer show --direct` lists `livewire/livewire ^4.x`, `livewire/flux ^2.x`, `livewire/blaze`, `laravel/chisel`
+      - [x] `phpunit/phpunit` is still `13.x` and `laravel/sail` is absent
+      - [x] `composer.json` `post-update-cmd` does **not** contain `install:features`
+      - [x] `.larapilot/`, `.ai/`, `.claude/`, `phpstan.neon.dist`, `pint.json`, `phpunit.xml`, and `.env` are byte-identical to their pre-task state (`git diff --stat` shows no changes under those paths)
+      - [x] `npm run build` succeeds and Vite writes `public/build`
+      - [x] `http://personal-kbms.test` renders the kit shell in light and dark
+      - [x] `composer audit` reports no advisory, or any advisory is recorded in the commit body
+      - [x] `php artisan larapilot:quality` passes
+      - [x] The throwaway scaffold directory is deleted and never committed
 
       ## Test Data
       - N/A — no model or schema changes authored by this task (the kit's own `UserFactory` arrives here and is deleted in TASK-02)
@@ -243,11 +243,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes with the resolved dependency versions
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 5
     dependencies:
       - TASK-00
+    commit:
+      sha: 43c1270dfb4b7e714ab39fedc8931ef639af4e1c
+      short_sha: 43c1270
+      subject: 'feat(US-001): TASK-01 install Livewire + Flux starter kit scaffold'
+      committed_at: '2026-09-07T20:49:44+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/43c1270dfb4b7e714ab39fedc8931ef639af4e1c'
   -
     id: TASK-02
     title: 'Remove starter-kit authentication outright'
@@ -684,4 +690,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T18:44:48+00:00'
+updated_at: '2026-09-07T18:49:46+00:00'
