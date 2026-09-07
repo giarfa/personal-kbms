@@ -8,7 +8,7 @@ specs:
       objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
     priority: HIGH
     points: 5
-    status: 'IN PROGRESS'
+    status: DONE
     body: |
       #### US-001: Application scaffold and local environment
 
@@ -26,22 +26,30 @@ specs:
       After implementing this spec, `http://personal-kbms.test` serves a themed application shell with light and dark modes and no login prompt, `php artisan queue:work` and `php artisan schedule:work` run clean, and the README describes every configuration value the product needs.
 
       **Acceptance Criteria**
-      - [ ] The official Laravel **Livewire + Flux starter kit** is installed and its layout, navigation, and light/dark theming render at `http://personal-kbms.test` via Herd
-      - [ ] Starter-kit **authentication is removed, not left dormant**: no auth routes, no login/register views, no `User` model or migration, no password-reset scaffolding — no half-wired login surface remains
-      - [ ] The application binds explicitly to `127.0.0.1` and is not reachable on `0.0.0.0`
-      - [ ] SQLite is the configured database; migrations run from a clean checkout with no manual file creation
-      - [ ] `database` queue driver is configured and `php artisan queue:work` processes a test job
-      - [ ] The scheduler is registered and `php artisan schedule:list` shows the calendar sync entry
-      - [ ] Every configuration value from the PRD exists in `.env.example` with documented defaults: `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES` (15), `KBMS_ICS_WINDOW_PAST_DAYS` (90), `KBMS_ICS_WINDOW_FUTURE_DAYS` (180), `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`
-      - [ ] The real `.env` is git-ignored and no ICS URL or filesystem path is committed
-      - [ ] A minimal `favicon.svg` and application title are in place; no logo, OG image, or social assets
-      - [ ] `README.md` covers Herd setup, the full `.env` surface, starting the queue worker and scheduler, and the launcher script's two-argument contract — **baseline documentation only**, no OpenAPI, diagrams, or runbook
-      - [ ] `php artisan larapilot:quality` (Pint + Larastan) passes
-      - [ ] **Error case:** a missing or unreadable SQLite database file produces a clear actionable message, not a stack trace on the shell page
+      - [x] The official Laravel **Livewire + Flux starter kit** is installed and its layout, navigation, and light/dark theming render at `http://personal-kbms.test` via Herd
+      - [x] Starter-kit **authentication is removed, not left dormant**: no auth routes, no login/register views, no `User` model or migration, no password-reset scaffolding — no half-wired login surface remains
+      - [x] The application binds explicitly to `127.0.0.1` and is not reachable on `0.0.0.0`
+      - [x] SQLite is the configured database; migrations run from a clean checkout with no manual file creation
+      - [x] `database` queue driver is configured and `php artisan queue:work` processes a test job
+      - [x] The scheduler is registered and `php artisan schedule:list` shows the calendar sync entry
+      - [x] Every configuration value from the PRD exists in `.env.example` with documented defaults: `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES` (15), `KBMS_ICS_WINDOW_PAST_DAYS` (90), `KBMS_ICS_WINDOW_FUTURE_DAYS` (180), `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`
+      - [x] The real `.env` is git-ignored and no ICS URL or filesystem path is committed
+      - [x] A minimal `favicon.svg` and application title are in place; no logo, OG image, or social assets
+      - [x] `README.md` covers Herd setup, the full `.env` surface, starting the queue worker and scheduler, and the launcher script's two-argument contract — **baseline documentation only**, no OpenAPI, diagrams, or runbook
+      - [x] `php artisan larapilot:quality` (Pint + Larastan) passes
+      - [x] **Error case:** a missing or unreadable SQLite database file produces a clear actionable message, not a stack trace on the shell page
     status_history:
       - { status: PLANNED, at: '2026-09-07T18:21:34+00:00' }
       - { status: 'IN PROGRESS', at: '2026-09-07T18:44:24+00:00' }
+      - { status: REVIEW, at: '2026-09-07T21:20:44+02:00' }
+      - { status: DONE, at: '2026-09-07T21:39:51+02:00' }
     rework: false
+    merge_commit:
+      sha: d2e3c14c692b9f650523a581f468b2a13b6d9758
+      short_sha: d2e3c14
+      subject: 'chore(US-001): log Lucille usage ledger entry'
+      committed_at: '2026-09-07T21:21:10+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/d2e3c14c692b9f650523a581f468b2a13b6d9758'
   -
     code: US-002
     title: 'Environment doctor command'
@@ -51,7 +59,7 @@ specs:
       objective: 'The application runs locally under Herd with its scaffold, storage, and every integration assumption verifiable in one command'
     priority: HIGH
     points: 3
-    status: TODO
+    status: 'IN PROGRESS'
     body: |
       #### US-002: Environment doctor command
 
@@ -78,6 +86,10 @@ specs:
       - [ ] **Edge case:** a launcher script that exists but lacks the executable bit fails the check with that specific reason
       - [ ] **Edge case:** the ICS check validates that the response actually parses as iCalendar, not merely that HTTP returned 200
       - [ ] Feature test covers all-pass and each individual failure mode with faked HTTP and a temporary filesystem
+    status_history:
+      - { status: PLANNED, at: '2026-09-07T21:46:35+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-07T21:54:07+02:00' }
+    rework: false
   -
     code: US-003
     title: 'Scheduled ICS calendar ingestion'

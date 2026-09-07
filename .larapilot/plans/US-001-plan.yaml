@@ -171,11 +171,11 @@ tasks:
       6. Draft the internal PR title (`US-001: Application scaffold and local environment`) and body (link `.larapilot/plans/US-001-plan.yaml`, list TASK-00…TASK-10) into local notes — **do not push and do not open a remote PR**
 
       ## Completion Criteria
-      - [ ] `main` has exactly one commit containing the skeleton and `.larapilot/` artifacts
-      - [ ] `.env` and `database/database.sqlite` are **not** tracked (`git ls-files | grep -E '^\.env$|\.sqlite$'` is empty)
-      - [ ] `develop` exists and points at `main`
-      - [ ] `feature/US-001-app-scaffold` is checked out
-      - [ ] PR title/body drafted locally; no remote configured, nothing pushed
+      - [x] `main` has exactly one commit containing the skeleton and `.larapilot/` artifacts
+      - [x] `.env` and `database/database.sqlite` are **not** tracked (`git ls-files | grep -E '^\.env$|\.sqlite$'` is empty)
+      - [x] `develop` exists and points at `main`
+      - [x] `feature/US-001-app-scaffold` is checked out
+      - [x] PR title/body drafted locally; no remote configured, nothing pushed
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -185,10 +185,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepared locally toward `develop`; open remotely only if the operator asks
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 1
     dependencies: {}
+    commit:
+      sha: ef8a94887eae675a7561102d844203b9ade9a486
+      short_sha: ef8a948
+      subject: 'chore(US-001): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-07T20:44:48+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ef8a94887eae675a7561102d844203b9ade9a486'
   -
     id: TASK-01
     title: 'Install the Livewire + Flux starter kit as the application scaffold'
@@ -219,15 +225,15 @@ tasks:
       9. Record the resolved versions of `livewire/livewire`, `livewire/flux`, `livewire/blaze`, `laravel/chisel`, and `laravel/fortify` (`composer show --direct`) in the commit body
 
       ## Completion Criteria
-      - [ ] `composer show --direct` lists `livewire/livewire ^4.x`, `livewire/flux ^2.x`, `livewire/blaze`, `laravel/chisel`
-      - [ ] `phpunit/phpunit` is still `13.x` and `laravel/sail` is absent
-      - [ ] `composer.json` `post-update-cmd` does **not** contain `install:features`
-      - [ ] `.larapilot/`, `.ai/`, `.claude/`, `phpstan.neon.dist`, `pint.json`, `phpunit.xml`, and `.env` are byte-identical to their pre-task state (`git diff --stat` shows no changes under those paths)
-      - [ ] `npm run build` succeeds and Vite writes `public/build`
-      - [ ] `http://personal-kbms.test` renders the kit shell in light and dark
-      - [ ] `composer audit` reports no advisory, or any advisory is recorded in the commit body
-      - [ ] `php artisan larapilot:quality` passes
-      - [ ] The throwaway scaffold directory is deleted and never committed
+      - [x] `composer show --direct` lists `livewire/livewire ^4.x`, `livewire/flux ^2.x`, `livewire/blaze`, `laravel/chisel`
+      - [x] `phpunit/phpunit` is still `13.x` and `laravel/sail` is absent
+      - [x] `composer.json` `post-update-cmd` does **not** contain `install:features`
+      - [x] `.larapilot/`, `.ai/`, `.claude/`, `phpstan.neon.dist`, `pint.json`, `phpunit.xml`, and `.env` are byte-identical to their pre-task state (`git diff --stat` shows no changes under those paths)
+      - [x] `npm run build` succeeds and Vite writes `public/build`
+      - [x] `http://personal-kbms.test` renders the kit shell in light and dark
+      - [x] `composer audit` reports no advisory, or any advisory is recorded in the commit body
+      - [x] `php artisan larapilot:quality` passes
+      - [x] The throwaway scaffold directory is deleted and never committed
 
       ## Test Data
       - N/A — no model or schema changes authored by this task (the kit's own `UserFactory` arrives here and is deleted in TASK-02)
@@ -237,11 +243,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes with the resolved dependency versions
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 5
     dependencies:
       - TASK-00
+    commit:
+      sha: 43c1270dfb4b7e714ab39fedc8931ef639af4e1c
+      short_sha: 43c1270
+      subject: 'feat(US-001): TASK-01 install Livewire + Flux starter kit scaffold'
+      committed_at: '2026-09-07T20:49:44+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/43c1270dfb4b7e714ab39fedc8931ef639af4e1c'
   -
     id: TASK-02
     title: 'Remove starter-kit authentication outright'
@@ -273,31 +285,37 @@ tasks:
       11. `php artisan test`, `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `composer show laravel/fortify` reports the package is not installed
-      - [ ] `php artisan route:list --except-vendor` contains no authentication, settings, or profile route
-      - [ ] `class_exists(App\Models\User::class)` is false; `app/Actions/Fortify/`, `resources/views/pages/auth/`, `resources/views/pages/settings/`, and `resources/views/layouts/auth/` do not exist
-      - [ ] `config/auth.php` and `config/fortify.php` do not exist and nothing references `config('auth.*')`
-      - [ ] `app/Console/Commands/InstallFeaturesCommand.php` is gone and `composer.json` has no `install:features` reference
-      - [ ] The rendered shell contains no avatar, initials, name placeholder, `Log out`, or `Settings` affordance
-      - [ ] `sessions` and `cache` migrations retained; `php artisan migrate:fresh --seed` succeeds
-      - [ ] `http://personal-kbms.test` serves without a login prompt and `/login` returns 404
-      - [ ] `php artisan test` and `php artisan larapilot:quality` pass
+      - [x] `composer show laravel/fortify` reports the package is not installed
+      - [x] `php artisan route:list --except-vendor` contains no authentication, settings, or profile route
+      - [x] `class_exists(App\Models\User::class)` is false; `app/Actions/Fortify/`, `resources/views/pages/auth/`, `resources/views/pages/settings/`, and `resources/views/layouts/auth/` do not exist
+      - [x] `config/auth.php` and `config/fortify.php` do not exist and nothing references `config('auth.*')`
+      - [x] `app/Console/Commands/InstallFeaturesCommand.php` is gone and `composer.json` has no `install:features` reference
+      - [x] The rendered shell contains no avatar, initials, name placeholder, `Log out`, or `Settings` affordance
+      - [x] `sessions` and `cache` migrations retained; `php artisan migrate:fresh --seed` succeeds
+      - [x] `http://personal-kbms.test` serves without a login prompt and `/login` returns 404
+      - [x] `php artisan test` and `php artisan larapilot:quality` pass
 
       ## Test Data
-      - [ ] `database/factories/UserFactory.php` deleted
-      - [ ] `database/seeders/DatabaseSeeder.php` reduced to a valid no-op `run()` with no user seeding
-      - [ ] `migrate:fresh --seed` verified green in this same task
+      - [x] `database/factories/UserFactory.php` deleted
+      - [x] `database/seeders/DatabaseSeeder.php` reduced to a valid no-op `run()` with no user seeding
+      - [x] `migrate:fresh --seed` verified green in this same task
 
       ## Git Deliverables
       - Commit: `refactor(US-001): TASK-02 remove starter-kit authentication surface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes with the removed-file inventory
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 4
     dependencies:
       - TASK-01
+    commit:
+      sha: 4254ba7649b9440d19bc340a6108d0b156952abb
+      short_sha: 4254ba7
+      subject: 'refactor(US-001): TASK-02 remove starter-kit authentication surface'
+      committed_at: '2026-09-07T20:53:13+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4254ba7649b9440d19bc340a6108d0b156952abb'
   -
     id: TASK-03
     title: 'Build the KBMS app shell, theme tokens and navigation'
@@ -332,16 +350,16 @@ tasks:
       12. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `http://personal-kbms.test` renders the KBMS shell with no login prompt, in both light and dark
-      - [ ] Sidebar shows Workspace (Agenda, Calendar) and Later (Search FR-013, Transcript inbox FR-014, disabled with FR tags); no Repository/Documentation/Reference items
-      - [ ] Sidebar footer shows the environment block; no avatar, initials, or name placeholder anywhere
-      - [ ] `public/favicon.svg` served; `<link rel="icon" href="/favicon.svg">` and `<meta name="robots" content="noindex, nofollow">` present; no dangling `favicon.ico` / `apple-touch-icon.png` links
-      - [ ] All seven `--kb-*` token pairs resolve in both themes; no kit token redefined; `theme.js` not ported
-      - [ ] Skip link is the first focusable element and reaches `#main`; every interactive element has a visible focus ring (never outline-only)
-      - [ ] Agenda and Calendar routes resolve by name and state which spec fills them
-      - [ ] Sync pill slot exists and is empty, with a comment naming US-004
-      - [ ] Nothing breaks at 375 px: sidebar collapses to the toggle, no clipped controls, touch targets ≥ 44 px
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `http://personal-kbms.test` renders the KBMS shell with no login prompt, in both light and dark
+      - [x] Sidebar shows Workspace (Agenda, Calendar) and Later (Search FR-013, Transcript inbox FR-014, disabled with FR tags); no Repository/Documentation/Reference items
+      - [x] Sidebar footer shows the environment block; no avatar, initials, or name placeholder anywhere
+      - [x] `public/favicon.svg` served; `<link rel="icon" href="/favicon.svg">` and `<meta name="robots" content="noindex, nofollow">` present; no dangling `favicon.ico` / `apple-touch-icon.png` links
+      - [x] All seven `--kb-*` token pairs resolve in both themes; no kit token redefined; `theme.js` not ported
+      - [x] Skip link is the first focusable element and reaches `#main`; every interactive element has a visible focus ring (never outline-only)
+      - [x] Agenda and Calendar routes resolve by name and state which spec fills them
+      - [x] Sync pill slot exists and is empty, with a comment naming US-004
+      - [x] Nothing breaks at 375 px: sidebar collapses to the toggle, no clipped controls, touch targets ≥ 44 px
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -351,11 +369,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 5
     dependencies:
       - TASK-02
+    commit:
+      sha: e56ed6d525fb86674725e281dca51ffefd7c62a6
+      short_sha: e56ed6d
+      subject: 'feat(US-001): TASK-03 build the KBMS app shell, theme tokens and navigation'
+      committed_at: '2026-09-07T21:08:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/e56ed6d525fb86674725e281dca51ffefd7c62a6'
   -
     id: TASK-04
     title: 'Wire SQLite, the database queue and the scheduler'
@@ -385,14 +409,14 @@ tasks:
       9. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `php artisan config:show database.default` reports `sqlite` and `database.connections.sqlite.database` resolves to `database/database.sqlite`
-      - [ ] A fresh `git clone` + `composer setup` migrates with **no manual file creation**
-      - [ ] `php artisan config:show queue.default` reports `database`; `jobs`, `job_batches`, and `failed_jobs` tables exist after migrate
-      - [ ] `php artisan kbms:queue-test` + `php artisan queue:work --stop-when-empty` processes the job and writes the expected log line
-      - [ ] `php artisan schedule:list` shows `kbms:sync-calendar` at the configured interval with `withoutOverlapping`
-      - [ ] `php artisan kbms:sync-calendar` exits non-zero with the `not implemented — US-003` message — it does not pretend to sync
-      - [ ] `database/database.sqlite` is not tracked by git
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `php artisan config:show database.default` reports `sqlite` and `database.connections.sqlite.database` resolves to `database/database.sqlite`
+      - [x] A fresh `git clone` + `composer setup` migrates with **no manual file creation**
+      - [x] `php artisan config:show queue.default` reports `database`; `jobs`, `job_batches`, and `failed_jobs` tables exist after migrate
+      - [x] `php artisan kbms:queue-test` + `php artisan queue:work --stop-when-empty` processes the job and writes the expected log line
+      - [x] `php artisan schedule:list` shows `kbms:sync-calendar` at the configured interval with `withoutOverlapping`
+      - [x] `php artisan kbms:sync-calendar` exits non-zero with the `not implemented — US-003` message — it does not pretend to sync
+      - [x] `database/database.sqlite` is not tracked by git
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no Eloquent domain model or schema of our own; only the framework's queue tables
@@ -402,11 +426,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Mike
     estimate_hours: 3
     dependencies:
       - TASK-02
+    commit:
+      sha: 8f73fe6e29d07fe2cb2caf07a4feefd8bfaddbd2
+      short_sha: 8f73fe6
+      subject: 'feat(US-001): TASK-04 wire SQLite, database queue and calendar sync schedule'
+      committed_at: '2026-09-07T20:55:25+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/8f73fe6e29d07fe2cb2caf07a4feefd8bfaddbd2'
   -
     id: TASK-05
     title: 'Declare the KBMS configuration surface'
@@ -431,12 +461,12 @@ tasks:
       8. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `php artisan config:show kbms` lists all ten keys with the documented defaults
-      - [ ] `.env.example` contains `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES`, `KBMS_ICS_WINDOW_PAST_DAYS`, `KBMS_ICS_WINDOW_FUTURE_DAYS`, `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`, `KBMS_ALLOW_NON_LOOPBACK` — each with a default and a comment
-      - [ ] `config('app.timezone')` follows `KBMS_TIMEZONE`
-      - [ ] `php artisan schedule:list` shows the interval derived from `config('kbms.sync_minutes')`
-      - [ ] No `.env.example` value contains a real ICS URL or a real filesystem path
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `php artisan config:show kbms` lists all ten keys with the documented defaults
+      - [x] `.env.example` contains `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES`, `KBMS_ICS_WINDOW_PAST_DAYS`, `KBMS_ICS_WINDOW_FUTURE_DAYS`, `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`, `KBMS_CLAUDE_LAUNCHER`, `KBMS_OUTLOOK_URL_TEMPLATE`, `KBMS_TIMEZONE`, `KBMS_ALLOW_NON_LOOPBACK` — each with a default and a comment
+      - [x] `config('app.timezone')` follows `KBMS_TIMEZONE`
+      - [x] `php artisan schedule:list` shows the interval derived from `config('kbms.sync_minutes')`
+      - [x] No `.env.example` value contains a real ICS URL or a real filesystem path
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -446,11 +476,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2
     dependencies:
       - TASK-04
+    commit:
+      sha: 0000ff01880fed7c85f6c668b59970f6e454410f
+      short_sha: 0000ff0
+      subject: 'feat(US-001): TASK-05 declare the KBMS configuration surface'
+      committed_at: '2026-09-07T20:56:28+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0000ff01880fed7c85f6c668b59970f6e454410f'
   -
     id: TASK-06
     title: 'Enforce loopback-only access and verify secret hygiene'
@@ -475,14 +511,14 @@ tasks:
       7. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `EnsureLoopbackRequest` is registered globally in `bootstrap/app.php`
-      - [ ] A request from a non-loopback IP receives 403 and the reason view; `127.0.0.1` and `::1` pass
-      - [ ] `config('kbms.allow_non_loopback')` defaults to `false` and flipping it to `true` lifts the block
-      - [ ] A spoofed `X-Forwarded-For` header cannot influence the decision (no trusted proxies configured)
-      - [ ] Rejections write one structured warning to the log
-      - [ ] `.env` is untracked; no real ICS URL or filesystem path appears anywhere in tracked application files
-      - [ ] `http://personal-kbms.test` still serves the shell normally
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `EnsureLoopbackRequest` is registered globally in `bootstrap/app.php`
+      - [x] A request from a non-loopback IP receives 403 and the reason view; `127.0.0.1` and `::1` pass
+      - [x] `config('kbms.allow_non_loopback')` defaults to `false` and flipping it to `true` lifts the block
+      - [x] A spoofed `X-Forwarded-For` header cannot influence the decision (no trusted proxies configured)
+      - [x] Rejections write one structured warning to the log
+      - [x] `.env` is untracked; no real ICS URL or filesystem path appears anywhere in tracked application files
+      - [x] `http://personal-kbms.test` still serves the shell normally
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -492,11 +528,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes with the secret-hygiene grep results
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Lars
     estimate_hours: 2
     dependencies:
       - TASK-05
+    commit:
+      sha: 0c47e7affa89c1140ec07fbb4483e38068e507cc
+      short_sha: 0c47e7a
+      subject: 'feat(US-001): TASK-06 enforce loopback-only access and verify secret hygiene'
+      committed_at: '2026-09-07T20:57:43+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0c47e7affa89c1140ec07fbb4483e38068e507cc'
   -
     id: TASK-07
     title: 'Render an actionable message when SQLite is unavailable'
@@ -518,12 +560,12 @@ tasks:
       6. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] With the SQLite file missing and `APP_DEBUG=true`, the shell page shows the actionable message and no exception trace
-      - [ ] With the file present but unreadable, a distinct and equally actionable message renders
-      - [ ] The message names the configured `DB_DATABASE` path and the `touch` + `migrate` remedy
-      - [ ] A genuine SQL error (e.g. a query against a missing table) still surfaces as a normal exception — the mapping is not a catch-all
-      - [ ] Restoring the file restores normal service with no cache clearing
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] With the SQLite file missing and `APP_DEBUG=true`, the shell page shows the actionable message and no exception trace
+      - [x] With the file present but unreadable, a distinct and equally actionable message renders
+      - [x] The message names the configured `DB_DATABASE` path and the `touch` + `migrate` remedy
+      - [x] A genuine SQL error (e.g. a query against a missing table) still surfaces as a normal exception — the mapping is not a catch-all
+      - [x] Restoring the file restores normal service with no cache clearing
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -533,11 +575,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2
     dependencies:
       - TASK-06
+    commit:
+      sha: b34be06d52622e1b41dd3dc452cce46c592210aa
+      short_sha: b34be06
+      subject: 'feat(US-001): TASK-07 render actionable message when SQLite is unavailable'
+      committed_at: '2026-09-07T21:01:51+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b34be06d52622e1b41dd3dc452cce46c592210aa'
   -
     id: TASK-08
     title: 'PHPUnit coverage for the scaffold'
@@ -567,23 +615,29 @@ tasks:
       10. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] All six feature tests pass via `php artisan test --compact`
-      - [ ] Coverage matches the `NORMAL` bar; no Playwright, Dusk, Pest browser, or viewport suite was added
-      - [ ] The auth-absence assertions fail if `App\Models\User` or any auth route is reintroduced (verify by temporarily re-adding one, then reverting)
-      - [ ] `.larapilot/docs/test-results/US-001.md` records the manual handoff steps
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] All six feature tests pass via `php artisan test --compact`
+      - [x] Coverage matches the `NORMAL` bar; no Playwright, Dusk, Pest browser, or viewport suite was added
+      - [x] The auth-absence assertions fail if `App\Models\User` or any auth route is reintroduced (verify by temporarily re-adding one, then reverting)
+      - [x] `.larapilot/docs/test-results/US-001.md` records the manual handoff steps
+      - [x] `php artisan larapilot:quality` passes
 
       ## Git Deliverables
       - Commit: `test(US-001): TASK-08 cover app scaffold, auth removal and loopback control`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes with the test command and its output
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 4
     dependencies:
       - TASK-03
       - TASK-07
+    commit:
+      sha: f7ad7c370283c80f6549aea532a7f0bcfae54abb
+      short_sha: f7ad7c3
+      subject: 'test(US-001): TASK-08 cover app scaffold, auth removal and loopback control'
+      committed_at: '2026-09-07T21:14:00+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/f7ad7c370283c80f6549aea532a7f0bcfae54abb'
   -
     id: TASK-09
     title: 'Write the baseline README and CHANGELOG'
@@ -613,13 +667,13 @@ tasks:
       6. `vendor/bin/pint --dirty --format agent` (no PHP touched, but run for consistency)
 
       ## Completion Criteria
-      - [ ] `README.md` covers Herd setup, the complete `.env` surface, the queue worker and scheduler, and the launcher's two-argument contract
-      - [ ] Every `KBMS_*` key documented in the README exists in `config/kbms.php` and `.env.example`, and vice versa
-      - [ ] Every command quoted in the README runs successfully as written
-      - [ ] `kbms:doctor` is presented as the first troubleshooting step, marked as arriving with US-002
-      - [ ] Baseline only: no OpenAPI, diagrams, runbook, or client manual
-      - [ ] `CHANGELOG.md` exists with an Unreleased section
-      - [ ] `SECURITY.md` and `security.txt` deliberately absent, with the reason recorded in the commit body
+      - [x] `README.md` covers Herd setup, the complete `.env` surface, the queue worker and scheduler, and the launcher's two-argument contract
+      - [x] Every `KBMS_*` key documented in the README exists in `config/kbms.php` and `.env.example`, and vice versa
+      - [x] Every command quoted in the README runs successfully as written
+      - [x] `kbms:doctor` is presented as the first troubleshooting step, marked as arriving with US-002
+      - [x] Baseline only: no OpenAPI, diagrams, runbook, or client manual
+      - [x] `CHANGELOG.md` exists with an Unreleased section
+      - [x] `SECURITY.md` and `security.txt` deliberately absent, with the reason recorded in the commit body
 
       ## Test Data
       - N/A — documentation only
@@ -629,11 +683,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 3
     dependencies:
       - TASK-07
+    commit:
+      sha: b85077e1df95431f177d1071686f8fedd0d2d5ab
+      short_sha: b85077e
+      subject: 'docs(US-001): TASK-09 write baseline README and CHANGELOG'
+      committed_at: '2026-09-07T21:15:07+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b85077e1df95431f177d1071686f8fedd0d2d5ab'
   -
     id: TASK-10
     title: 'Final quality gate and Laravel idiom review'
@@ -656,13 +716,13 @@ tasks:
       7. Confirm the branch history is one atomic commit per task with `type(US-001): TASK-NN` messages and nothing pushed: `git log --oneline develop..HEAD` and `git remote -v`
 
       ## Completion Criteria
-      - [ ] `php artisan larapilot:quality` passes with Larastan at level 5 or higher
-      - [ ] `composer audit` clean, or advisories recorded
-      - [ ] `php artisan test --compact` green
-      - [ ] `npm run build` clean
-      - [ ] No residual reference to Fortify, passkeys, two-factor, `auth()`, or a `User` anywhere in application code
-      - [ ] `route:list` and `schedule:list` outputs captured for review
-      - [ ] One atomic commit per task, Conventional Commit messages, no remote, nothing pushed
+      - [x] `php artisan larapilot:quality` passes with Larastan at level 5 or higher
+      - [x] `composer audit` clean, or advisories recorded
+      - [x] `php artisan test --compact` green
+      - [x] `npm run build` clean
+      - [x] No residual reference to Fortify, passkeys, two-factor, `auth()`, or a `User` anywhere in application code
+      - [x] `route:list` and `schedule:list` outputs captured for review
+      - [x] One atomic commit per task, Conventional Commit messages, no remote, nothing pushed
 
       ## Test Data
       - N/A — verification only
@@ -672,10 +732,10 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalize the local PR description toward `develop` with the gate outputs
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Andrew
     estimate_hours: 1
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T18:21:34+00:00'
+updated_at: '2026-09-07T21:15:51+02:00'

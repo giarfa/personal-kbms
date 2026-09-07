@@ -1,0 +1,425 @@
+code: US-002
+plan_body: |
+  ## Technical Solution
+
+  `php artisan kbms:doctor` verifies every assumption this product makes about the operator's machine and reports each one independently. The design goal is that check independence and the "not configured" vs "configured but invalid" distinction are **structural properties of the types**, not conventions the command has to remember.
+
+  ### Components
+
+  New namespace `App\Doctor` (no new base folder — `app/` already hosts `Support/`, `Jobs/`, `Console/`):
+
+  | Class | Responsibility |
+  | --- | --- |
+  | `App\Doctor\EnvironmentCheck` (interface) | `label(): string` and `run(): CheckResult` — the seam every check implements |
+  | `App\Doctor\CheckStatus` (enum) | `Pass`, `NotConfigured`, `Failed` — TitleCase keys per PHP conventions |
+  | `App\Doctor\CheckResult` (readonly) | `status`, `detail` (what was observed), `remediation` (nullable; names the config key at fault) |
+  | `App\Doctor\CheckSuite` | Ordered list of checks; runs each inside `try/catch (Throwable)` so one failure never aborts the rest; returns `array<string, CheckResult>` |
+  | `App\Doctor\Checks\IcsFeedCheck` | Bounded-timeout HTTPS GET + iCalendar envelope validation |
+  | `App\Doctor\Checks\TranscriptsDirectoryCheck` | Directory exists and is readable |
+  | `App\Doctor\Checks\LauncherScriptCheck` | File exists **and** carries the executable bit |
+  | `App\Doctor\Checks\QueueConnectionCheck` | Configured queue connection resolves and answers `size()` |
+  | `App\Doctor\Checks\SchedulerRegistrationCheck` | `kbms:sync-calendar` is registered on the schedule |
+  | `App\Doctor\Checks\TimezoneCheck` | `KBMS_TIMEZONE` is a valid timezone identifier |
+  | `App\Console\Commands\DoctorCommand` | Renders one line per check; exit `0` / `1` |
+
+  `CheckSuite` is bound in `AppServiceProvider::register()` with the ordered check list, so registration is one readable place and tests can swap individual checks.
+
+  ### Three-state result, and why
+
+  `CheckStatus::NotConfigured` exists because "you never set `KBMS_ICS_URL`" and "you set `KBMS_ICS_URL` and the feed returns 404" are different operator problems with different remedies. Both are **non-passing** and both contribute to a non-zero exit code — the command is a gate, and an unconfigured integration point is not a passing environment. The distinction is in the rendered label (`NOT CONFIGURED` vs `FAIL`) and in the remediation text.
+
+  ### Check independence
+
+  `CheckSuite::run()` wraps every `EnvironmentCheck::run()` in `try/catch (Throwable $e)` and converts an escaped exception into `CheckStatus::Failed` with the exception message as detail. An `IcsFeedCheck` that throws a connection exception, or a `QueueConnectionCheck` that hits a missing `jobs` table, therefore degrades to a failed line rather than a stack trace that kills the remaining checks. This is asserted directly in the test suite with a deliberately throwing stub check.
+
+  ### ICS feed check — recorded decision
+
+  Per the decision journal entry **"doctor ICS parse validation"** (2026-09-07): US-002 validates the iCalendar envelope **structurally**, with **no composer change**. `sabre/vobject` stays with US-003, the spec that owns ICS sync.
+
+  Sequence:
+
+  1. `kbms.ics_url` unset → `NotConfigured`, hint names `KBMS_ICS_URL`.
+  2. `Http::connectTimeout(3)->timeout(5)->get($url)` — bounded, so the command can never hang. Connection/timeout exceptions are caught inside the check and reported as `Failed` with a timeout-specific hint.
+  3. Non-2xx → `Failed`, hint carries the HTTP status.
+  4. Body validation, in order, each with its own remediation text:
+     - no `BEGIN:VCALENDAR` → "responded 200 but the body is not iCalendar (an HTML sign-in page is the usual cause)"
+     - no `VERSION:` property → "iCalendar envelope is malformed"
+     - no `BEGIN:VEVENT` → "feed parsed but contains no events — verify the subscription URL covers a calendar with entries"
+     - no `END:VCALENDAR` → "the feed body is truncated"
+
+  **Known trade-off (accepted by the operator):** a genuinely empty calendar fails check 4c. It is reported with its own hint rather than a generic parse error, so the reason is legible. When US-003 installs `sabre/vobject`, replace the body assertions with the real parser and reconsider whether "zero events" should stay a failure.
+
+  ### Queue check under test
+
+  `phpunit.xml` forces `QUEUE_CONNECTION=sync` so queued jobs run inline. `QueueConnectionCheck` therefore reads the **configured** connection at runtime rather than hardcoding `database`, and the test sets `queue.default` explicitly per scenario — mirroring how `QueueAndScheduleTest` already handles this asymmetry.
+
+  ### Non-goals
+
+  No new dependencies. No models, migrations, or schema. No `--json` output mode, no auto-remediation, no additional checks beyond the six the acceptance criteria name — the exit code is the machine-readable surface.
+
+  ## Git & Branching
+
+  - Mode: `GITFLOW` (from `settings.git_mode`) — Gitflow **without** automatic push
+  - Branch: `feature/US-002-environment-doctor` from `develop`
+  - TASK-00: bootstrap the branch and draft the internal PR description locally
+  - Per task: exactly one Conventional Commit `type(US-002): TASK-NN summary` — never batch tasks
+  - Push: **skip** — no `git push`, no remote PR, unless the operator asks in-session
+  - `php artisan larapilot:quality` (Pint + Larastan level 5+) green before every `task-done`
+  - Merge to `develop` only after human `/larapilot-review` approval
+
+  ## Test Data Strategy
+
+  - **N/A for factories and seeders** — this spec introduces no Eloquent model, migration, or schema change. `database/factories/` and `DatabaseSeeder` are untouched.
+  - Test fixtures are created and torn down per test, not seeded:
+    - **Filesystem:** real temporary directories under `sys_get_temp_dir()`, created in `setUp()` and removed in `tearDown()`. `Storage::fake()` is deliberately **not** used — it cannot model a missing executable bit, which is an explicit acceptance criterion.
+    - **HTTP:** `Http::fake()` with inline iCalendar fixture strings (valid feed, HTML sign-in page, truncated body, event-free calendar, 404, connection exception).
+  - No `migrate:fresh --seed` verification step is required for any task in this plan.
+
+  ## Test Strategy
+
+  - Bar: `NORMAL` (from `settings.testing`) — PHPUnit feature and unit tests. **No** Playwright, Dusk, Pest browser, or viewport matrix. This spec has no UI.
+  - Style follows the existing suite: PHPUnit class tests with `public function test_snake_case(): void` methods, `Tests\TestCase`, `Http::fake()` / `Log::spy()` as already used in `QueueAndScheduleTest`.
+  - **Interleaved, not deferred:** every check task (TASK-02 → TASK-04) ships its own targeted unit test in the same commit. TASK-06 then adds the command-level feature test the acceptance criteria mandate.
+  - Coverage map:
+
+  | Acceptance criterion | Covered by |
+  | --- | --- |
+  | Six checks report pass/fail independently | `DoctorCommandTest::test_all_checks_pass_...` + per-check unit tests |
+  | Every failure names the config key at fault | Per-check unit tests assert `remediation` content |
+  | Exit `0` all-pass / non-zero on any failure | `DoctorCommandTest` — `assertExitCode(0)` and `assertExitCode(1)` |
+  | One failure does not abort the rest | `CheckSuiteTest` with a deliberately throwing stub check |
+  | "not configured" ≠ "configured but invalid" | `CheckStatus` assertions in each config-backed check test |
+  | ICS bounded timeout, never hangs | `IcsFeedCheckTest` asserts `Http::assertSent` timeout config + `ConnectionException` handling |
+  | Launcher exists but not executable | `LauncherScriptCheckTest` — `chmod 0644` fixture |
+  | ICS parses as iCalendar, not merely 200 | `IcsFeedCheckTest` — HTML-body-with-200 scenario |
+  | Feature test: all-pass + each failure mode | `tests/Feature/DoctorCommandTest.php` |
+
+  - Run: `php artisan test --compact --filter=Doctor` during implement; full `php artisan test` before the final task-done.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and prepare the internal PR'
+    body: |
+      ## Description
+      Bootstrap Gitflow for this spec: create the feature branch from `develop` and prepare the internal PR description toward `develop`. Do **not** push — `settings.git_mode` is `GITFLOW`.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop` (US-001 must be merged or the branch point agreed first)
+      2. `git checkout -b feature/US-002-environment-doctor`
+      3. Draft the internal PR title `US-002: Environment doctor command` and a body linking `.larapilot/plans/US-002-plan.yaml` plus the task list; keep it local
+      4. Anchor the branch: `git commit --allow-empty -m "chore(US-002): TASK-00 bootstrap feature branch"`
+
+      ## Completion Criteria
+      - [ ] Branch `feature/US-002-environment-doctor` exists locally, branched from `develop`
+      - [ ] PR title and body drafted toward `develop` (not pushed)
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-002): TASK-00 bootstrap feature branch` (empty commit)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally — open the remote PR only if the operator asks
+    type: Impl
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+  -
+    id: TASK-01
+    title: 'Define the doctor check contract, result type and suite'
+    body: |
+      ## Description
+      Introduce the `App\Doctor` seam every check plugs into: the `EnvironmentCheck` interface, the three-state `CheckStatus` enum, the `CheckResult` value object, and the `CheckSuite` that runs checks independently. No individual check is implemented here — this task is the contract plus the exception-isolation guarantee.
+
+      ## Files Involved
+      - app/Doctor/EnvironmentCheck.php
+      - app/Doctor/CheckStatus.php
+      - app/Doctor/CheckResult.php
+      - app/Doctor/CheckSuite.php
+      - app/Providers/AppServiceProvider.php
+      - tests/Unit/Doctor/CheckSuiteTest.php
+
+      ## Steps
+      1. `php artisan make:interface Doctor/EnvironmentCheck --no-interaction` (or `make:class`) — methods `label(): string` and `run(): CheckResult`
+      2. `php artisan make:enum Doctor/CheckStatus --no-interaction` — cases `Pass`, `NotConfigured`, `Failed` (TitleCase keys); add `isPassing(): bool` returning `true` only for `Pass`
+      3. `App\Doctor\CheckResult` — `final readonly` class with promoted constructor properties `CheckStatus $status`, `string $detail`, `?string $remediation = null`; named constructors `pass(string $detail)`, `notConfigured(string $detail, string $remediation)`, `failed(string $detail, string $remediation)`
+      4. `App\Doctor\CheckSuite` — constructor promotes `private array $checks` with PHPDoc `@param list<EnvironmentCheck> $checks`; `run(): array` (PHPDoc `@return array<string, CheckResult>` keyed by `label()`) wraps every `EnvironmentCheck::run()` in `try/catch (\Throwable $e)` and converts an escaped exception into `CheckResult::failed($e->getMessage(), ...)`; add `hasFailures(array $results): bool`
+      5. Bind `CheckSuite` in `AppServiceProvider::register()` with the ordered check list (empty array for now; TASK-02 → TASK-04 append their checks as they land)
+      6. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `EnvironmentCheck`, `CheckStatus`, `CheckResult`, `CheckSuite` exist with explicit return types and parameter type hints
+      - [ ] `CheckSuite::run()` catches `Throwable` per check — a throwing check yields a `Failed` result and the remaining checks still run
+      - [ ] `CheckSuiteTest` proves independence with a deliberately throwing stub check plus a passing one
+      - [ ] `larapilot:quality` green (Pint + Larastan level 5+)
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-002): TASK-01 add the doctor check contract, result type and suite`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-00
+  -
+    id: TASK-02
+    title: 'Implement the configuration and filesystem checks (timezone, transcripts, launcher)'
+    body: |
+      ## Description
+      Implement the three checks that read `config/kbms.php` and the local filesystem. Each distinguishes an unset value (`NotConfigured`) from a configured-but-wrong value (`Failed`), and every non-passing result names the `KBMS_*` key at fault.
+
+      ## Files Involved
+      - app/Doctor/Checks/TimezoneCheck.php
+      - app/Doctor/Checks/TranscriptsDirectoryCheck.php
+      - app/Doctor/Checks/LauncherScriptCheck.php
+      - app/Providers/AppServiceProvider.php
+      - tests/Unit/Doctor/TimezoneCheckTest.php
+      - tests/Unit/Doctor/TranscriptsDirectoryCheckTest.php
+      - tests/Unit/Doctor/LauncherScriptCheckTest.php
+
+      ## Steps
+      1. `TimezoneCheck` — label `Timezone`. Read `config('kbms.timezone')`; empty → `NotConfigured` naming `KBMS_TIMEZONE`. Validate with `in_array($tz, timezone_identifiers_list(), true)`; invalid → `Failed` with hint "`KBMS_TIMEZONE` is not a valid IANA timezone identifier (e.g. `Europe/Rome`)". Pass detail states the resolved identifier.
+      2. `TranscriptsDirectoryCheck` — label `Transcripts directory`. `config('kbms.transcripts_path')` null → `NotConfigured` naming `KBMS_TRANSCRIPTS_PATH`. Then `is_dir()` false → `Failed` ("path does not exist or is not a directory"); `is_readable()` false → `Failed` ("directory exists but is not readable by the web/CLI user — check permissions"). Pass detail states the absolute path.
+      3. `LauncherScriptCheck` — label `Claude launcher script`. `config('kbms.claude_launcher')` null → `NotConfigured` naming `KBMS_CLAUDE_LAUNCHER`. Then `is_file()` false → `Failed` ("no file at the configured path"); **`is_executable()` false → `Failed` with the specific reason "the script exists but is not executable — run `chmod +x <path>`"**. The two failures must be separately reported, per the acceptance criteria.
+      4. Register all three in the `CheckSuite` binding in `AppServiceProvider::register()`, in report order
+      5. Write the three unit tests: for each, cover unset / invalid / valid, and assert on `CheckStatus` **and** on the `KBMS_*` key appearing in `remediation`. Filesystem tests use real temp directories from `sys_get_temp_dir()` created in `setUp()` and removed in `tearDown()` — `Storage::fake()` cannot model the executable bit. The not-executable case creates the file then `chmod($path, 0644)`.
+      6. `php artisan test --compact --filter=Doctor`
+      7. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Three checks implement `EnvironmentCheck` with explicit return types
+      - [ ] Unset config yields `NotConfigured`; configured-but-invalid yields `Failed` — never conflated
+      - [ ] Every non-passing `remediation` names its `KBMS_*` key
+      - [ ] A launcher script that exists without the executable bit fails with that specific reason
+      - [ ] Unit tests pass; `larapilot:quality` green
+
+      ## Test Data
+      - N/A — no model or schema changes in this task; fixtures are per-test temp files
+
+      ## Git Deliverables
+      - Commit: `feat(US-002): TASK-02 add timezone, transcripts and launcher environment checks`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-03
+    title: 'Implement the ICS feed reachability and iCalendar validation check'
+    body: |
+      ## Description
+      Implement `IcsFeedCheck`: a bounded-timeout HTTPS GET of `KBMS_ICS_URL` that then validates the response body is genuinely iCalendar, not merely an HTTP 200. Per the decision journal entry **"doctor ICS parse validation"**, validation is structural — **do not add `sabre/vobject` or any other dependency in this task**; US-003 owns that.
+
+      ## Files Involved
+      - app/Doctor/Checks/IcsFeedCheck.php
+      - app/Providers/AppServiceProvider.php
+      - tests/Unit/Doctor/IcsFeedCheckTest.php
+
+      ## Steps
+      1. Label `ICS calendar feed`. `config('kbms.ics_url')` null → `NotConfigured` naming `KBMS_ICS_URL`.
+      2. Request with an explicit bound so the command can never hang: `Http::connectTimeout(3)->timeout(5)->get($url)`. Wrap the call in `try/catch (\Illuminate\Http\Client\ConnectionException $e)` → `Failed` with hint "the feed at `KBMS_ICS_URL` did not respond within 5s — check the URL and network reachability". (`CheckSuite` also catches `Throwable`, but this check owns the timeout-specific message.)
+      3. Non-2xx (`$response->successful()` false) → `Failed` with the status code in the detail and a hint naming `KBMS_ICS_URL` (mention that a 401/403 usually means the subscription URL requires its secret token).
+      4. Validate the body in order, each with its own remediation string:
+         - no `BEGIN:VCALENDAR` → "the feed responded 200 but the body is not iCalendar — an HTML sign-in page is the usual cause; re-copy the subscription URL into `KBMS_ICS_URL`"
+         - no `VERSION:` → "the iCalendar envelope is malformed — `VERSION` is missing"
+         - no `BEGIN:VEVENT` → "the feed parsed as iCalendar but contains no events — verify `KBMS_ICS_URL` points at a calendar with entries"
+         - no `END:VCALENDAR` → "the feed body is truncated — `END:VCALENDAR` is missing"
+      5. Pass detail reports the HTTP status and the `VEVENT` count.
+      6. Register in the `CheckSuite` binding in `AppServiceProvider::register()`
+      7. `IcsFeedCheckTest` with `Http::fake()`: valid feed; HTML page with 200; truncated body; calendar with zero `VEVENT`; 404; `ConnectionException`; unset URL. Assert `CheckStatus` and remediation text per scenario.
+      8. `php artisan test --compact --filter=IcsFeedCheck`
+      9. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `composer.json` and `composer.lock` are **unchanged** by this task
+      - [ ] The request carries an explicit bounded timeout and a connection failure is reported, never thrown to the operator
+      - [ ] A 200 response with a non-iCalendar body **fails** the check
+      - [ ] Unset `KBMS_ICS_URL` yields `NotConfigured`, distinct from a reachable-but-invalid feed
+      - [ ] Unit tests cover all seven scenarios; `larapilot:quality` green
+
+      ## Test Data
+      - N/A — no model or schema changes; iCalendar fixtures are inline strings in the test
+
+      ## Git Deliverables
+      - Commit: `feat(US-002): TASK-03 add the ICS feed reachability and iCalendar validation check`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-04
+    title: 'Implement the queue connection and scheduler registration checks'
+    body: |
+      ## Description
+      Implement the two runtime checks: the configured queue connection is reachable, and `kbms:sync-calendar` is actually registered on the scheduler. Both are assumptions US-001 wired up and that silently rot when a driver or a schedule entry changes.
+
+      ## Files Involved
+      - app/Doctor/Checks/QueueConnectionCheck.php
+      - app/Doctor/Checks/SchedulerRegistrationCheck.php
+      - app/Providers/AppServiceProvider.php
+      - tests/Unit/Doctor/QueueConnectionCheckTest.php
+      - tests/Unit/Doctor/SchedulerRegistrationCheckTest.php
+
+      ## Steps
+      1. `QueueConnectionCheck` — label `Queue connection`. Read the **configured** connection name (`config('queue.default')`) rather than hardcoding `database`; `phpunit.xml` forces `sync`, so the check must reflect runtime config the way `QueueAndScheduleTest` already does. Resolve `Queue::connection($name)` and call `->size()` inside `try/catch (\Throwable $e)` → `Failed` with a hint naming `QUEUE_CONNECTION` and, for the `database` driver, pointing at `php artisan migrate` when the `jobs` table is missing. Pass detail reports the driver and pending job count, and notes that a reachable queue is not the same as a *running* worker (`php artisan queue:work`).
+      2. `SchedulerRegistrationCheck` — label `Calendar sync schedule`. Resolve `Illuminate\Console\Scheduling\Schedule` from the container, search `events()` for a command containing `kbms:sync-calendar`. Absent → `Failed` with hint "`kbms:sync-calendar` is not registered — check `routes/console.php`". Present → `Pass` reporting the cron expression, sourced from `KBMS_ICS_SYNC_MINUTES`.
+      3. Register both in the `CheckSuite` binding in `AppServiceProvider::register()` — the suite's check list is now complete (six checks, report order: ICS feed, transcripts, launcher, queue, schedule, timezone)
+      4. Unit tests: queue check passing on a reachable connection and failing when `Queue::connection()` throws; scheduler check passing against the real registered event and failing when the schedule is emptied
+      5. `php artisan test --compact --filter=Doctor`
+      6. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Queue check reads the configured connection at runtime and never hardcodes a driver
+      - [ ] An unreachable queue is reported as a failure with a remediation hint, not an uncaught exception
+      - [ ] Scheduler check detects both the registered and the missing `kbms:sync-calendar` entry
+      - [ ] All six checks are registered in `AppServiceProvider` in report order
+      - [ ] Unit tests pass; `larapilot:quality` green
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-002): TASK-04 add the queue connection and scheduler registration checks`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2.0
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-05
+    title: 'Build the kbms:doctor command with per-check reporting and a gating exit code'
+    body: |
+      ## Description
+      Replace nothing and add the operator-facing surface: `php artisan kbms:doctor` runs the suite, prints one clearly-marked line per check with the remediation hint on every non-passing result, and exits non-zero when any check does not pass — so the command is usable as a gate in a shell pipeline.
+
+      ## Files Involved
+      - app/Console/Commands/DoctorCommand.php
+      - tests/Feature/DoctorCommandTest.php (smoke assertions only; TASK-06 owns full coverage)
+
+      ## Steps
+      1. `php artisan make:command DoctorCommand --no-interaction`, then match the existing command style in `app/Console/Commands/` — `#[Signature('kbms:doctor')]` and `#[Description('Check every environment assumption this product makes about the machine')]` attributes, `handle(): int`
+      2. Inject `CheckSuite` via constructor property promotion; call `run()`
+      3. Render each result with `$this->components->twoColumnDetail($label, $badge)` where the badge is `<fg=green>PASS</>`, `<fg=yellow>NOT CONFIGURED</>`, or `<fg=red>FAIL</>` — the yellow badge is what makes "unset" visually distinct from "configured but invalid"
+      4. Under every non-passing line print the `detail` and then the `remediation` (indented, e.g. via `$this->components->bulletList`) so the operator sees both what was observed and what to change
+      5. Print a closing summary line: `N passed, M failed` (counting `NotConfigured` among the failures)
+      6. `return $suite->hasFailures($results) ? self::FAILURE : self::SUCCESS;`
+      7. Smoke test: command runs, prints all six labels, and returns an int exit code
+      8. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `php artisan kbms:doctor` prints exactly one status line per registered check
+      - [ ] Every non-passing check prints its remediation hint naming the configuration key at fault
+      - [ ] `NOT CONFIGURED` renders distinctly from `FAIL`
+      - [ ] Exit code is `0` only when every check passes, non-zero otherwise
+      - [ ] `larapilot:quality` green
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-002): TASK-05 build the kbms:doctor command with a gating exit code`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2.0
+    dependencies:
+      - TASK-02
+      - TASK-03
+      - TASK-04
+  -
+    id: TASK-06
+    title: 'Cover the doctor command: all-pass, every failure mode and the exit-code gate'
+    body: |
+      ## Description
+      Add the feature test the acceptance criteria mandate: the all-pass path and each individual failure mode, with faked HTTP and a temporary filesystem, asserting both the rendered output and the exit code. Bar is `settings.testing: NORMAL` — PHPUnit feature tests only, no browser or E2E tooling.
+
+      ## Files Involved
+      - tests/Feature/DoctorCommandTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit DoctorCommandTest --no-interaction`; follow the existing suite style (`Tests\TestCase`, `public function test_snake_case(): void`)
+      2. `setUp()` builds a fully healthy environment: temp transcripts directory, temp launcher file with `chmod 0755`, `Http::fake()` returning a valid iCalendar body, `config()` set for `kbms.ics_url`, `kbms.transcripts_path`, `kbms.claude_launcher`, `kbms.timezone`. `tearDown()` removes the temp fixtures.
+      3. All-pass: `$this->artisan('kbms:doctor')->assertExitCode(0)` and assert every check label appears with a passing marker
+      4. One test per failure mode, each starting from the healthy baseline and breaking exactly one thing — unreachable ICS URL (404), 200-with-HTML body, unset `KBMS_ICS_URL`, missing transcripts directory, launcher present without the executable bit, missing launcher, invalid `KBMS_TIMEZONE`, unregistered schedule entry. Each asserts `assertExitCode(1)` **and** that the remediation text names the offending configuration key.
+      5. Independence: break **two** checks at once and assert both failure lines are present — a single failure must not truncate the report
+      6. Distinction: assert an unset value renders `NOT CONFIGURED` while a configured-but-wrong value renders `FAIL`
+      7. `php artisan test --compact --filter=DoctorCommandTest`, then the full `php artisan test` to confirm no regression in the US-001 suites
+      8. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] All-pass scenario asserts exit code `0`
+      - [ ] Each of the six checks has at least one failing scenario asserting a non-zero exit code
+      - [ ] A test proves two simultaneous failures are both reported
+      - [ ] A test proves `NOT CONFIGURED` and `FAIL` are distinguishable
+      - [ ] Full `php artisan test` green; `larapilot:quality` green
+      - [ ] No Playwright, Dusk, Pest browser, or viewport suites added
+
+      ## Git Deliverables
+      - Commit: `test(US-002): TASK-06 cover the doctor command's pass, failure and exit-code behavior`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-05
+  -
+    id: TASK-07
+    title: 'Document kbms:doctor in the README and CHANGELOG'
+    body: |
+      ## Description
+      Close the placeholder the README already carries. Line 76 of `README.md` currently reads "`php artisan kbms:doctor` — checks the whole integration surface in one shot (arrives with US-002)" — that parenthetical goes away and is replaced with real operator guidance. Documentation scope is **baseline only**, per the recorded decision "documentation scope"; no diagrams, no OpenAPI, no runbook.
+
+      ## Files Involved
+      - README.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. `README.md` → **Troubleshooting**: replace the "(arrives with US-002)" placeholder. Document what the six checks verify, that each failure names the `KBMS_*` key at fault, and that the command exits non-zero so it can gate a shell script.
+      2. Add a short note that `NOT CONFIGURED` means the key was never set while `FAIL` means it was set to something the machine rejects — the distinction is the point of the command.
+      3. Cross-reference the launcher two-argument contract already documented above it: the launcher check verifies the file exists and is executable, not that it honors the contract.
+      4. `CHANGELOG.md` → `[Unreleased]` → `Added`: "`php artisan kbms:doctor` — verifies the ICS feed, transcripts directory, launcher script, queue connection, scheduler registration and timezone, with a remediation hint per failure and a non-zero exit code."
+      5. Re-read the edited section end to end for accuracy against the shipped command output — no aspirational text.
+
+      ## Completion Criteria
+      - [ ] No "arrives with US-002" placeholder remains anywhere in `README.md`
+      - [ ] README documents all six checks, the remediation behavior, and the exit-code gate
+      - [ ] `CHANGELOG.md` `[Unreleased] / Added` carries the doctor entry
+      - [ ] Documentation matches actual command behavior — verified by running `php artisan kbms:doctor`
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `docs(US-002): TASK-07 document kbms:doctor in the README and CHANGELOG`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: finalize the local PR description for `develop`
+    type: Impl
+    status: TODO
+    assignee: Albert
+    estimate_hours: 1.0
+    dependencies:
+      - TASK-05
+updated_at: '2026-09-07T21:46:35+02:00'

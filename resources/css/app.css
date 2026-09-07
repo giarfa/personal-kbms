@@ -1,9 +1,151 @@
 @import 'tailwindcss';
+@import '../../vendor/livewire/flux/dist/flux.css';
 
+@source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+@source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';
+@source '../../vendor/livewire/flux/stubs/**/*.blade.php';
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-zinc-50: #fafafa;
+    --color-zinc-100: #f5f5f5;
+    --color-zinc-200: #e5e5e5;
+    --color-zinc-300: #d4d4d4;
+    --color-zinc-400: #a3a3a3;
+    --color-zinc-500: #737373;
+    --color-zinc-600: #525252;
+    --color-zinc-700: #404040;
+    --color-zinc-800: #262626;
+    --color-zinc-900: #171717;
+    --color-zinc-950: #0a0a0a;
+
+    --color-accent: var(--color-neutral-800);
+    --color-accent-content: var(--color-neutral-800);
+    --color-accent-foreground: var(--color-white);
+
+    /* --- Personal KBMS (US-001) — additive only, never a Flux/kit token --- */
+    --kb-mirror-bg: oklch(0.975 0.004 250);
+    --kb-mirror-border: oklch(0.90 0.008 250);
+    --kb-note: oklch(0.45 0.085 205);
+    --kb-note-bg: oklch(0.955 0.022 205);
+    --kb-transcript: oklch(0.44 0.095 285);
+    --kb-transcript-bg: oklch(0.955 0.025 285);
+    --kb-ok: oklch(0.45 0.095 155);
+    --kb-ok-bg: oklch(0.955 0.03 155);
+    --kb-warn: oklch(0.46 0.10 70);
+    --kb-warn-bg: oklch(0.965 0.045 80);
+    --kb-danger: var(--destructive);
+    --kb-danger-bg: oklch(0.96 0.03 25);
+
+    --kb-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    --kb-frame-max: 88rem;
 }
+
+@layer theme {
+    .dark {
+        --color-accent: var(--color-white);
+        --color-accent-content: var(--color-white);
+        --color-accent-foreground: var(--color-neutral-800);
+
+        --kb-mirror-bg: oklch(0.185 0.006 250);
+        --kb-mirror-border: oklch(0.30 0.01 250);
+        --kb-note: oklch(0.80 0.09 205);
+        --kb-note-bg: oklch(0.28 0.04 205);
+        --kb-transcript: oklch(0.79 0.10 285);
+        --kb-transcript-bg: oklch(0.28 0.045 285);
+        --kb-ok: oklch(0.80 0.11 155);
+        --kb-ok-bg: oklch(0.27 0.05 155);
+        --kb-warn: oklch(0.83 0.11 80);
+        --kb-warn-bg: oklch(0.28 0.05 75);
+        --kb-danger: oklch(0.75 0.14 25);
+        --kb-danger-bg: oklch(0.28 0.06 25);
+    }
+}
+
+/*
+ * Base surface tokens this Flux kit does not ship itself (Flux styles via
+ * Tailwind zinc utilities directly). Mirrors .larapilot/design-systems/starter-kit/tokens.css
+ * so --kb-danger: var(--destructive) and the rest of kbms.css's var(--card) /
+ * var(--border) usage resolve to something real.
+ */
+:root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --ring: oklch(0.87 0 0);
+    --radius: 0.625rem;
+}
+
+.dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.145 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --destructive: oklch(0.396 0.141 25.723);
+    --border: oklch(0.269 0 0);
+    --ring: oklch(0.439 0 0);
+}
+
+.kb-skip {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    z-index: 50;
+    padding: 0.5rem 0.875rem;
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--color-accent-content);
+    color: var(--color-accent-foreground);
+    font-weight: 500;
+    text-decoration: none;
+    transition: top 0.12s ease-out;
+}
+
+.kb-skip:focus-visible {
+    top: 0.5rem;
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+}
+
+@layer base {
+
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-gray-200, currentColor);
+    }
+}
+
+[data-flux-field]:not(ui-radio, ui-checkbox) {
+    @apply grid gap-2;
+}
+
+[data-flux-label] {
+    @apply  !mb-0 !leading-tight;
+}
+
+input:focus[data-flux-control],
+textarea:focus[data-flux-control],
+select:focus[data-flux-control] {
+    @apply outline-hidden ring-2 ring-accent ring-offset-2 ring-offset-accent-foreground;
+}
+
+/* \[:where(&)\]:size-4 {
+    @apply size-4;
+} */
