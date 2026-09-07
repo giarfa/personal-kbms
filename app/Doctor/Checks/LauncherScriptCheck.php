@@ -26,14 +26,14 @@ final class LauncherScriptCheck implements EnvironmentCheck
         if (! is_file($path)) {
             return CheckResult::failed(
                 "no file at \"{$path}\"",
-                '`KBMS_CLAUDE_LAUNCHER` no file at the configured path'
+                "`KBMS_CLAUDE_LAUNCHER` is set to a path with no file at \"{$path}\""
             );
         }
 
         if (! is_executable($path)) {
             return CheckResult::failed(
                 "\"{$path}\" is not executable",
-                '`KBMS_CLAUDE_LAUNCHER` the script exists but is not executable — run `chmod +x '.$path.'`'
+                "`KBMS_CLAUDE_LAUNCHER` the script exists but is not executable — run `chmod +x {$path}`"
             );
         }
 
