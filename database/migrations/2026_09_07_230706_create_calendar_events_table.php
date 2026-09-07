@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('calendar_events', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('source_uid');
-            $table->string('recurrence_id');
+            $table->string('recurrence_id')->default('');
             $table->string('summary')->nullable();
             $table->text('description')->nullable();
             $table->string('location')->nullable();

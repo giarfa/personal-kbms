@@ -57,6 +57,9 @@ class CalendarEventFactory extends Factory
 
     /**
      * An all-day occurrence stored as a naive date, never timezone-converted.
+     * `recurrence_id` stays whatever the base definition or `occurrenceOf()`
+     * set — only a recurring all-day occurrence uses the Y-m-d form; a
+     * standalone all-day event's recurrence_id is always ''.
      */
     public function allDay(): static
     {
@@ -68,7 +71,6 @@ class CalendarEventFactory extends Factory
                 'ends_at' => $date.' 00:00:00',
                 'is_all_day' => true,
                 'timezone' => null,
-                'recurrence_id' => $date,
             ];
         });
     }
