@@ -403,14 +403,14 @@ tasks:
       9. `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `php artisan config:show database.default` reports `sqlite` and `database.connections.sqlite.database` resolves to `database/database.sqlite`
-      - [ ] A fresh `git clone` + `composer setup` migrates with **no manual file creation**
-      - [ ] `php artisan config:show queue.default` reports `database`; `jobs`, `job_batches`, and `failed_jobs` tables exist after migrate
-      - [ ] `php artisan kbms:queue-test` + `php artisan queue:work --stop-when-empty` processes the job and writes the expected log line
-      - [ ] `php artisan schedule:list` shows `kbms:sync-calendar` at the configured interval with `withoutOverlapping`
-      - [ ] `php artisan kbms:sync-calendar` exits non-zero with the `not implemented — US-003` message — it does not pretend to sync
-      - [ ] `database/database.sqlite` is not tracked by git
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `php artisan config:show database.default` reports `sqlite` and `database.connections.sqlite.database` resolves to `database/database.sqlite`
+      - [x] A fresh `git clone` + `composer setup` migrates with **no manual file creation**
+      - [x] `php artisan config:show queue.default` reports `database`; `jobs`, `job_batches`, and `failed_jobs` tables exist after migrate
+      - [x] `php artisan kbms:queue-test` + `php artisan queue:work --stop-when-empty` processes the job and writes the expected log line
+      - [x] `php artisan schedule:list` shows `kbms:sync-calendar` at the configured interval with `withoutOverlapping`
+      - [x] `php artisan kbms:sync-calendar` exits non-zero with the `not implemented — US-003` message — it does not pretend to sync
+      - [x] `database/database.sqlite` is not tracked by git
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no Eloquent domain model or schema of our own; only the framework's queue tables
@@ -420,11 +420,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Mike
     estimate_hours: 3
     dependencies:
       - TASK-02
+    commit:
+      sha: 8f73fe6e29d07fe2cb2caf07a4feefd8bfaddbd2
+      short_sha: 8f73fe6
+      subject: 'feat(US-001): TASK-04 wire SQLite, database queue and calendar sync schedule'
+      committed_at: '2026-09-07T20:55:25+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/8f73fe6e29d07fe2cb2caf07a4feefd8bfaddbd2'
   -
     id: TASK-05
     title: 'Declare the KBMS configuration surface'
@@ -696,4 +702,4 @@ tasks:
     dependencies:
       - TASK-08
       - TASK-09
-updated_at: '2026-09-07T18:53:16+00:00'
+updated_at: '2026-09-07T18:55:29+00:00'
