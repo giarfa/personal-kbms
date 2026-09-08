@@ -6,7 +6,7 @@ epic:
   objective: 'The subscribed Outlook feed is mirrored locally with correct recurrence and timezone handling, and its freshness is always visible'
 priority: HIGH
 points: 3
-status: PLANNED
+status: 'IN PROGRESS'
 body: |
   #### US-004: Calendar sync health and manual resync
 
@@ -35,4 +35,7 @@ status_history:
   -
     status: PLANNED
     at: '2026-09-08T06:28:40+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-08T07:46:35+02:00'
 rework: false

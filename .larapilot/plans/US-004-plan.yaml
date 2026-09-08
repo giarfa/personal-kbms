@@ -92,7 +92,7 @@ tasks:
     id: TASK-00
     title: 'Bootstrap feature branch and draft internal PR'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
@@ -110,8 +110,8 @@ tasks:
       4. Anchor commit: `chore(US-004): TASK-00 bootstrap feature branch` (empty commit allowed)
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-004-sync-health-resync` exists locally off `develop`
-      - [ ] PR title/body drafted toward `develop` (remote untouched)
+      - [x] Branch `feature/US-004-sync-health-resync` exists locally off `develop`
+      - [x] PR title/body drafted toward `develop` (remote untouched)
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -120,6 +120,12 @@ tasks:
       - Commit: `chore(US-004): TASK-00 bootstrap feature branch` (empty commit allowed)
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally — open the remote PR only if the user asks
+    commit:
+      sha: 2c094ceee92b0cd3595f29afd851dd234e42b617
+      short_sha: 2c094ce
+      subject: 'chore(US-004): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-08T07:46:39+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/2c094ceee92b0cd3595f29afd851dd234e42b617'
   -
     id: TASK-01
     title: 'Sync health read model: state enum, value object, reporter, stuck-run guard'
@@ -470,4 +476,4 @@ tasks:
       - Commit: `chore(US-004): TASK-08 document sync health config and settle the demo seed`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`; open the remote only if the user asks
-updated_at: '2026-09-08T06:28:40+02:00'
+updated_at: '2026-09-08T07:46:39+02:00'
