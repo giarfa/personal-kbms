@@ -363,4 +363,17 @@ decisions:
     source: chat
     spec: US-005
     supersedes: null
-updated_at: '2026-09-08T19:31:55+02:00'
+  -
+    id: effd87cd9761dffc
+    ts: '2026-09-08T23:28:42+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-005 review verdict'
+    label: 'US-005 review verdict'
+    value: 'Request changes — multi-day timed events dropped from the agenda (AgendaQuery all-day-only clamp) and HTTP 500 on a malformed ?date= query string; both reproduced at the gate'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-005
+    supersedes: null
+updated_at: '2026-09-08T23:28:42+02:00'
