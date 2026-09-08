@@ -6,6 +6,7 @@ use App\Calendar\SyncHealthReporter;
 use App\Meetings\AgendaQuery;
 use App\Meetings\AgendaRange;
 use Carbon\CarbonImmutable;
+use Exception;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -19,7 +20,7 @@ class Agenda extends Component
 
     public function mount(): void
     {
-        $this->date ??= AgendaRange::today()->anchor->toDateString();
+        $this->date = $this->anchor()->toDateString();
     }
 
     public function previous(): void
@@ -50,6 +51,21 @@ class Agenda extends Component
 
     private function range(): AgendaRange
     {
-        return new AgendaRange(CarbonImmutable::parse($this->date));
+        return new AgendaRange($this->anchor());
+    }
+
+    /**
+     * The anchor is a #[Url] property, so it is a bookmarkable, hand-editable
+     * surface: a truncated or edited value must degrade to today rather than
+     * throw a parse error out of render(). startOfDay() also keeps a
+     * datetime-valued anchor from shifting the window bounds.
+     */
+    private function anchor(): CarbonImmutable
+    {
+        try {
+            return CarbonImmutable::parse($this->date)->startOfDay();
+        } catch (Exception) {
+            return AgendaRange::today()->anchor;
+        }
     }
 }

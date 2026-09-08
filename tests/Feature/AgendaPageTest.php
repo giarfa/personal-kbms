@@ -43,6 +43,47 @@ class AgendaPageTest extends TestCase
             ->assertDontSee('Far future planning');
     }
 
+    public function test_an_unparseable_anchor_date_falls_back_to_today_instead_of_throwing(): void
+    {
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Client kickoff',
+        ]);
+
+        // `date` is a #[Url] property: a truncated or hand-edited bookmark must
+        // not reach CarbonImmutable::parse() and 500 the application's index route.
+        $this->get('/?date=not-a-date')
+            ->assertOk()
+            ->assertSee('Client kickoff');
+    }
+
+    public function test_a_calendar_impossible_anchor_date_falls_back_to_today(): void
+    {
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Client kickoff',
+        ]);
+
+        $this->get('/?date=2026-02-31T99:99')
+            ->assertOk()
+            ->assertSee('Client kickoff');
+    }
+
+    public function test_a_datetime_valued_anchor_is_normalized_to_the_start_of_its_day(): void
+    {
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Client kickoff',
+        ]);
+
+        Livewire::test(Agenda::class, ['date' => '2026-09-08 17:45:00'])
+            ->assertSet('date', '2026-09-08')
+            ->assertSee('Client kickoff');
+    }
+
+    public function test_an_invalid_anchor_is_rewritten_so_the_bookmarked_url_self_corrects(): void
+    {
+        Livewire::test(Agenda::class, ['date' => 'yesterday-ish'])
+            ->assertSet('date', '2026-09-08');
+    }
+
     public function test_next_and_previous_move_the_window(): void
     {
         CalendarEvent::factory()->at(now('Europe/Rome')->addDays(10)->setTime(9, 30), 30)->create([
