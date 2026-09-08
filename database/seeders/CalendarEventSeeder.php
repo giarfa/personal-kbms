@@ -43,11 +43,12 @@ class CalendarEventSeeder extends Seeder
             ->values()
             ->all();
 
-        // Today: a multi-day all-day offsite, two overlapping timed meetings, and a cancelled one.
-        CalendarEvent::factory()->spanning(1)->create([
+        // Today: a multi-day all-day offsite (today + tomorrow), two overlapping timed
+        // meetings, and a cancelled one.
+        CalendarEvent::factory()->spanning(2)->create([
             'summary' => 'Offsite: product strategy',
             'starts_at' => $today->clone()->format('Y-m-d').' 00:00:00',
-            'ends_at' => $today->clone()->addDay()->format('Y-m-d').' 00:00:00',
+            'ends_at' => $today->clone()->addDays(2)->format('Y-m-d').' 00:00:00',
         ]);
 
         CalendarEvent::factory()->at($today->clone()->setTime(9, 30), 60)->create([
@@ -79,7 +80,7 @@ class CalendarEventSeeder extends Seeder
 
         CalendarEvent::factory()->allDay()->create([
             'starts_at' => $today->clone()->addDays($fillerOffsetA)->format('Y-m-d').' 00:00:00',
-            'ends_at' => $today->clone()->addDays($fillerOffsetA)->format('Y-m-d').' 00:00:00',
+            'ends_at' => $today->clone()->addDays($fillerOffsetA + 1)->format('Y-m-d').' 00:00:00',
         ]);
 
         CalendarEvent::factory()->at($today->clone()->addDays($fillerOffsetB)->setTime(16, 0), 30)->create([

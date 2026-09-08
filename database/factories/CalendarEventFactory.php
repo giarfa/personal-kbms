@@ -58,9 +58,11 @@ class CalendarEventFactory extends Factory
 
     /**
      * An all-day occurrence stored as a naive date, never timezone-converted.
-     * `recurrence_id` stays whatever the base definition or `occurrenceOf()`
-     * set — only a recurring all-day occurrence uses the Y-m-d form; a
-     * standalone all-day event's recurrence_id is always ''.
+     * `ends_at` is exclusive per RFC 5545 `DTEND` — a single-day event's
+     * `ends_at` is one day after `starts_at` (see IcsParser). `recurrence_id`
+     * stays whatever the base definition or `occurrenceOf()` set — only a
+     * recurring all-day occurrence uses the Y-m-d form; a standalone all-day
+     * event's recurrence_id is always ''.
      */
     public function allDay(): static
     {
@@ -69,7 +71,7 @@ class CalendarEventFactory extends Factory
 
             return [
                 'starts_at' => $date.' 00:00:00',
-                'ends_at' => $date.' 00:00:00',
+                'ends_at' => date('Y-m-d', strtotime($date.' +1 day')).' 00:00:00',
                 'is_all_day' => true,
                 'timezone' => null,
             ];
@@ -128,7 +130,8 @@ class CalendarEventFactory extends Factory
     }
 
     /**
-     * An all-day event spanning `$days` days, for the multi-day clamp path.
+     * An all-day event covering `$days` calendar days (exclusive `ends_at`,
+     * matching IcsParser). Use `$days >= 2` for the multi-day clamp path.
      */
     public function spanning(int $days): static
     {
