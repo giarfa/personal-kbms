@@ -431,7 +431,7 @@ tasks:
     id: TASK-07
     title: 'Feature tests for the sync health interface'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 3
     dependencies:
@@ -460,16 +460,22 @@ tasks:
       7. `php artisan test --compact`
 
       ## Completion Criteria
-      - [ ] Success, failure, in-progress, stale, and never-synced each have a named feature test (the AC's explicit list)
-      - [ ] Tests assert the distinguishing strings, not just HTTP 200
-      - [ ] The resync control's **absence** while syncing is asserted, not its `disabled` attribute
-      - [ ] The pill is proven present on both shell routes
-      - [ ] Full suite green — no Playwright, Dusk, or viewport suites (`settings.testing: NORMAL`)
+      - [x] Success, failure, in-progress, stale, and never-synced each have a named feature test (the AC's explicit list)
+      - [x] Tests assert the distinguishing strings, not just HTTP 200
+      - [x] The resync control's **absence** while syncing is asserted, not its `disabled` attribute
+      - [x] The pill is proven present on both shell routes
+      - [x] Full suite green — no Playwright, Dusk, or viewport suites (`settings.testing: NORMAL`)
 
       ## Git Deliverables
       - Commit: `test(US-004): TASK-07 cover sync health states in the interface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: bd1e031e914370ee2a2f3d88f5492f5b8a08657f
+      short_sha: bd1e031
+      subject: 'test(US-004): TASK-07 cover sync health states in the interface'
+      committed_at: '2026-09-08T08:05:19+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/bd1e031e914370ee2a2f3d88f5492f5b8a08657f'
   -
     id: TASK-08
     title: 'Seeder coherence, README env surface, and quality gate'
@@ -512,4 +518,4 @@ tasks:
       - Commit: `chore(US-004): TASK-08 document sync health config and settle the demo seed`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`; open the remote only if the user asks
-updated_at: '2026-09-08T08:00:06+02:00'
+updated_at: '2026-09-08T08:05:19+02:00'
