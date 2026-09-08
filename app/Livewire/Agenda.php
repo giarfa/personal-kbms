@@ -57,13 +57,13 @@ class Agenda extends Component
     /**
      * The anchor is a #[Url] property, so it is a bookmarkable, hand-editable
      * surface: a truncated or edited value must degrade to today rather than
-     * throw a parse error out of render(). startOfDay() also keeps a
-     * datetime-valued anchor from shifting the window bounds.
+     * throw a parse error out of render(). AgendaRange normalizes the time
+     * component itself.
      */
     private function anchor(): CarbonImmutable
     {
         try {
-            return CarbonImmutable::parse($this->date)->startOfDay();
+            return CarbonImmutable::parse($this->date);
         } catch (Exception) {
             return AgendaRange::today()->anchor;
         }

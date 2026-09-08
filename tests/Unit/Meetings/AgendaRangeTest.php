@@ -31,6 +31,26 @@ class AgendaRangeTest extends TestCase
         $this->assertSame(7, $range->days);
     }
 
+    public function test_a_time_component_on_the_anchor_is_normalized_away(): void
+    {
+        // AgendaQuery's no-drop guarantee depends on the window's exclusive end
+        // landing on a day boundary, so the invariant belongs to the constructor
+        // rather than to whichever caller happens to remember it.
+        $range = new AgendaRange(CarbonImmutable::parse('2026-09-08 17:45:00'));
+
+        $this->assertSame('2026-09-08 00:00:00', $range->anchor->toDateTimeString());
+        $this->assertSame('2026-09-15 00:00:00', $range->endsAt()->toDateTimeString());
+    }
+
+    public function test_stepping_and_jumping_preserve_the_start_of_day_invariant(): void
+    {
+        $range = new AgendaRange(CarbonImmutable::parse('2026-09-08 17:45:00'));
+
+        $this->assertSame('2026-09-15 00:00:00', $range->next()->anchor->toDateTimeString());
+        $this->assertSame('2026-09-01 00:00:00', $range->previous()->anchor->toDateTimeString());
+        $this->assertSame('2026-10-02 00:00:00', $range->jumpTo(CarbonImmutable::parse('2026-10-02 23:59:59'))->anchor->toDateTimeString());
+    }
+
     public function test_previous_and_next_step_by_exactly_the_window_length(): void
     {
         $range = AgendaRange::today();

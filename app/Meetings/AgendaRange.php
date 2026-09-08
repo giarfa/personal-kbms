@@ -10,11 +10,21 @@ use Carbon\CarbonInterface;
  */
 final readonly class AgendaRange
 {
-    public function __construct(public CarbonImmutable $anchor, public int $days = 7) {}
+    public CarbonImmutable $anchor;
+
+    public function __construct(CarbonImmutable $anchor, public int $days = 7)
+    {
+        // Structural, not cosmetic: every consumer treats the anchor as a calendar
+        // day, and AgendaQuery's no-drop guarantee depends on it. A time component
+        // shifts the window's exclusive end off the day boundary, so a row the
+        // overlap predicate already fetched gets grouped outside dates() and
+        // disappears — the same defect the day-one clamp exists to prevent.
+        $this->anchor = $anchor->startOfDay();
+    }
 
     public static function today(int $days = 7): self
     {
-        return new self(CarbonImmutable::now(config('kbms.timezone'))->startOfDay(), $days);
+        return new self(CarbonImmutable::now(config('kbms.timezone')), $days);
     }
 
     public function previous(): self
@@ -29,7 +39,7 @@ final readonly class AgendaRange
 
     public function jumpTo(CarbonInterface $date): self
     {
-        return new self(CarbonImmutable::parse($date)->startOfDay(), $this->days);
+        return new self(CarbonImmutable::parse($date), $this->days);
     }
 
     /**

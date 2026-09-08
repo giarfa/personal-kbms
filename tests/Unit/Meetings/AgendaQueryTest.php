@@ -214,6 +214,41 @@ class AgendaQueryTest extends TestCase
         $this->assertNull($rows[0]->spanLabel);
     }
 
+    public function test_a_row_at_the_upper_edge_survives_an_anchor_carrying_a_time(): void
+    {
+        // The mirror image of the clamp defect: a time component used to push the
+        // window's exclusive end past midnight, fetching a row the grouping then
+        // discarded. AgendaRange normalizes, so fetched and rendered must agree.
+        CalendarEvent::factory()->create([
+            'summary' => 'Upper edge meeting',
+            'is_all_day' => false,
+            'starts_at' => '2026-09-15 09:00:00',
+            'ends_at' => '2026-09-15 10:00:00',
+        ]);
+
+        $days = AgendaQuery::for(new AgendaRange(CarbonImmutable::parse('2026-09-08 17:45:00')));
+
+        $this->assertSame(0, $days->sum(fn (AgendaDay $day): int => $day->meetingCount));
+        $this->assertCount(7, $days);
+        $this->assertSame('2026-09-14', $days->last()->date->toDateString());
+    }
+
+    public function test_a_sub_minute_duration_is_rounded_rather_than_truncated(): void
+    {
+        // Carbon 3 returns a float from diffInMinutes(); a feed event carrying
+        // seconds must not implicitly truncate into the int property.
+        CalendarEvent::factory()->create([
+            'summary' => 'Ninety second standup',
+            'is_all_day' => false,
+            'starts_at' => '2026-09-08 09:00:00',
+            'ends_at' => '2026-09-08 09:01:30',
+        ]);
+
+        $rows = $this->dayFor(AgendaQuery::for(AgendaRange::today()), '2026-09-08')->rows;
+
+        $this->assertSame(2, $rows[0]->durationMinutes);
+    }
+
     public function test_a_range_with_no_events_returns_every_date_with_zero_rows(): void
     {
         $days = AgendaQuery::for(AgendaRange::today());
