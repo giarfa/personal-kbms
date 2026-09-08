@@ -22,6 +22,13 @@ class AgendaQuery
         $to = $range->endsAt();
         $fromDate = $from->toDateString();
 
+        // One overlap predicate for both timed and all-day rows: EventSynchronizer
+        // stores starts_at/ends_at as config('app.timezone')-local wall-clock digits
+        // (never UTC — see its own docblock), so comparing against $from/$to built in
+        // config('kbms.timezone') is only correct because the two configs are the same
+        // value. Do not "fix" this by converting to UTC, and do not split all-day back
+        // into a separate whereDate() branch — both would break under the real storage
+        // convention.
         $rows = CalendarEvent::query()
             ->where('starts_at', '<', $to)
             ->where('ends_at', '>', $from)

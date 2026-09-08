@@ -12,7 +12,7 @@ class OutlookLinkBuilder
 {
     public function for(CalendarEvent $event): OutlookLink
     {
-        if ($event->event_url !== null) {
+        if ($event->event_url !== null && $this->isSafeUrl($event->event_url)) {
             return new OutlookLink($event->event_url, OutlookLinkSource::Feed);
         }
 
@@ -31,7 +31,19 @@ class OutlookLinkBuilder
      */
     public function teamsUrl(CalendarEvent $event): ?string
     {
-        return $event->join_url;
+        return $event->join_url !== null && $this->isSafeUrl($event->join_url) ? $event->join_url : null;
+    }
+
+    /**
+     * The feed is a semi-trusted third party: reject anything but http(s) so a
+     * malicious/compromised ICS source can never smuggle a `javascript:` (or
+     * other dangerous-scheme) URL into a rendered `href`.
+     */
+    private function isSafeUrl(string $url): bool
+    {
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+
+        return in_array(strtolower((string) $scheme), ['http', 'https'], true);
     }
 
     private function substitute(string $template, CalendarEvent $event): string

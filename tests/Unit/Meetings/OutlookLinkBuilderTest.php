@@ -86,4 +86,20 @@ class OutlookLinkBuilderTest extends TestCase
         // Teams presence never changes the Outlook outcome.
         $this->assertSame(OutlookLinkSource::Template, $this->builder()->for($withTeams)->source);
     }
+
+    public function test_a_dangerous_event_url_scheme_is_rejected_and_falls_back_to_the_template(): void
+    {
+        $event = CalendarEvent::factory()->make(['event_url' => 'javascript:alert(1)']);
+
+        $link = $this->builder()->for($event);
+
+        $this->assertSame(OutlookLinkSource::Template, $link->source);
+    }
+
+    public function test_a_dangerous_join_url_scheme_is_rejected(): void
+    {
+        $event = CalendarEvent::factory()->make(['join_url' => 'javascript:alert(1)']);
+
+        $this->assertNull($this->builder()->teamsUrl($event));
+    }
 }
