@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Meetings\OccurrenceKey;
 use Carbon\CarbonInterface;
 use Database\Factories\CalendarEventFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -43,5 +44,18 @@ class CalendarEvent extends Model
     public function scopeInWindow(Builder $query, CarbonInterface $from, CarbonInterface $to): Builder
     {
         return $query->whereBetween('starts_at', [$from, $to]);
+    }
+
+    /**
+     * Scope to the single occurrence addressed by the given natural key.
+     */
+    public function scopeForOccurrence(Builder $query, OccurrenceKey $key): Builder
+    {
+        return $query->where('source_uid', $key->sourceUid)->where('recurrence_id', $key->recurrenceId);
+    }
+
+    public function occurrenceKey(): OccurrenceKey
+    {
+        return new OccurrenceKey($this->source_uid, $this->recurrence_id);
     }
 }

@@ -9,7 +9,10 @@ use App\Doctor\Checks\SchedulerRegistrationCheck;
 use App\Doctor\Checks\TimezoneCheck;
 use App\Doctor\Checks\TranscriptsDirectoryCheck;
 use App\Doctor\CheckSuite;
+use App\Meetings\OccurrenceKey;
+use App\Models\CalendarEvent;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -34,6 +37,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Route::bind('occurrence', fn (string $value): CalendarEvent => CalendarEvent::query()
+            ->forOccurrence(OccurrenceKey::fromRouteKey($value) ?? abort(404))
+            ->firstOrFail());
     }
 }
