@@ -216,6 +216,41 @@
     color: var(--muted-foreground);
 }
 
+.kb-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid color-mix(in oklch, var(--kb-danger) 40%, var(--border));
+    border-radius: var(--radius);
+    background: var(--kb-danger-bg);
+    font-size: 0.8125rem;
+}
+
+.kb-banner--warn {
+    border-color: color-mix(in oklch, var(--kb-warn) 45%, var(--border));
+    background: var(--kb-warn-bg);
+}
+
+.kb-banner strong {
+    display: block;
+    margin-bottom: 0.125rem;
+}
+
+.kb-banner code {
+    font-family: var(--kb-mono);
+    font-size: 0.75rem;
+    word-break: break-all;
+}
+
+.kb-banner__actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.001ms !important;

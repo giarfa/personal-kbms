@@ -23,6 +23,8 @@
             </button>
         </flux:header>
 
+        <livewire:sync-alert />
+
         {{ $slot }}
     </flux:main>
 </x-layouts::app.sidebar>

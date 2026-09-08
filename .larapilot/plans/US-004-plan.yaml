@@ -319,7 +319,7 @@ tasks:
     id: TASK-05
     title: 'SyncStatus pill: first Livewire component, header wiring, pill styles'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 4
     dependencies:
@@ -355,13 +355,13 @@ tasks:
       11. `php artisan test --compact --filter=AppShellTest`
 
       ## Completion Criteria
-      - [ ] The pill renders on every page of the shell, with last successful sync in **both** relative and absolute form
-      - [ ] The resync control is **absent from the DOM** while a run is in progress, not merely disabled
-      - [ ] "Never synced" renders literally when no run exists
-      - [ ] `config/livewire.php` pins class-based generation for the specs that follow
-      - [ ] `sync-health-changed` fires on state change only, not on every poll tick
-      - [ ] Header layout intact at 375 px and 1280 px, both themes
-      - [ ] Existing `AppShellTest` still passes
+      - [x] The pill renders on every page of the shell, with last successful sync in **both** relative and absolute form
+      - [x] The resync control is **absent from the DOM** while a run is in progress, not merely disabled
+      - [x] "Never synced" renders literally when no run exists
+      - [x] `config/livewire.php` pins class-based generation for the specs that follow
+      - [x] `sync-health-changed` fires on state change only, not on every poll tick
+      - [x] Header layout intact at 375 px and 1280 px, both themes
+      - [x] Existing `AppShellTest` still passes
 
       ## Test Data
       - N/A — no model, schema, or factory changes in this task
@@ -370,6 +370,12 @@ tasks:
       - Commit: `feat(US-004): TASK-05 add sync status pill to the app shell`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: b0c15206008b0794dbdfad6a7eb8a23044e596f7
+      short_sha: b0c1520
+      subject: 'feat(US-004): TASK-05 add sync status pill to the app shell'
+      committed_at: '2026-09-08T07:57:35+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b0c15206008b0794dbdfad6a7eb8a23044e596f7'
   -
     id: TASK-06
     title: 'SyncAlert banner: failure reason legible without opening storage/logs'
@@ -500,4 +506,4 @@ tasks:
       - Commit: `chore(US-004): TASK-08 document sync health config and settle the demo seed`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`; open the remote only if the user asks
-updated_at: '2026-09-08T07:54:24+02:00'
+updated_at: '2026-09-08T07:57:36+02:00'
