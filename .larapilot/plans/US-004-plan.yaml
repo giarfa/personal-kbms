@@ -1,0 +1,473 @@
+code: US-004
+plan_body: |
+  ## Technical Solution
+
+  US-004 turns the `calendar_sync_runs` history US-003 already writes into a **health verdict** the shell renders everywhere, plus a guarded manual resync. No new table, no migration — one derived read model, one dispatch guard, two Livewire components.
+
+  ### Derived read model (no schema change)
+
+  `App\Calendar\SyncHealthState` (enum, string-backed) — `Never`, `Syncing`, `Ok`, `Stale`, `Failed`. `App\Calendar\SyncHealth` (final readonly value object) — the enum plus `lastSuccessAt`, `lastAttemptAt`, `lastError`, `lastErrorAt`, `httpStatus`, `awaitingWorker`. `App\Calendar\SyncHealthReporter` — a container-resolved service that reads the run history once and returns a `SyncHealth`. Views never query `CalendarSyncRun` directly.
+
+  **Resolution order** (first match wins — this ordering is the contract, and TASK-02 pins it):
+
+  1. A `Running` run started within `kbms.sync_stuck_after_seconds` → `Syncing`.
+  2. A resync dispatch marker in cache with no run row yet → `Syncing` with `awaitingWorker` once the marker outlives the grace window (renders "queued — no worker picked this up").
+  3. No run rows at all → `Never`.
+  4. Latest finished run is `Failed` → `Failed` (carrying `error` + `http_status`; the previous mirror stays on screen).
+  5. No `Success`/`NotModified` run recorded → `Never` (defensive: every success pruned or abandoned).
+  6. `lastSuccessAt` older than `sync_minutes × sync_stale_multiplier` → `Stale`.
+  7. Otherwise → `Ok`.
+
+  **`NotModified` counts as a successful sync.** A 304 means the mirror was confirmed current against the feed. Treating it as "not a success" would mark a perfectly healthy calendar that simply has not changed as stale within one interval — the exact false alarm this spec exists to avoid. `CalendarSyncRun::latestValidators()` already groups the two statuses this way; the reporter reuses that grouping.
+
+  **Stuck-run guard.** A `Running` row whose worker died never finishes, so the pill would read "Syncing" forever *and* the resync control would stay hidden — a silent failure worse than the stale mirror this spec is about. The reporter marks `Running` rows older than `kbms.sync_stuck_after_seconds` (default 300s = 2× the job's 120s timeout) as `Failed` with a legible reason naming `php artisan queue:work`, then resolves against the corrected history. This is a write during a read path: it is idempotent, touches at most the one abandoned row, and keeps the persisted history honest rather than papering over it in the view layer. The alternative — a scheduled reaper command — is more machinery than a single-operator localhost tool earns.
+
+  ### Duplicate-run prevention (AC: error case)
+
+  Three independent layers, because each fails differently:
+
+  1. **UI** — when the state is `Syncing`, the resync control is **removed from the DOM, not disabled** (the mockup states this explicitly). A hidden control cannot be clicked, focused, or submitted.
+  2. **Action** — `App\Calendar\ResyncDispatcher` re-reads the health inside the request and refuses when a run is in progress, returning a `ResyncOutcome` enum rather than throwing. A stale poll that POSTs a resync a second after a scheduled run started hits this, not the queue.
+  3. **Queue** — `SyncCalendarFeed` already implements `ShouldBeUnique`, but with **no `$uniqueFor`** the lock is held until the job completes; a killed worker holds it forever and permanently blocks every future resync. TASK-03 sets `$uniqueFor` to the same stuck threshold and an explicit `uniqueId()`, so the lock self-heals on the same clock as the stuck-run guard.
+
+  The scheduler's existing `->withoutOverlapping()` covers cron-vs-cron; it does **not** cover UI-vs-cron, which is why layers 2 and 3 are needed.
+
+  ### Presentation
+
+  Two **class-based** Livewire components (recorded decision `livewire component style`, 2026-09-08 — class-based keeps component logic inside the mandatory Larastan level-5 analysis, which does not scan Blade-embedded anonymous classes, and keeps tests in `tests/Feature` under PHPUnit rather than the Pest file `make:livewire --test` scaffolds for SFCs):
+
+  - **`App\Livewire\SyncStatus`** — the header pill. Owns `wire:poll.60s` (the mockup's stated cadence for a local tool) and the `resync()` action. `aria-live="polite"`.
+  - **`App\Livewire\SyncAlert`** — the full-width failure/stale banner above the page slot, `role="alert"`, carrying the error text, the affected config key, and a `php artisan kbms:doctor` hint. It does **not** poll: `SyncStatus` dispatches `sync-health-changed` only when the resolved state actually changes, and `SyncAlert` listens via `#[On]`. One poll for the shell, no drifting double state.
+
+  `layouts/app.blade.php` already reserves the header slot (`{{-- Sync pill lands here — US-004 --}}`). Pill styling follows the existing `.kb-skip` precedent: hand-written `.kb-sync*` classes in `resources/css/app.css` built on the `--kb-ok/warn/danger/transcript` tokens US-001 already registered. Tailwind 4 generates no `bg-kb-ok` utility from a non-`--color-*` `@theme` entry, so utilities are not an option here without aliasing tokens the mockup README forbids touching.
+
+  ### Timestamps
+
+  Every state renders **relative and absolute** together (`Synced 4 min ago · 12:36`), formatted in `config('kbms.timezone')`, with the full ISO datetime in `title`/`datetime`. `Never` renders the literal string "Never synced" — never a humanised epoch, never an empty span.
+
+  ### Wording is contract
+
+  `states.html` fixes five mutually distinguishable strings: **never synced ≠ stale ≠ failed ≠ syncing ≠ synced**. TASK-07 asserts on those strings, not on status codes.
+
+  ### New configuration
+
+  | Key | Env | Default | Purpose |
+  | --- | --- | --- | --- |
+  | `kbms.sync_stale_multiplier` | `KBMS_SYNC_STALE_MULTIPLIER` | `3` | Stale after this many sync intervals without a success (mockup: ">3× the interval") |
+  | `kbms.sync_stuck_after_seconds` | `KBMS_SYNC_STUCK_AFTER_SECONDS` | `300` | A `Running` run older than this is abandoned; also `SyncCalendarFeed::$uniqueFor` |
+
+  `config/livewire.php` is published in TASK-05 solely to pin `make_command.type = class` and `emoji = false`, so future components (US-005…US-009) are generated the agreed way rather than relying on every agent remembering a flag.
+
+  ### Out of scope
+
+  No broadcasting/websockets (polling is sufficient and the PRD keeps this machine-local); no sync history page (FR-010 asks for last success + last error, not an audit UI); no notification surface.
+
+  ## Git & Branching
+
+  - Mode: `GITFLOW` (from `settings.git_mode`) — **never auto-push**
+  - Branch: `feature/US-004-sync-health-resync` from `develop` (`develop` is current and carries the merged US-003 work)
+  - TASK-00: bootstrap the branch and draft the internal PR body locally
+  - Per task: one atomic Conventional Commit `type(US-004): TASK-NN summary` — never batch tasks
+  - PR toward `develop` prepared locally; open/update the remote only if the user asks in-session
+  - Merge to `develop` only after human `/larapilot-review` approval
+
+  ## Test Data Strategy
+
+  - `CalendarSyncRunFactory` already ships `successful()`, `failed()`, `notModified()`, `running()`. TASK-01 adds `abandoned()` (a `Running` row started well past the stuck threshold) and `stale()` (a success old enough to trip the multiplier) so every rendered state is expressible in one factory call.
+  - No new model and no migration — `calendar_events` and `calendar_sync_runs` are unchanged. `CalendarEventFactory` is untouched.
+  - `CalendarSyncRunSeeder` is refreshed in TASK-08 so `migrate:fresh --seed` lands on a **healthy** mirror by default (a recent success), with the failure and 304 rows kept as history rather than as the current verdict — today's seeder leaves the newest row ambiguous for a demo.
+  - Verify `php artisan migrate:fresh --seed` before `task-done` on TASK-01 and TASK-08.
+
+  ## Test Strategy
+
+  - Bar: **`NORMAL`** (from `settings.testing`). No Playwright, no Dusk, no Pest browser, no viewport matrix, no axe automation. PHPUnit throughout — this project runs PHPUnit, not Pest, despite Livewire's Pest scaffolding.
+  - **Unit** (`tests/Unit/Calendar/SyncHealthReporterTest.php`, TASK-02) — the resolution order above, one test per branch: never / syncing / ok / stale / failed, plus 304-counts-as-success, the stale boundary at exactly `n ×` the interval, and stuck-run abandonment writing a legible error.
+  - **Feature — dispatch** (`tests/Feature/SyncResyncTest.php`, TASK-04) — `Queue::fake()` duplicate suppression, refusal while a run is in progress, `$uniqueFor` present and equal to the stuck threshold, dispatch-marker lifecycle.
+  - **Feature — UI** (`tests/Feature/SyncStatusTest.php`, TASK-07) — `Livewire::test()` over all five states asserting the distinguishing strings; the resync control **absent** (not merely disabled) while syncing; `resync()` dispatching the job and transitioning state; the banner rendering the failure reason and `role="alert"`; the pill present on both `/` and `/calendar` via `assertSeeLivewire`.
+  - Time-sensitive tests use `$this->travelTo()` / `travel()`, matching `SyncCalendarFeedJobTest`'s existing convention.
+  - `php artisan larapilot:quality` (Pint + Larastan level 5) green before review — TASK-08.
+  - **Manual test handoff** (UI, per the mockup test contract): keyboard-only reach and activation of the resync control; the pill announced by a screen reader on state change (`aria-live`); the pulse neutralised under `prefers-reduced-motion: reduce`; both themes checked against `states.html`; a 375 px pass confirming the pill does not clip the header.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and draft internal PR'
+    type: Impl
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+    body: |
+      ## Description
+      Bootstrap Gitflow for US-004: create the feature branch from `develop` and prepare the internal PR description toward `develop`. Do **not** push — `settings.git_mode` is `GITFLOW`.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop` — confirm it is at the US-003 merge commit and the tree is clean apart from `.larapilot/usage/ledger.jsonl`
+      2. `git checkout -b feature/US-004-sync-health-resync`
+      3. Draft the internal PR title `US-004: Calendar sync health and manual resync` and a body linking `.larapilot/plans/US-004-plan.yaml` and listing TASK-00…TASK-08 — keep it local
+      4. Anchor commit: `chore(US-004): TASK-00 bootstrap feature branch` (empty commit allowed)
+
+      ## Completion Criteria
+      - [ ] Branch `feature/US-004-sync-health-resync` exists locally off `develop`
+      - [ ] PR title/body drafted toward `develop` (remote untouched)
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-004): TASK-00 bootstrap feature branch` (empty commit allowed)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally — open the remote PR only if the user asks
+  -
+    id: TASK-01
+    title: 'Sync health read model: state enum, value object, reporter, stuck-run guard'
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 3.5
+    dependencies:
+      - TASK-00
+    body: |
+      ## Description
+      Add the derived read model that turns `calendar_sync_runs` history into a single health verdict, so no view ever queries the runs table itself. No migration — this reads what US-003 already writes.
+
+      ## Files Involved
+      - app/Calendar/SyncHealthState.php (new — enum)
+      - app/Calendar/SyncHealth.php (new — final readonly value object)
+      - app/Calendar/SyncHealthReporter.php (new — service)
+      - app/Models/CalendarSyncRun.php (add `latestSuccess()`, `latestFinished()`, `activeRun()` query helpers + `abandon()`)
+      - config/kbms.php (two new keys + PHPDoc array shape)
+      - .env.example
+      - database/factories/CalendarSyncRunFactory.php (add `abandoned()`, `stale()` states)
+
+      ## Steps
+      1. `php artisan make:class Calendar/SyncHealthState` (convert to `enum SyncHealthState: string` — `Never`, `Syncing`, `Ok`, `Stale`, `Failed`; TitleCase keys per the PHP rules). Give it a `label(): string` returning the exact `states.html` wording, so the strings live in one place and the tests in TASK-02/TASK-07 assert against the same source the view renders.
+      2. `php artisan make:class Calendar/SyncHealth` — `final readonly`, constructor-promoted: `SyncHealthState $state`, `?CarbonImmutable $lastSuccessAt`, `?CarbonImmutable $lastAttemptAt`, `?string $lastError`, `?CarbonImmutable $lastErrorAt`, `?int $httpStatus`, `bool $awaitingWorker`. Add `hasEverSynced(): bool` and `needsAttention(): bool` (true for `Failed`/`Stale`) — the banner in TASK-06 keys off the latter.
+      3. `php artisan make:class Calendar/SyncHealthReporter` with a `current(): SyncHealth` method implementing the resolution order in the plan body, in that exact precedence. Resolve it from the container (no facade, no static) so tests can inject a frozen clock via `travelTo`.
+      4. Add `CalendarSyncRun` query helpers so the reporter issues **at most three indexed queries** and no query inside a loop: `activeRun()` (status `Running`, latest `started_at`), `latestFinished()` (whereNotNull `finished_at`, latest `started_at`), `latestSuccess()` (status in `Success`/`NotModified`, latest `started_at` — reuse the grouping `latestValidators()` already applies). The `started_at` and `(status, finished_at)` indexes from US-003's migration already cover these; verify with `EXPLAIN QUERY PLAN` rather than assuming.
+      5. Add `CalendarSyncRun::abandon(string $reason)` — sets `finished_at = now()`, `status = Failed`, `error = $reason`. The reporter calls it for any `Running` row started before `now()->subSeconds(config('kbms.sync_stuck_after_seconds'))`, with a reason that names the fix: `the sync worker did not finish this run within {n}s; check that \`php artisan queue:work\` is running`. Re-resolve against the corrected history afterwards.
+      6. `config/kbms.php` — add `sync_stale_multiplier` (`(int) env('KBMS_SYNC_STALE_MULTIPLIER', 3)`) and `sync_stuck_after_seconds` (`(int) env('KBMS_SYNC_STUCK_AFTER_SECONDS', 300)`), and extend the file's `@return` array shape PHPDoc — Larastan reads it.
+      7. `.env.example` — add both keys under the `# --- Personal KBMS ---` block with the same one-line-comment style the existing keys use.
+      8. Factory: add `abandoned()` (`Running`, `started_at` = 10 minutes ago, `finished_at` null) and `stale()` (`Success`, `started_at`/`finished_at` = `sync_minutes × multiplier + 1` minutes ago). Both are needed by TASK-02 and TASK-07.
+      9. `php artisan migrate:fresh --seed` then `php artisan test --compact --filter=CalendarSyncRun`
+
+      ## Completion Criteria
+      - [ ] `SyncHealthReporter::current()` returns the right state for every branch of the documented order, verified by hand via `tinker` before handing to Anne
+      - [ ] A `Running` row older than the stuck threshold is persisted as `Failed` with a reason naming `queue:work` — not just hidden in the view
+      - [ ] A `NotModified` run counts as a successful sync (not stale one interval later)
+      - [ ] Reporter issues no query inside a loop; the three queries use the existing indexes
+      - [ ] Both new config keys read from env with the documented defaults and appear in `.env.example`
+      - [ ] `migrate:fresh --seed` succeeds
+
+      ## Test Data
+      - [ ] `database/factories/CalendarSyncRunFactory.php` gains `abandoned()` and `stale()` states in **this** task
+      - [ ] No new model and no migration — `CalendarEventFactory` and the seeders are untouched here (seeder coherence is TASK-08)
+
+      ## Git Deliverables
+      - Commit: `feat(US-004): TASK-01 add sync health read model and stuck-run guard`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-02
+    title: 'Unit tests for the sync health reporter'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-01
+    body: |
+      ## Description
+      Pin the reporter's resolution order and its two non-obvious rules (304 counts as success, stuck runs are abandoned) before any UI depends on them.
+
+      ## Files Involved
+      - tests/Unit/Calendar/SyncHealthReporterTest.php (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit Calendar/SyncHealthReporterTest`, `use RefreshDatabase` (the reporter reads the database, matching `tests/Unit/Models/CalendarSyncRunTest.php`'s existing precedent for DB-backed unit tests).
+      2. Build fixtures **only** from `CalendarSyncRunFactory` states — no hand-built arrays, no duplicated factory definitions.
+      3. Freeze time with `$this->travelTo(...)` / `travel(...)`, following `SyncCalendarFeedJobTest`'s convention.
+      4. One test per branch of the documented order:
+         - no rows at all → `Never`
+         - `running()` inside the threshold → `Syncing`
+         - recent `successful()` → `Ok`, exposing `lastSuccessAt`
+         - recent `notModified()` → `Ok` (**regression guard**: a 304 must not read as stale one interval later)
+         - `stale()` with no failure → `Stale`
+         - latest finished is `failed()` → `Failed`, exposing `lastError` and `httpStatus`
+         - `failed()` **and** stale → `Failed` wins (precedence, not both)
+         - `abandoned()` → row is persisted as `Failed` with a reason containing `queue:work`, and the resolved state is no longer `Syncing`
+         - only `failed()` rows ever recorded → `Never` (defensive branch 5)
+      5. Boundary: a success at exactly `sync_minutes × multiplier` is **not** stale; one minute older **is**. Drive it by setting `config(['kbms.sync_minutes' => …, 'kbms.sync_stale_multiplier' => …])` so the test proves the values are configurable rather than hard-coded.
+      6. `php artisan test --compact --filter=SyncHealthReporterTest`
+
+      ## Completion Criteria
+      - [ ] Every branch of the resolution order has a named test
+      - [ ] The stale boundary is asserted from config, not from a literal 45 minutes
+      - [ ] The 304-is-success and stuck-run cases each have a dedicated test
+      - [ ] `php artisan test --compact` fully green
+
+      ## Git Deliverables
+      - Commit: `test(US-004): TASK-02 cover sync health resolution order`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-03
+    title: 'Guarded resync dispatch: no duplicate or overlapping run'
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 3
+    dependencies:
+      - TASK-01
+    body: |
+      ## Description
+      Make a manual resync safe to trigger from the UI: refuse while a run is in progress, prevent an overlapping queue job, and record enough state that the interface can honestly say "queued" before a worker touches the row.
+
+      ## Files Involved
+      - app/Calendar/ResyncDispatcher.php (new)
+      - app/Calendar/ResyncOutcome.php (new — enum)
+      - app/Jobs/SyncCalendarFeed.php (add `$uniqueFor` and `uniqueId()`)
+
+      ## Steps
+      1. `php artisan make:class Calendar/ResyncOutcome` → `enum ResyncOutcome: string` — `Dispatched`, `AlreadyRunning`. Returning an outcome beats throwing: "a run is already going" is an expected result of a race, not an exception.
+      2. `php artisan make:class Calendar/ResyncDispatcher` with `dispatch(): ResyncOutcome`. It re-reads `SyncHealthReporter::current()` **inside the call** and returns `AlreadyRunning` when the state is `Syncing` — a poll rendered 60 seconds ago can post into a scheduled run that has since started, and the removed button cannot protect against that.
+      3. On dispatch: put a cache marker `kbms.sync.dispatched_at` (value `now()`, TTL = `kbms.sync_stuck_after_seconds`) **before** `SyncCalendarFeed::dispatch()`, so a page render between dispatch and the worker picking the job up can still show `Syncing` rather than an unchanged pill. TASK-01's reporter already reads this marker; the marker is cleared by the run row superseding it, and expires on its own if no worker ever appears.
+      4. `SyncCalendarFeed`: add `public int $uniqueFor` returning `config('kbms.sync_stuck_after_seconds')` and an explicit `uniqueId(): string` (a constant key — the whole point is that only one feed sync exists at a time). **This is a bug fix, not decoration:** `ShouldBeUnique` with no `$uniqueFor` holds the lock until the job completes, so a killed worker blocks every future resync forever, on the same failure that TASK-01's stuck-run guard exists to survive. Both now heal on the same clock.
+      5. Leave `kbms:sync-calendar` and the scheduler entry alone — `->withoutOverlapping()` covers cron-vs-cron and is unaffected. Sanity-check that `--sync` (`dispatchSync`) still bypasses the queue lock as before.
+      6. `php artisan test --compact --filter=SyncCalendarFeed`
+
+      ## Completion Criteria
+      - [ ] `ResyncDispatcher::dispatch()` returns `AlreadyRunning` and dispatches nothing while a run is in progress
+      - [ ] `SyncCalendarFeed::$uniqueFor` equals `kbms.sync_stuck_after_seconds`, so a dead worker's lock expires instead of blocking resync permanently
+      - [ ] The dispatch marker makes `Syncing` visible before the worker creates the run row
+      - [ ] Existing US-003 job and command tests still pass untouched
+
+      ## Test Data
+      - N/A — no model, schema, or factory changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-004): TASK-03 guard manual resync against overlapping runs`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-04
+    title: 'Feature tests for guarded resync dispatch'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 2
+    dependencies:
+      - TASK-03
+    body: |
+      ## Description
+      Cover the spec's explicit error case — triggering a resync during a run must not queue a duplicate or produce an overlapping run — at the dispatch layer, independently of the UI.
+
+      ## Files Involved
+      - tests/Feature/SyncResyncTest.php (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit SyncResyncTest`, `use RefreshDatabase`.
+      2. `Queue::fake()` — with no run in progress, `ResyncDispatcher::dispatch()` returns `Dispatched` and `Queue::assertPushed(SyncCalendarFeed::class, 1)`.
+      3. With a `running()` run present, it returns `AlreadyRunning` and `Queue::assertNothingPushed()`.
+      4. With an `abandoned()` run present (past the stuck threshold), it **does** dispatch — the stuck guard must not leave resync wedged.
+      5. Assert `(new SyncCalendarFeed)->uniqueFor === config('kbms.sync_stuck_after_seconds')` and that the job still implements `ShouldBeUnique` — `SyncCalendarFeedJobTest` already imports that interface, so follow its assertion style.
+      6. Assert the cache marker is written on dispatch and that the reporter reads `Syncing` from it with no run row present.
+      7. `php artisan test --compact --filter=SyncResyncTest`
+
+      ## Completion Criteria
+      - [ ] Duplicate dispatch during a live run is proven impossible at the dispatcher, not just hidden in the view
+      - [ ] The `$uniqueFor` regression (dead worker wedging resync forever) has a failing-without-the-fix test
+      - [ ] `php artisan test --compact` fully green
+
+      ## Git Deliverables
+      - Commit: `test(US-004): TASK-04 cover resync dispatch guards`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-05
+    title: 'SyncStatus pill: first Livewire component, header wiring, pill styles'
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 4
+    dependencies:
+      - TASK-01
+      - TASK-03
+    body: |
+      ## Description
+      Render the sync verdict in the app shell header on every page, with a resync control that is present only when resyncing is actually possible. This is the project's first Livewire component, so it also fixes the generation convention for US-005…US-009.
+
+      ## Files Involved
+      - config/livewire.php (published — pin `make_command.type` and `emoji`)
+      - app/Livewire/SyncStatus.php (new)
+      - resources/views/livewire/sync-status.blade.php (new)
+      - resources/views/layouts/app.blade.php (replace the reserved `{{-- Sync pill lands here — US-004 --}}` slot)
+      - resources/css/app.css (`.kb-sync*` component classes + `kb-pulse` keyframe)
+
+      ## Steps
+      1. **Read `.ai/rules/views.md` and `.larapilot/mockups/kbms-app/README.md` first** — the mockup is the agreed visual contract, and `states.html` fixes the wording.
+      2. `php artisan livewire:publish --config`, then set `make_command.type => 'class'` and `emoji => false`. Recorded decision `livewire component style` (2026-09-08): class-based, **not** Livewire 4 single-file components, so the logic stays inside Larastan level-5 analysis and the tests stay PHPUnit in `tests/Feature`.
+      3. `php artisan make:livewire SyncStatus --class --no-interaction` → `app/Livewire/SyncStatus.php` + `resources/views/livewire/sync-status.blade.php`. Type the class the way the rest of `app/` is typed: explicit return types, PHPDoc, constructor-promoted dependencies where applicable.
+      4. `render(): View` resolves `SyncHealthReporter` and passes one `SyncHealth` to the view. `resync(): void` calls `ResyncDispatcher`, and on `AlreadyRunning` simply re-renders — no error toast; the pill already tells the truth.
+      5. Dispatch `sync-health-changed` **only when the resolved state differs from the previously rendered one** (hold the last state in a public property). Idle polling must not cause a second round trip for the banner in TASK-06.
+      6. View: single root element, `wire:poll.60s` (the cadence the mockup README sanctions for a local tool), `aria-live="polite"`. Per state render the `states.html` wording exactly:
+         - `Ok` → `Synced {relative} · {H:i}` + `Resync`
+         - `Syncing` → `Syncing now…` + **no control at all** (removed from the DOM, not `disabled` — the mockup calls this out explicitly), and `queued — no worker picked this up` when `awaitingWorker`
+         - `Stale` → `Last sync {relative} · stale` + `Resync`
+         - `Failed` → `Sync failed · {H:i}` + `Retry`
+         - `Never` → `Never synced` + `Sync now`
+      7. Timestamps: relative via `diffForHumans()` **and** absolute `H:i` in `config('kbms.timezone')`, with the full ISO datetime on a `<time datetime="…">`/`title`. `Never` renders the literal string — never a humanised epoch.
+      8. Wire it into `layouts/app.blade.php` at the reserved header slot, before the theme toggle.
+      9. `resources/css/app.css`: add `.kb-sync`, `.kb-sync__dot`, `.kb-sync__label`, the four state modifiers and `.kb-sync__resync`, ported from `.larapilot/mockups/kbms-app/kbms.css` and built on the `--kb-ok/warn/danger/transcript` tokens US-001 already registered. Follow the existing `.kb-skip` precedent — hand-written classes, **not** Tailwind utilities: a non-`--color-*` `@theme` entry generates no `bg-kb-ok` utility, and aliasing the tokens is exactly what the mockup README forbids. Add the `kb-pulse` keyframe for the syncing dot; the file's existing global `prefers-reduced-motion` block already neutralises it.
+      10. `npm run build`, then check `/` and `/calendar` by hand at 1280 px and 375 px — the pill must not clip or wrap the header.
+      11. `php artisan test --compact --filter=AppShellTest`
+
+      ## Completion Criteria
+      - [ ] The pill renders on every page of the shell, with last successful sync in **both** relative and absolute form
+      - [ ] The resync control is **absent from the DOM** while a run is in progress, not merely disabled
+      - [ ] "Never synced" renders literally when no run exists
+      - [ ] `config/livewire.php` pins class-based generation for the specs that follow
+      - [ ] `sync-health-changed` fires on state change only, not on every poll tick
+      - [ ] Header layout intact at 375 px and 1280 px, both themes
+      - [ ] Existing `AppShellTest` still passes
+
+      ## Test Data
+      - N/A — no model, schema, or factory changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-004): TASK-05 add sync status pill to the app shell`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-06
+    title: 'SyncAlert banner: failure reason legible without opening storage/logs'
+    type: Impl
+    status: TODO
+    assignee: Joe
+    estimate_hours: 3
+    dependencies:
+      - TASK-05
+    body: |
+      ## Description
+      Render the full-width warning surface for the failed and stale states, carrying the actual error text. This is the acceptance criterion that says the operator must never open `storage/logs` to learn why the mirror is behind.
+
+      ## Files Involved
+      - app/Livewire/SyncAlert.php (new)
+      - resources/views/livewire/sync-alert.blade.php (new)
+      - resources/views/layouts/app.blade.php (mount above `{{ $slot }}` inside `flux:main`)
+      - resources/css/app.css (`.kb-banner*` classes)
+
+      ## Steps
+      1. `php artisan make:livewire SyncAlert --class --no-interaction`.
+      2. `#[On('sync-health-changed')]` refresh listener — **no `wire:poll` here.** `SyncStatus` owns the single poll for the shell; two independent polls would let the pill and the banner disagree mid-flight.
+      3. Render nothing (`@if ($health->needsAttention())` around the whole root) when the state is `Ok`, `Syncing`, or `Never` — `Never` is the pill's story, and a banner on first run would be noise, not information.
+      4. `Failed` → `role="alert"`, `<strong>Last sync failed at {H:i}</strong>`, the stored `error` in a `<code>`, the `KBMS_ICS_URL` key named, `Showing the mirror from {last success}` (or a plain statement that no mirror exists yet), a `Run php artisan kbms:doctor to check reachability` hint, and a `Retry now` button calling the same `ResyncDispatcher`. Marika's rule holds: name the config key or the action that fixes it — nothing says "Something went wrong".
+      5. `Stale` → the same banner shape in the `--kb-warn` tint, stating how long it has been and that **nothing failed** — a stale mirror with no error is a different problem from a failure and must read differently.
+      6. Escape the error text normally (`{{ }}`) — it is remote feed and exception content and must never reach the page as raw HTML.
+      7. `.kb-banner` / `.kb-banner__actions` in `resources/css/app.css`, ported from `kbms.css`, using `--kb-danger-bg` / `--kb-warn-bg`.
+      8. Mount inside `flux:main` above `{{ $slot }}` so it appears on Agenda and Calendar alike, below the header strip.
+      9. `npm run build`; check both themes against `states.html` and both banner variants at 375 px.
+
+      ## Completion Criteria
+      - [ ] The failure reason recorded on the run is legible in the interface — no log file required
+      - [ ] The banner is `role="alert"` and names the config key plus the `kbms:doctor` remediation
+      - [ ] Stale and failed read as visibly and textually different states
+      - [ ] Nothing renders when the mirror is healthy, syncing, or never synced
+      - [ ] Error text is escaped
+      - [ ] Banner refreshes from the pill's event without a second poll
+
+      ## Test Data
+      - N/A — no model, schema, or factory changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-004): TASK-06 surface sync failures and staleness in the shell`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-07
+    title: 'Feature tests for the sync health interface'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-05
+      - TASK-06
+    body: |
+      ## Description
+      Cover the acceptance criterion that names all five states, asserting the distinguishing strings from `states.html` rather than status codes — the mockup test contract is explicit that `never synced` ≠ `stale` ≠ `failed` must stay provable.
+
+      ## Files Involved
+      - tests/Feature/SyncStatusTest.php (new)
+      - tests/Feature/AppShellTest.php (extend — pill present on both routes)
+
+      ## Steps
+      1. `php artisan make:test --phpunit SyncStatusTest`, `use RefreshDatabase`. PHPUnit, not Pest — this project's runner, notwithstanding Livewire's Pest scaffolding.
+      2. Fixtures from `CalendarSyncRunFactory` states only; freeze time with `travelTo`.
+      3. `Livewire::test(SyncStatus::class)` once per state, asserting the exact wording:
+         - never synced → `assertSee('Never synced')`, `assertDontSee('ago')`
+         - success → relative **and** absolute both present
+         - stale → `assertSee('stale')`, `assertDontSee('failed')`
+         - failed → `assertSee` the stored error text
+         - syncing → `assertSee('Syncing')` **and** `assertDontSee('Resync')` — the control must be absent, which is what distinguishes this from a `disabled` attribute
+      4. `Queue::fake()` → `->call('resync')` pushes `SyncCalendarFeed`; calling it again from the syncing state pushes nothing.
+      5. `Livewire::test(SyncAlert::class)`: renders the error and `role="alert"` when failed; renders the stale variant; renders nothing when healthy, syncing, or never synced.
+      6. `$this->get('/')->assertSeeLivewire('sync-status')` and the same for `/calendar` — added to `AppShellTest` beside the existing shell smoke tests, so the "everywhere" requirement is guarded where the shell is guarded.
+      7. `php artisan test --compact`
+
+      ## Completion Criteria
+      - [ ] Success, failure, in-progress, stale, and never-synced each have a named feature test (the AC's explicit list)
+      - [ ] Tests assert the distinguishing strings, not just HTTP 200
+      - [ ] The resync control's **absence** while syncing is asserted, not its `disabled` attribute
+      - [ ] The pill is proven present on both shell routes
+      - [ ] Full suite green — no Playwright, Dusk, or viewport suites (`settings.testing: NORMAL`)
+
+      ## Git Deliverables
+      - Commit: `test(US-004): TASK-07 cover sync health states in the interface`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-08
+    title: 'Seeder coherence, README env surface, and quality gate'
+    type: Impl
+    status: TODO
+    assignee: Albert
+    estimate_hours: 2
+    dependencies:
+      - TASK-07
+    body: |
+      ## Description
+      Close the spec: make the seeded demo state coherent with what the new interface renders, document the two new configuration keys, and run the mandatory quality gate. Documentation scope stays **baseline only** per the recorded `documentation scope` decision — README, no new documents.
+
+      ## Files Involved
+      - database/seeders/CalendarSyncRunSeeder.php
+      - README.md
+      - .larapilot/docs/test-results/US-004.md (manual test handoff)
+
+      ## Steps
+      1. Seeder: order the runs so the **newest** row is a recent success — `migrate:fresh --seed` should demo a healthy mirror, keeping the failure and 304 rows as history. Today's seeder creates ten successes with random `-7 days` timestamps after the failed row, so which state the pill lands on is effectively luck. Pin explicit `started_at`/`finished_at` values instead.
+      2. README env table: add `KBMS_SYNC_STALE_MULTIPLIER` (`3`, No, US-004) and `KBMS_SYNC_STUCK_AFTER_SECONDS` (`300`, No, US-004) with the same column shape as the existing rows.
+      3. README: extend the calendar-sync section with a short **Sync health** paragraph — what the pill shows, that `Never synced` / `stale` / `failed` are distinct states, that a manual resync will not overlap a running one, and that a run abandoned by a dead worker is recorded as failed rather than left spinning. Keep it operator-facing; no new document.
+      4. Write the manual test handoff to `.larapilot/docs/test-results/US-004.md` (`settings.testing: NORMAL` — the UI itself is verified by hand): keyboard-only reach and activation of the resync control; the pill announced on state change via `aria-live`; the pulse neutralised under `prefers-reduced-motion: reduce`; both themes checked against `states.html`; a 375 px pass.
+      5. `php artisan larapilot:quality --fix` (Pint), then re-run for Larastan level 5 — green before review. Also `vendor/bin/pint --dirty --format agent` per the project's PHP rules.
+      6. `php artisan migrate:fresh --seed` and `php artisan test --compact` — full suite, one final time.
+
+      ## Completion Criteria
+      - [ ] `migrate:fresh --seed` produces a demo database whose pill state is deterministic and healthy
+      - [ ] Both new `KBMS_*` keys documented in the README env table and in `.env.example`
+      - [ ] README explains the sync-health states in operator terms
+      - [ ] Manual test handoff written to `.larapilot/docs/test-results/US-004.md`
+      - [ ] `larapilot:quality` green (Pint clean, Larastan level 5 clean)
+      - [ ] Full `php artisan test` suite green
+
+      ## Test Data
+      - [ ] `CalendarSyncRunSeeder` updated so the seeded history renders a deterministic, healthy current state
+      - [ ] No factory change beyond the states added in TASK-01
+
+      ## Git Deliverables
+      - Commit: `chore(US-004): TASK-08 document sync health config and settle the demo seed`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: finalise the local PR body toward `develop`; open the remote only if the user asks
+updated_at: '2026-09-08T06:28:40+02:00'

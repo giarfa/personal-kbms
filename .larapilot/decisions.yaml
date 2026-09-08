@@ -272,4 +272,17 @@ decisions:
     source: askquestion
     spec: US-003
     supersedes: null
-updated_at: '2026-09-08T06:14:43+02:00'
+  -
+    id: 323452a1ea9887cb
+    ts: '2026-09-08T06:24:11+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'livewire component style'
+    label: 'livewire component style'
+    value: 'Class-based Livewire components (app/Livewire/*.php + resources/views/livewire/*.blade.php), not Livewire 4 single-file components; config/livewire.php sets make_command.type=class, emoji=false'
+    question: null
+    rationale: "Keeps component logic inside Larastan level 5 analysis (blade-embedded anonymous classes are not scanned), matches the repo's typed-class + PHPDoc conventions, and keeps tests in tests/Feature under PHPUnit rather than the Pest scaffold Livewire generates for SFCs. Sets the convention for US-005..US-009."
+    source: askquestion
+    spec: US-004
+    supersedes: null
+updated_at: '2026-09-08T06:24:11+02:00'

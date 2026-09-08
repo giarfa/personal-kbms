@@ -6,7 +6,7 @@ epic:
   objective: 'The subscribed Outlook feed is mirrored locally with correct recurrence and timezone handling, and its freshness is always visible'
 priority: HIGH
 points: 3
-status: TODO
+status: PLANNED
 body: |
   #### US-004: Calendar sync health and manual resync
 
@@ -31,3 +31,8 @@ body: |
   - [ ] **Error case:** triggering resync while a run is already in progress does not queue a duplicate or produce an overlapping run
   - [ ] **Edge case:** with no sync run recorded at all, the interface shows "never synced" rather than an empty or misleading value
   - [ ] Feature test covers success, failure, in-progress, stale, and never-synced states
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-08T06:28:40+02:00'
+rework: false
