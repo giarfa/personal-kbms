@@ -9,7 +9,7 @@
 
             <flux:spacer />
 
-            {{-- Sync pill lands here — US-004 --}}
+            <livewire:sync-status />
 
             <button
                 type="button"

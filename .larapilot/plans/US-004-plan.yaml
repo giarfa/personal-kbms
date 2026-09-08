@@ -234,7 +234,7 @@ tasks:
     id: TASK-03
     title: 'Guarded resync dispatch: no duplicate or overlapping run'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 3
     dependencies:
@@ -257,10 +257,10 @@ tasks:
       6. `php artisan test --compact --filter=SyncCalendarFeed`
 
       ## Completion Criteria
-      - [ ] `ResyncDispatcher::dispatch()` returns `AlreadyRunning` and dispatches nothing while a run is in progress
-      - [ ] `SyncCalendarFeed::$uniqueFor` equals `kbms.sync_stuck_after_seconds`, so a dead worker's lock expires instead of blocking resync permanently
-      - [ ] The dispatch marker makes `Syncing` visible before the worker creates the run row
-      - [ ] Existing US-003 job and command tests still pass untouched
+      - [x] `ResyncDispatcher::dispatch()` returns `AlreadyRunning` and dispatches nothing while a run is in progress
+      - [x] `SyncCalendarFeed::$uniqueFor` equals `kbms.sync_stuck_after_seconds`, so a dead worker's lock expires instead of blocking resync permanently
+      - [x] The dispatch marker makes `Syncing` visible before the worker creates the run row
+      - [x] Existing US-003 job and command tests still pass untouched
 
       ## Test Data
       - N/A — no model, schema, or factory changes in this task
@@ -269,11 +269,17 @@ tasks:
       - Commit: `feat(US-004): TASK-03 guard manual resync against overlapping runs`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: bca2da66fec3c7908550d24b9b3bf5dc84ea90cb
+      short_sha: bca2da6
+      subject: 'feat(US-004): TASK-03 guard manual resync against overlapping runs'
+      committed_at: '2026-09-08T07:53:57+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/bca2da66fec3c7908550d24b9b3bf5dc84ea90cb'
   -
     id: TASK-04
     title: 'Feature tests for guarded resync dispatch'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 2
     dependencies:
@@ -295,14 +301,20 @@ tasks:
       7. `php artisan test --compact --filter=SyncResyncTest`
 
       ## Completion Criteria
-      - [ ] Duplicate dispatch during a live run is proven impossible at the dispatcher, not just hidden in the view
-      - [ ] The `$uniqueFor` regression (dead worker wedging resync forever) has a failing-without-the-fix test
-      - [ ] `php artisan test --compact` fully green
+      - [x] Duplicate dispatch during a live run is proven impossible at the dispatcher, not just hidden in the view
+      - [x] The `$uniqueFor` regression (dead worker wedging resync forever) has a failing-without-the-fix test
+      - [x] `php artisan test --compact` fully green
 
       ## Git Deliverables
       - Commit: `test(US-004): TASK-04 cover resync dispatch guards`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: 7a9ef8fdaab66822071fb0addcdd749d58ec9d3d
+      short_sha: 7a9ef8f
+      subject: 'test(US-004): TASK-04 cover resync dispatch guards'
+      committed_at: '2026-09-08T07:54:24+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7a9ef8fdaab66822071fb0addcdd749d58ec9d3d'
   -
     id: TASK-05
     title: 'SyncStatus pill: first Livewire component, header wiring, pill styles'
@@ -488,4 +500,4 @@ tasks:
       - Commit: `chore(US-004): TASK-08 document sync health config and settle the demo seed`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`; open the remote only if the user asks
-updated_at: '2026-09-08T07:52:45+02:00'
+updated_at: '2026-09-08T07:54:24+02:00'
