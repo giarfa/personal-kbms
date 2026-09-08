@@ -285,4 +285,82 @@ decisions:
     source: askquestion
     spec: US-004
     supersedes: null
-updated_at: '2026-09-08T06:24:11+02:00'
+  -
+    id: 5b8b38a0bb1b50f5
+    ts: '2026-09-08T09:11:52+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-004 review verdict'
+    label: 'us-004 review verdict'
+    value: "Approved after adding the missing [Unreleased] CHANGELOG entry on the feature branch (20801a0); partial index coverage on the reporter's ORDER BY, the latestSuccess/latestValidators alias, and the duplicate SyncHealthReporter resolve per page load accepted as Low, not blockers"
+    question: null
+    rationale: 'All AC met and independently re-verified (138 tests / 341 assertions, Larastan level 5 clean, Pint clean, Gitflow discipline intact); the only convention break was the CHANGELOG, fixed in-review rather than sent back for rework'
+    source: askquestion
+    spec: US-004
+    supersedes: null
+  -
+    id: 70c0f98bea6cc952
+    ts: '2026-09-08T19:31:54+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'us-005 occurrence route addressing'
+    label: 'us-005 occurrence route addressing'
+    value: 'Detail route is /meetings/{occurrence}, one URL-safe segment = base64url(source_uid) [. base64url(recurrence_id)]; decoded by an OccurrenceKey value object + Route::bind that 404s on miss. Chosen over raw path segments because Laravel matches parameters against decodedPath(), so %2F in an RFC 5545 UID breaks [^/]+ matching; no occurrence_key column added, the existing (source_uid, recurrence_id) unique index serves the lookup.'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-005
+    supersedes: null
+  -
+    id: 7dd743655709bf2d
+    ts: '2026-09-08T19:31:54+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'us-005 branch point'
+    label: 'us-005 branch point'
+    value: 'TASK-00 commits the outstanding US-004 review artifacts, merges feature/US-004-sync-health-resync into develop (US-004 is DONE/approved at 20801a0 but develop was still at 652cd44), then branches feature/US-005-agenda-meeting-detail from develop — rather than stacking on an unmerged feature branch as US-002 had to.'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-005
+    supersedes: null
+  -
+    id: 74e19156356e02da
+    ts: '2026-09-08T19:31:54+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'agenda multi-day event rendering'
+    label: 'agenda multi-day event rendering'
+    value: "A multi-day or spanning event is rendered ONCE, in the day group where it starts, clamped to the range's first visible day when it began earlier, with a span label (Sep 7 - Sep 8) — not repeated into every day it covers. Follows the recorded mockup contract, whose Tue 8 group deliberately omits the offsite that started Mon 7."
+    question: null
+    rationale: null
+    source: chat
+    spec: US-005
+    supersedes: null
+  -
+    id: b6d00a155a3e66eb
+    ts: '2026-09-08T19:31:55+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'outlook url template placeholders'
+    label: 'outlook url template placeholders'
+    value: "KBMS_OUTLOOK_URL_TEMPLATE supports {date} (Y-m-d), {time} (H:i) and {datetime} (ISO 8601), rendered in config('kbms.timezone'); all-day events substitute the stored naive date with 00:00 and no timezone conversion. Documented in .env.example, README and the PRD configuration surface."
+    question: null
+    rationale: null
+    source: chat
+    spec: US-005
+    supersedes: null
+  -
+    id: c9760622c7fceefc
+    ts: '2026-09-08T19:31:55+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'us-005 coverage badge seam'
+    label: 'us-005 coverage badge seam'
+    value: 'Note/transcript coverage badges ship in US-005 driven by a MeetingCoverage DTO whose hasNotes/hasTranscript are hard false, marked for US-006/US-007. FR-003 wants inline presence but meeting_notes and meeting_transcripts do not exist until those specs, which US-005 blocks; nothing is faked and no view is restructured later.'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-005
+    supersedes: null
+updated_at: '2026-09-08T19:31:55+02:00'
