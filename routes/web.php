@@ -1,9 +1,10 @@
 <?php
 
 use App\Http\Controllers\MeetingController;
+use App\Livewire\Agenda;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'pages.agenda')->name('agenda');
+Route::get('/', Agenda::class)->name('agenda');
 
 Route::view('calendar', 'pages.calendar')->name('calendar');
 

@@ -32,7 +32,7 @@ final readonly class AgendaRow
         $this->start = CarbonImmutable::instance($event->starts_at);
         $this->end = CarbonImmutable::instance($event->ends_at);
         $this->isAllDay = (bool) $event->is_all_day;
-        $this->durationMinutes = $this->isAllDay ? 0 : $this->end->diffInMinutes($this->start);
+        $this->durationMinutes = $this->isAllDay ? 0 : $this->start->diffInMinutes($this->end);
         $this->isCancelled = $event->cancelled_at !== null;
         $this->routeKey = $event->occurrenceKey()->toRouteKey();
         $this->coverage = new MeetingCoverage;
