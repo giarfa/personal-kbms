@@ -130,7 +130,7 @@ tasks:
     id: TASK-01
     title: 'Sync health read model: state enum, value object, reporter, stuck-run guard'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 3.5
     dependencies:
@@ -160,26 +160,32 @@ tasks:
       9. `php artisan migrate:fresh --seed` then `php artisan test --compact --filter=CalendarSyncRun`
 
       ## Completion Criteria
-      - [ ] `SyncHealthReporter::current()` returns the right state for every branch of the documented order, verified by hand via `tinker` before handing to Anne
-      - [ ] A `Running` row older than the stuck threshold is persisted as `Failed` with a reason naming `queue:work` — not just hidden in the view
-      - [ ] A `NotModified` run counts as a successful sync (not stale one interval later)
-      - [ ] Reporter issues no query inside a loop; the three queries use the existing indexes
-      - [ ] Both new config keys read from env with the documented defaults and appear in `.env.example`
-      - [ ] `migrate:fresh --seed` succeeds
+      - [x] `SyncHealthReporter::current()` returns the right state for every branch of the documented order, verified by hand via `tinker` before handing to Anne
+      - [x] A `Running` row older than the stuck threshold is persisted as `Failed` with a reason naming `queue:work` — not just hidden in the view
+      - [x] A `NotModified` run counts as a successful sync (not stale one interval later)
+      - [x] Reporter issues no query inside a loop; the three queries use the existing indexes
+      - [x] Both new config keys read from env with the documented defaults and appear in `.env.example`
+      - [x] `migrate:fresh --seed` succeeds
 
       ## Test Data
-      - [ ] `database/factories/CalendarSyncRunFactory.php` gains `abandoned()` and `stale()` states in **this** task
-      - [ ] No new model and no migration — `CalendarEventFactory` and the seeders are untouched here (seeder coherence is TASK-08)
+      - [x] `database/factories/CalendarSyncRunFactory.php` gains `abandoned()` and `stale()` states in **this** task
+      - [x] No new model and no migration — `CalendarEventFactory` and the seeders are untouched here (seeder coherence is TASK-08)
 
       ## Git Deliverables
       - Commit: `feat(US-004): TASK-01 add sync health read model and stuck-run guard`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: 3321d760e165e9d30bd089797ee580659226ee72
+      short_sha: 3321d76
+      subject: 'feat(US-004): TASK-01 add sync health read model and stuck-run guard'
+      committed_at: '2026-09-08T07:52:03+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/3321d760e165e9d30bd089797ee580659226ee72'
   -
     id: TASK-02
     title: 'Unit tests for the sync health reporter'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 3
     dependencies:
@@ -209,15 +215,21 @@ tasks:
       6. `php artisan test --compact --filter=SyncHealthReporterTest`
 
       ## Completion Criteria
-      - [ ] Every branch of the resolution order has a named test
-      - [ ] The stale boundary is asserted from config, not from a literal 45 minutes
-      - [ ] The 304-is-success and stuck-run cases each have a dedicated test
-      - [ ] `php artisan test --compact` fully green
+      - [x] Every branch of the resolution order has a named test
+      - [x] The stale boundary is asserted from config, not from a literal 45 minutes
+      - [x] The 304-is-success and stuck-run cases each have a dedicated test
+      - [x] `php artisan test --compact` fully green
 
       ## Git Deliverables
       - Commit: `test(US-004): TASK-02 cover sync health resolution order`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: c5fed2dda3846735fad56b30960fb397dd869bbb
+      short_sha: c5fed2d
+      subject: 'test(US-004): TASK-02 cover sync health resolution order'
+      committed_at: '2026-09-08T07:52:44+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/c5fed2dda3846735fad56b30960fb397dd869bbb'
   -
     id: TASK-03
     title: 'Guarded resync dispatch: no duplicate or overlapping run'
@@ -476,4 +488,4 @@ tasks:
       - Commit: `chore(US-004): TASK-08 document sync health config and settle the demo seed`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`; open the remote only if the user asks
-updated_at: '2026-09-08T07:46:39+02:00'
+updated_at: '2026-09-08T07:52:45+02:00'
