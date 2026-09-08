@@ -46,6 +46,8 @@ Every machine-specific assumption is a `.env` value, never a code constant. All 
 | `KBMS_SYNC_STALE_MULTIPLIER` | `3` | No | US-004 (sync intervals without a success before "stale") |
 | `KBMS_SYNC_STUCK_AFTER_SECONDS` | `300` | No | US-004 (abandon a `Running` row whose worker died) |
 
+`KBMS_OUTLOOK_URL_TEMPLATE` supports three placeholders, substituted in `KBMS_TIMEZONE`: `{date}` (`Y-m-d`), `{time}` (`H:i`), `{datetime}` (ISO 8601). A feed-carried `event_url` always wins over the template. Worked example against Outlook Web Access: `https://outlook.office.com/calendar/view/day/{date}`.
+
 ## Running the background processes
 
 Two long-running processes besides the web server:

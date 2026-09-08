@@ -272,7 +272,7 @@ Every machine-specific assumption is a `.env` value, never a code constant:
 - `KBMS_ICS_WINDOW_PAST_DAYS` (default `90`), `KBMS_ICS_WINDOW_FUTURE_DAYS` (default `180`)
 - `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`
 - `KBMS_CLAUDE_LAUNCHER`
-- `KBMS_OUTLOOK_URL_TEMPLATE`
+- `KBMS_OUTLOOK_URL_TEMPLATE` — placeholders `{date}` (`Y-m-d`), `{time}` (`H:i`), `{datetime}` (ISO 8601), substituted in `KBMS_TIMEZONE`; a feed-carried `event_url` always takes precedence
 - `KBMS_TIMEZONE`
 - `KBMS_SYNC_RUN_RETENTION_DAYS` (default `30`) — days a finished `calendar_sync_runs` row is kept before pruning
 
@@ -349,3 +349,4 @@ Baseline set only, matching a personal project: a `README.md` covering Herd setu
 | --- | --- | --- |
 | 2026-09-07 | larapilot-inception | Initial PRD — Personal / MVP: ICS mirror, agenda + calendar, meeting notes, transcript linking, local Claude Code launch bridge, Outlook CTA |
 | 2026-09-07 | larapilot-plan US-003 | Added `KBMS_SYNC_RUN_RETENTION_DAYS` to the configuration surface; added `last_modified` to the `calendar_sync_runs` column list (required to serve `If-Modified-Since` on the next conditional GET) |
+| 2026-09-08 | larapilot-plan US-005 | Recorded the `KBMS_OUTLOOK_URL_TEMPLATE` placeholder vocabulary |
