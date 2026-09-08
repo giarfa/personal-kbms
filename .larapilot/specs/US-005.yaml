@@ -6,7 +6,7 @@ epic:
   objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
 priority: HIGH
 points: 10
-status: TODO
+status: PLANNED
 body: |
   #### US-005: Agenda view, meeting detail and Open in Outlook
 
@@ -39,3 +39,8 @@ body: |
   - [ ] **Edge case:** a date range containing no meetings shows an explicit empty state
   - [ ] **Edge case:** overlapping and multi-day events render without collapsing into each other or being dropped
   - [ ] Feature tests cover agenda ranges, detail rendering, link preference order, and the disabled call-to-action path
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-08T19:31:30+02:00'
+rework: false
