@@ -162,7 +162,7 @@ specs:
       objective: 'The subscribed Outlook feed is mirrored locally with correct recurrence and timezone handling, and its freshness is always visible'
     priority: HIGH
     points: 3
-    status: PLANNED
+    status: DONE
     body: |
       #### US-004: Calendar sync health and manual resync
 
@@ -180,16 +180,25 @@ specs:
       After implementing this spec, the interface always shows the last successful sync time and the last failure if there was one, and a resync control refreshes the mirror without touching the terminal.
 
       **Acceptance Criteria**
-      - [ ] The application shell shows the **last successful sync** timestamp in relative and absolute form
-      - [ ] When the most recent attempt failed, a distinct warning state shows the failure reason legibly — **without requiring the operator to open `storage/logs`**
-      - [ ] A manual resync control dispatches the sync job and reflects in-progress, success, and failure states
-      - [ ] A stale mirror (no successful sync for a configurable multiple of the sync interval) is visually flagged even when no run has explicitly failed
-      - [ ] **Error case:** triggering resync while a run is already in progress does not queue a duplicate or produce an overlapping run
-      - [ ] **Edge case:** with no sync run recorded at all, the interface shows "never synced" rather than an empty or misleading value
-      - [ ] Feature test covers success, failure, in-progress, stale, and never-synced states
+      - [x] The application shell shows the **last successful sync** timestamp in relative and absolute form
+      - [x] When the most recent attempt failed, a distinct warning state shows the failure reason legibly — **without requiring the operator to open `storage/logs`**
+      - [x] A manual resync control dispatches the sync job and reflects in-progress, success, and failure states
+      - [x] A stale mirror (no successful sync for a configurable multiple of the sync interval) is visually flagged even when no run has explicitly failed
+      - [x] **Error case:** triggering resync while a run is already in progress does not queue a duplicate or produce an overlapping run
+      - [x] **Edge case:** with no sync run recorded at all, the interface shows "never synced" rather than an empty or misleading value
+      - [x] Feature test covers success, failure, in-progress, stale, and never-synced states
     status_history:
       - { status: PLANNED, at: '2026-09-08T06:28:40+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-08T07:46:35+02:00' }
+      - { status: REVIEW, at: '2026-09-08T08:10:25+02:00' }
+      - { status: DONE, at: '2026-09-08T09:11:46+02:00' }
     rework: false
+    merge_commit:
+      sha: 20801a098ab1fe611d263d812e80b796b428bac1
+      short_sha: 20801a0
+      subject: 'docs(US-004): record sync health and manual resync in the CHANGELOG'
+      committed_at: '2026-09-08T09:11:41+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/20801a098ab1fe611d263d812e80b796b428bac1'
   -
     code: US-005
     title: 'Agenda view, meeting detail and Open in Outlook'
@@ -199,7 +208,7 @@ specs:
       objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
     priority: HIGH
     points: 10
-    status: TODO
+    status: PLANNED
     body: |
       #### US-005: Agenda view, meeting detail and Open in Outlook
 
@@ -232,6 +241,9 @@ specs:
       - [ ] **Edge case:** a date range containing no meetings shows an explicit empty state
       - [ ] **Edge case:** overlapping and multi-day events render without collapsing into each other or being dropped
       - [ ] Feature tests cover agenda ranges, detail rendering, link preference order, and the disabled call-to-action path
+    status_history:
+      - { status: PLANNED, at: '2026-09-08T19:31:30+02:00' }
+    rework: false
   -
     code: US-006
     title: 'Personal notes on a meeting'

@@ -113,6 +113,144 @@
     outline-offset: 2px;
 }
 
+.kb-sync {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2rem;
+    padding: 0.25rem 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+}
+
+.kb-sync__dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--kb-ok);
+    flex-shrink: 0;
+}
+
+.kb-sync__label {
+    color: var(--foreground);
+    font-weight: 500;
+}
+
+.kb-sync--ok {
+    border-color: color-mix(in oklch, var(--kb-ok) 40%, var(--border));
+    background: var(--kb-ok-bg);
+}
+
+.kb-sync--ok .kb-sync__label {
+    color: var(--kb-ok);
+}
+
+.kb-sync--stale {
+    border-color: color-mix(in oklch, var(--kb-warn) 45%, var(--border));
+    background: var(--kb-warn-bg);
+}
+
+.kb-sync--stale .kb-sync__dot {
+    background: var(--kb-warn);
+}
+
+.kb-sync--stale .kb-sync__label {
+    color: var(--kb-warn);
+}
+
+.kb-sync--failed {
+    border-color: color-mix(in oklch, var(--kb-danger) 45%, var(--border));
+    background: var(--kb-danger-bg);
+}
+
+.kb-sync--failed .kb-sync__dot {
+    background: var(--kb-danger);
+}
+
+.kb-sync--failed .kb-sync__label {
+    color: var(--kb-danger);
+}
+
+.kb-sync--never .kb-sync__dot {
+    background: var(--muted-foreground);
+}
+
+.kb-sync--syncing .kb-sync__dot {
+    background: var(--kb-transcript);
+    animation: kb-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes kb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+}
+
+.kb-sync__resync {
+    border: none;
+    background: transparent;
+    padding: 0.125rem 0.25rem;
+    margin: -0.125rem -0.25rem -0.125rem 0.125rem;
+    border-radius: calc(var(--radius) - 4px);
+    font: inherit;
+    font-weight: 500;
+    color: var(--foreground);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.kb-sync__resync:hover {
+    background: var(--accent);
+}
+
+.kb-sync__resync:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+.kb-note-inline {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+}
+
+.kb-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid color-mix(in oklch, var(--kb-danger) 40%, var(--border));
+    border-radius: var(--radius);
+    background: var(--kb-danger-bg);
+    font-size: 0.8125rem;
+}
+
+.kb-banner--warn {
+    border-color: color-mix(in oklch, var(--kb-warn) 45%, var(--border));
+    background: var(--kb-warn-bg);
+}
+
+.kb-banner strong {
+    display: block;
+    margin-bottom: 0.125rem;
+}
+
+.kb-banner code {
+    font-family: var(--kb-mono);
+    font-size: 0.75rem;
+    word-break: break-all;
+}
+
+.kb-banner__actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.001ms !important;

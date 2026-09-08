@@ -13,6 +13,8 @@
  *     timezone: string,
  *     allow_non_loopback: bool,
  *     sync_run_retention_days: int,
+ *     sync_stale_multiplier: int,
+ *     sync_stuck_after_seconds: int,
  * }
  */
 return [
@@ -38,4 +40,8 @@ return [
     'allow_non_loopback' => (bool) env('KBMS_ALLOW_NON_LOOPBACK', false),
 
     'sync_run_retention_days' => (int) env('KBMS_SYNC_RUN_RETENTION_DAYS', 30),
+
+    'sync_stale_multiplier' => (int) env('KBMS_SYNC_STALE_MULTIPLIER', 3),
+
+    'sync_stuck_after_seconds' => (int) env('KBMS_SYNC_STUCK_AFTER_SECONDS', 300),
 ];

@@ -21,7 +21,22 @@ class SyncCalendarFeed implements ShouldBeUnique, ShouldQueue
 
     public int $timeout = 120;
 
-    public function __construct(public bool $force = false) {}
+    public int $uniqueFor;
+
+    public function __construct(public bool $force = false)
+    {
+        // A dead worker must not hold this lock forever — it expires on the
+        // same clock as the stuck-run guard in SyncHealthReporter.
+        $this->uniqueFor = (int) config('kbms.sync_stuck_after_seconds');
+    }
+
+    /**
+     * Only one feed sync may be queued or running at a time.
+     */
+    public function uniqueId(): string
+    {
+        return 'sync-calendar-feed';
+    }
 
     /**
      * Fetch, parse, and mirror the configured ICS feed, then prune old runs.

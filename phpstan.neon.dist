@@ -13,3 +13,7 @@ parameters:
 
     # Larapilot minimum — never lower without an explicit human waiver (see runtime-delivery.md).
     level: 5
+
+    bootstrapFiles!:
+        - phpstan-bootstrap.php
+        - vendor/larastan/larastan/bootstrap.php

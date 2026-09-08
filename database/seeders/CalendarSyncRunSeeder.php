@@ -22,6 +22,16 @@ class CalendarSyncRunSeeder extends Seeder
             'finished_at' => now()->subHours(4)->addSecond(),
         ]);
 
-        CalendarSyncRun::factory()->successful()->count(10)->create();
+        // Ten successes at ~15-minute intervals, ending with a very recent run
+        // so `migrate:fresh --seed` always demos a healthy mirror (Ok state),
+        // not whatever random "-7 days" timestamp happened to land last.
+        for ($i = 9; $i >= 0; $i--) {
+            $startedAt = now()->subMinutes(2 + $i * 15);
+
+            CalendarSyncRun::factory()->successful()->create([
+                'started_at' => $startedAt,
+                'finished_at' => $startedAt->clone()->addSeconds(2),
+            ]);
+        }
     }
 }

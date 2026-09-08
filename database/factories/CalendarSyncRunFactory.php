@@ -95,4 +95,35 @@ class CalendarSyncRunFactory extends Factory
             'error' => null,
         ]);
     }
+
+    /**
+     * A `Running` row whose worker died before finishing it.
+     */
+    public function abandoned(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => SyncRunStatus::Running,
+            'started_at' => now()->subMinutes(10),
+            'finished_at' => null,
+            'http_status' => null,
+            'events_upserted' => 0,
+            'events_cancelled' => 0,
+            'error' => null,
+        ]);
+    }
+
+    /**
+     * A successful run old enough to trip the stale multiplier.
+     */
+    public function stale(): static
+    {
+        $staleMinutes = (int) config('kbms.sync_minutes') * (int) config('kbms.sync_stale_multiplier') + 1;
+
+        return $this->state(fn (array $attributes) => [
+            'status' => SyncRunStatus::Success,
+            'started_at' => now()->subMinutes($staleMinutes),
+            'finished_at' => now()->subMinutes($staleMinutes)->addSeconds(2),
+            'http_status' => 200,
+        ]);
+    }
 }

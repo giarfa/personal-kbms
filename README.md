@@ -43,6 +43,8 @@ Every machine-specific assumption is a `.env` value, never a code constant. All 
 | `KBMS_TIMEZONE` | `Europe/Rome` | No | US-001 (also binds `app.timezone`) |
 | `KBMS_ALLOW_NON_LOOPBACK` | `false` | No | US-001 (loopback-only override) |
 | `KBMS_SYNC_RUN_RETENTION_DAYS` | `30` | No | US-003 (`calendar_sync_runs` pruning) |
+| `KBMS_SYNC_STALE_MULTIPLIER` | `3` | No | US-004 (sync intervals without a success before "stale") |
+| `KBMS_SYNC_STUCK_AFTER_SECONDS` | `300` | No | US-004 (abandon a `Running` row whose worker died) |
 
 ## Running the background processes
 
@@ -63,6 +65,12 @@ By default the command **dispatches to the queue**, so `php artisan queue:work` 
 
 - `--sync` — run inline instead of queueing, and print the resulting run's status and counts.
 - `--force` — ignore the stored `ETag`/`Last-Modified` validators and force a full fetch instead of a conditional GET.
+
+### Sync health
+
+The app shell shows a sync pill on every page: **Synced** (last success, relative and absolute time), **Stale** (no success for more than `KBMS_SYNC_STALE_MULTIPLIER` × `KBMS_ICS_SYNC_MINUTES`, even if nothing has explicitly failed), **Sync failed** (with the stored error and the `KBMS_ICS_URL` key named — no need to open `storage/logs`), or **Never synced** (no run recorded at all). These four states are distinct and never collapse into one another.
+
+A manual resync from the pill will not queue a duplicate or overlapping run while one is already in progress. A run whose worker died mid-flight (killed `queue:work`, crashed process) is recorded as failed after `KBMS_SYNC_STUCK_AFTER_SECONDS` rather than left spinning forever.
 
 ## The launcher script contract
 

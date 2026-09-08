@@ -9,7 +9,7 @@
 
             <flux:spacer />
 
-            {{-- Sync pill lands here — US-004 --}}
+            <livewire:sync-status />
 
             <button
                 type="button"
@@ -22,6 +22,8 @@
                 <flux:icon name="moon" variant="mini" class="hidden dark:inline" />
             </button>
         </flux:header>
+
+        <livewire:sync-alert />
 
         {{ $slot }}
     </flux:main>

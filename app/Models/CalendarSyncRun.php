@@ -82,12 +82,54 @@ class CalendarSyncRun extends Model
     }
 
     /**
+     * Mark a stuck `Running` row as failed, naming the fix in the error.
+     */
+    public function abandon(string $reason): void
+    {
+        $this->update([
+            'finished_at' => now(),
+            'status' => SyncRunStatus::Failed,
+            'error' => $reason,
+        ]);
+    }
+
+    /**
      * The most recent run whose validators are usable for a conditional GET.
      */
     public static function latestValidators(): ?self
     {
         return self::query()
             ->whereIn('status', [SyncRunStatus::Success, SyncRunStatus::NotModified])
+            ->orderByDesc('started_at')
+            ->first();
+    }
+
+    /**
+     * The most recent run that counts as a successful sync (Success or NotModified).
+     */
+    public static function latestSuccess(): ?self
+    {
+        return self::latestValidators();
+    }
+
+    /**
+     * The currently running row, if any.
+     */
+    public static function activeRun(): ?self
+    {
+        return self::query()
+            ->where('status', SyncRunStatus::Running)
+            ->orderByDesc('started_at')
+            ->first();
+    }
+
+    /**
+     * The most recently started run that has finished (successfully or not).
+     */
+    public static function latestFinished(): ?self
+    {
+        return self::query()
+            ->whereNotNull('finished_at')
             ->orderByDesc('started_at')
             ->first();
     }
