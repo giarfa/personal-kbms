@@ -107,7 +107,7 @@ specs:
       objective: 'The subscribed Outlook feed is mirrored locally with correct recurrence and timezone handling, and its freshness is always visible'
     priority: HIGH
     points: 8
-    status: REVIEW
+    status: DONE
     body: |
       #### US-003: Scheduled ICS calendar ingestion
 
@@ -125,27 +125,34 @@ specs:
       After implementing this spec, `php artisan kbms:sync-calendar` populates `calendar_events` from the configured feed with recurring series expanded into individually addressable occurrences, and the scheduler repeats it every 15 minutes without overlapping runs.
 
       **Acceptance Criteria**
-      - [ ] The feed is fetched from `KBMS_ICS_URL` on a schedule every `KBMS_ICS_SYNC_MINUTES` (default 15) with `withoutOverlapping()`
-      - [ ] Conditional GET sends stored `ETag` / `If-Modified-Since`; a `304 Not Modified` short-circuits without parsing
-      - [ ] Events are parsed with `sabre/vobject ^5.0` and `RRULE` recurrences expanded across the window `KBMS_ICS_WINDOW_PAST_DAYS` to `KBMS_ICS_WINDOW_FUTURE_DAYS`
-      - [ ] Upsert is keyed on (`source_uid`, `recurrence_id`) with a unique index, so **a single occurrence of a recurring series is addressable independently of its siblings**
-      - [ ] `EXDATE` exclusions and `RECURRENCE-ID` overrides (a moved or retitled single occurrence) are honored rather than flattened into the series default
-      - [ ] `TZID` is preserved and occurrences render correctly in `KBMS_TIMEZONE`, including **across a DST boundary**
-      - [ ] All-day events are stored as date-only, not midnight-local, and do not shift by a day
-      - [ ] Events absent from the feed, or carrying `STATUS:CANCELLED`, are marked `cancelled_at` — **never deleted**, so annotated history survives an upstream change
-      - [ ] A content hash skips writes for unchanged occurrences
-      - [ ] `join_url` and `event_url` are captured from the `VEVENT` when present (`URL`, `X-MICROSOFT-SKYPETEAMSMEETINGURL`, or a Teams link in the description) for later use by US-005
-      - [ ] Each run writes a `calendar_sync_runs` row with start, finish, status, HTTP status, events upserted, events cancelled, and error
-      - [ ] Sync runs as a queued job so no operator-facing request blocks on the fetch
-      - [ ] **Error case:** an unreachable feed, HTTP error, or timeout records a failed run and leaves the previous mirror intact
-      - [ ] **Error case:** a malformed or truncated `.ics` body records a failed run without partially wiping existing events
-      - [ ] **Edge case:** an unbounded recurring series (no `UNTIL`, no `COUNT`) is expanded only within the configured window and does not run away
-      - [ ] Tests use fixture `.ics` files covering a recurring series, a single-occurrence override, an `EXDATE`, a cancellation, an all-day event, and a DST transition; HTTP is faked
+      - [x] The feed is fetched from `KBMS_ICS_URL` on a schedule every `KBMS_ICS_SYNC_MINUTES` (default 15) with `withoutOverlapping()`
+      - [x] Conditional GET sends stored `ETag` / `If-Modified-Since`; a `304 Not Modified` short-circuits without parsing
+      - [x] Events are parsed with `sabre/vobject ^5.0` and `RRULE` recurrences expanded across the window `KBMS_ICS_WINDOW_PAST_DAYS` to `KBMS_ICS_WINDOW_FUTURE_DAYS`
+      - [x] Upsert is keyed on (`source_uid`, `recurrence_id`) with a unique index, so **a single occurrence of a recurring series is addressable independently of its siblings**
+      - [x] `EXDATE` exclusions and `RECURRENCE-ID` overrides (a moved or retitled single occurrence) are honored rather than flattened into the series default
+      - [x] `TZID` is preserved and occurrences render correctly in `KBMS_TIMEZONE`, including **across a DST boundary**
+      - [x] All-day events are stored as date-only, not midnight-local, and do not shift by a day
+      - [x] Events absent from the feed, or carrying `STATUS:CANCELLED`, are marked `cancelled_at` — **never deleted**, so annotated history survives an upstream change
+      - [x] A content hash skips writes for unchanged occurrences
+      - [x] `join_url` and `event_url` are captured from the `VEVENT` when present (`URL`, `X-MICROSOFT-SKYPETEAMSMEETINGURL`, or a Teams link in the description) for later use by US-005
+      - [x] Each run writes a `calendar_sync_runs` row with start, finish, status, HTTP status, events upserted, events cancelled, and error
+      - [x] Sync runs as a queued job so no operator-facing request blocks on the fetch
+      - [x] **Error case:** an unreachable feed, HTTP error, or timeout records a failed run and leaves the previous mirror intact
+      - [x] **Error case:** a malformed or truncated `.ics` body records a failed run without partially wiping existing events
+      - [x] **Edge case:** an unbounded recurring series (no `UNTIL`, no `COUNT`) is expanded only within the configured window and does not run away
+      - [x] Tests use fixture `.ics` files covering a recurring series, a single-occurrence override, an `EXDATE`, a cancellation, an all-day event, and a DST transition; HTTP is faked
     status_history:
       - { status: PLANNED, at: '2026-09-07T23:02:57+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-07T23:05:53+02:00' }
       - { status: REVIEW, at: '2026-09-07T23:39:16+02:00' }
+      - { status: DONE, at: '2026-09-08T06:14:34+02:00' }
     rework: false
+    merge_commit:
+      sha: f4f376c199075c01cc2d6ff4b7dc307657a1ebbe
+      short_sha: f4f376c
+      subject: 'chore(US-003): update backlog status to REVIEW'
+      committed_at: '2026-09-07T23:39:31+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/f4f376c199075c01cc2d6ff4b7dc307657a1ebbe'
   -
     code: US-004
     title: 'Calendar sync health and manual resync'
