@@ -380,7 +380,7 @@ tasks:
     id: TASK-06
     title: 'SyncAlert banner: failure reason legible without opening storage/logs'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 3
     dependencies:
@@ -407,12 +407,12 @@ tasks:
       9. `npm run build`; check both themes against `states.html` and both banner variants at 375 px.
 
       ## Completion Criteria
-      - [ ] The failure reason recorded on the run is legible in the interface — no log file required
-      - [ ] The banner is `role="alert"` and names the config key plus the `kbms:doctor` remediation
-      - [ ] Stale and failed read as visibly and textually different states
-      - [ ] Nothing renders when the mirror is healthy, syncing, or never synced
-      - [ ] Error text is escaped
-      - [ ] Banner refreshes from the pill's event without a second poll
+      - [x] The failure reason recorded on the run is legible in the interface — no log file required
+      - [x] The banner is `role="alert"` and names the config key plus the `kbms:doctor` remediation
+      - [x] Stale and failed read as visibly and textually different states
+      - [x] Nothing renders when the mirror is healthy, syncing, or never synced
+      - [x] Error text is escaped
+      - [x] Banner refreshes from the pill's event without a second poll
 
       ## Test Data
       - N/A — no model, schema, or factory changes in this task
@@ -421,6 +421,12 @@ tasks:
       - Commit: `feat(US-004): TASK-06 surface sync failures and staleness in the shell`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: c0b3632f7534ca2f01562d72c2a4dc33f537d734
+      short_sha: c0b3632
+      subject: 'feat(US-004): TASK-06 surface sync failures and staleness in the shell'
+      committed_at: '2026-09-08T08:00:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/c0b3632f7534ca2f01562d72c2a4dc33f537d734'
   -
     id: TASK-07
     title: 'Feature tests for the sync health interface'
@@ -506,4 +512,4 @@ tasks:
       - Commit: `chore(US-004): TASK-08 document sync health config and settle the demo seed`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`; open the remote only if the user asks
-updated_at: '2026-09-08T07:57:36+02:00'
+updated_at: '2026-09-08T08:00:06+02:00'
