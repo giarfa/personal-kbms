@@ -480,7 +480,7 @@ tasks:
     id: TASK-08
     title: 'Seeder coherence, README env surface, and quality gate'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 2
     dependencies:
@@ -503,19 +503,25 @@ tasks:
       6. `php artisan migrate:fresh --seed` and `php artisan test --compact` — full suite, one final time.
 
       ## Completion Criteria
-      - [ ] `migrate:fresh --seed` produces a demo database whose pill state is deterministic and healthy
-      - [ ] Both new `KBMS_*` keys documented in the README env table and in `.env.example`
-      - [ ] README explains the sync-health states in operator terms
-      - [ ] Manual test handoff written to `.larapilot/docs/test-results/US-004.md`
-      - [ ] `larapilot:quality` green (Pint clean, Larastan level 5 clean)
-      - [ ] Full `php artisan test` suite green
+      - [x] `migrate:fresh --seed` produces a demo database whose pill state is deterministic and healthy
+      - [x] Both new `KBMS_*` keys documented in the README env table and in `.env.example`
+      - [x] README explains the sync-health states in operator terms
+      - [x] Manual test handoff written to `.larapilot/docs/test-results/US-004.md`
+      - [x] `larapilot:quality` green (Pint clean, Larastan level 5 clean)
+      - [x] Full `php artisan test` suite green
 
       ## Test Data
-      - [ ] `CalendarSyncRunSeeder` updated so the seeded history renders a deterministic, healthy current state
-      - [ ] No factory change beyond the states added in TASK-01
+      - [x] `CalendarSyncRunSeeder` updated so the seeded history renders a deterministic, healthy current state
+      - [x] No factory change beyond the states added in TASK-01
 
       ## Git Deliverables
       - Commit: `chore(US-004): TASK-08 document sync health config and settle the demo seed`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`; open the remote only if the user asks
-updated_at: '2026-09-08T08:05:19+02:00'
+    commit:
+      sha: 0471994a71ae6f7dfb295f2f22a1835aa6790f90
+      short_sha: '0471994'
+      subject: 'chore(US-004): TASK-08 document sync health config and settle the demo seed'
+      committed_at: '2026-09-08T08:06:33+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0471994a71ae6f7dfb295f2f22a1835aa6790f90'
+updated_at: '2026-09-08T08:06:33+02:00'
