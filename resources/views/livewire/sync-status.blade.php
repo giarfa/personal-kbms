@@ -1,4 +1,4 @@
-<div wire:poll.60s="" aria-live="polite">
+<div wire:poll.60s aria-live="polite">
     <p class="kb-sync kb-sync--{{ $health->state->value }}"
         @if ($health->state->value === 'failed' && $health->lastError) title="{{ $health->lastError }}" @endif
     >
