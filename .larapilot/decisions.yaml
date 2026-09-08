@@ -233,4 +233,43 @@ decisions:
     source: chat
     spec: US-002
     supersedes: null
-updated_at: '2026-09-07T22:36:09+02:00'
+  -
+    id: 9461fe297cfc2f00
+    ts: '2026-09-07T22:56:57+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'doctor ics parse validation'
+    label: 'doctor ics parse validation'
+    value: 'US-003 swaps IcsFeedCheck onto sabre/vobject; a feed that parses cleanly PASSES even with zero VEVENTs (supersedes the US-002 zero-events failure), and the deferred Http::assertSent bounded-timeout assertion is added'
+    question: null
+    rationale: 'US-002 recorded the structural check as a stopgap and explicitly deferred reconsidering zero-events to US-003; with a real parser an empty-but-valid calendar is a legitimate state, not a misconfiguration'
+    source: askquestion
+    spec: US-003
+    supersedes: 6b3a5c34afbd906c
+  -
+    id: b46dcb131792abc8
+    ts: '2026-09-07T22:57:01+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'calendar sync run retention'
+    label: 'calendar sync run retention'
+    value: 'Prune finished calendar_sync_runs older than 30 days after each sync; configurable via KBMS_SYNC_RUN_RETENTION_DAYS (default 30)'
+    question: null
+    rationale: "Bounds a table that would otherwise grow ~35k rows/year at the 15-minute interval, while keeping a month of failure history for US-004's sync-health surface"
+    source: askquestion
+    spec: US-003
+    supersedes: null
+  -
+    id: d907beb3317ba6aa
+    ts: '2026-09-08T06:14:42+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-003 review verdict'
+    label: 'US-003 review verdict'
+    value: 'Approved and merged to develop; per-occurrence upsert batching, RRULE/response-size caps and redirect restriction accepted as future hardening, not blockers'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-003
+    supersedes: null
+updated_at: '2026-09-08T06:14:43+02:00'

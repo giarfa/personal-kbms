@@ -12,6 +12,7 @@
  *     outlook_url_template: string|null,
  *     timezone: string,
  *     allow_non_loopback: bool,
+ *     sync_run_retention_days: int,
  * }
  */
 return [
@@ -35,4 +36,6 @@ return [
     'timezone' => env('KBMS_TIMEZONE', 'Europe/Rome'),
 
     'allow_non_loopback' => (bool) env('KBMS_ALLOW_NON_LOOPBACK', false),
+
+    'sync_run_retention_days' => (int) env('KBMS_SYNC_RUN_RETENTION_DAYS', 30),
 ];

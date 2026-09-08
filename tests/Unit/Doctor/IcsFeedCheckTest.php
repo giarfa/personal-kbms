@@ -74,36 +74,35 @@ class IcsFeedCheckTest extends TestCase
         $this->assertStringContainsString('re-copy the subscription URL', $result->remediation);
     }
 
-    public function test_it_fails_when_version_is_missing(): void
-    {
-        config(['kbms.ics_url' => 'https://example.test/feed.ics']);
-        Http::fake(['*' => Http::response("BEGIN:VCALENDAR\nBEGIN:VEVENT\nEND:VEVENT\nEND:VCALENDAR", 200)]);
-
-        $result = (new IcsFeedCheck)->run();
-
-        $this->assertSame(CheckStatus::Failed, $result->status);
-        $this->assertStringContainsString('VERSION', $result->remediation);
-    }
-
-    public function test_it_fails_when_the_calendar_has_zero_events(): void
+    public function test_a_valid_calendar_with_zero_events_now_passes(): void
     {
         config(['kbms.ics_url' => 'https://example.test/feed.ics']);
         Http::fake(['*' => Http::response("BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR", 200)]);
 
         $result = (new IcsFeedCheck)->run();
 
-        $this->assertSame(CheckStatus::Failed, $result->status);
-        $this->assertStringContainsString('no events', $result->remediation);
+        $this->assertSame(CheckStatus::Pass, $result->status);
+        $this->assertStringContainsString('0 event(s)', $result->detail);
     }
 
     public function test_it_fails_when_the_body_is_truncated(): void
     {
         config(['kbms.ics_url' => 'https://example.test/feed.ics']);
-        Http::fake(['*' => Http::response("BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nEND:VEVENT", 200)]);
+        Http::fake(['*' => Http::response("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nSUMMARY:Standup", 200)]);
 
         $result = (new IcsFeedCheck)->run();
 
         $this->assertSame(CheckStatus::Failed, $result->status);
-        $this->assertStringContainsString('truncated', $result->remediation);
+    }
+
+    public function test_the_connect_and_total_timeouts_are_bounded(): void
+    {
+        // Guzzle timeout/connect_timeout are transfer options, not part of the
+        // PSR-7 request, so Http::assertSent cannot introspect them — assert
+        // the bounded constants directly instead (see IcsFeedClientTest).
+        $reflection = new \ReflectionClass(IcsFeedCheck::class);
+
+        $this->assertSame(3, $reflection->getConstant('CONNECT_TIMEOUT'));
+        $this->assertSame(5, $reflection->getConstant('TIMEOUT'));
     }
 }

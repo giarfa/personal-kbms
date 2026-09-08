@@ -1,0 +1,17 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Personal KBMS//Test Fixtures//EN
+BEGIN:VEVENT
+UID:uid-weekly-001
+DTSTAMP:20260301T000000Z
+DTSTART;TZID=Europe/Rome:20260302T090000
+DTEND;TZID=Europe/Rome:20260302T093000
+SUMMARY:Weekly sync
+ORGANIZER;CN=Jane Doe:mailto:jane.doe@example.com
+ATTENDEE;CN=John Smith:mailto:john.smith@example.com
+ATTENDEE;CN=Alice Brown:mailto:alice.brown@example.com
+URL:https://example.com/meetings/weekly-sync
+X-MICROSOFT-SKYPETEAMSMEETINGURL:https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc123
+RRULE:FREQ=WEEKLY;COUNT=8
+END:VEVENT
+END:VCALENDAR
