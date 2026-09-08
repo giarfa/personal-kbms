@@ -136,6 +136,84 @@ class AgendaQueryTest extends TestCase
         $this->assertSame('Design review', $rows[2]->event->summary);
     }
 
+    public function test_a_timed_event_that_began_before_the_window_is_clamped_not_dropped(): void
+    {
+        // An overnight bridge started yesterday and is still running when the
+        // window opens. The overlap predicate matches it, so grouping must keep
+        // it — under the range's first visible day, not its own earlier one.
+        CalendarEvent::factory()->create([
+            'summary' => 'Overnight incident bridge',
+            'is_all_day' => false,
+            'starts_at' => '2026-09-07 22:00:00',
+            'ends_at' => '2026-09-08 06:00:00',
+        ]);
+
+        $days = AgendaQuery::for(AgendaRange::today());
+
+        $today = $this->dayFor($days, '2026-09-08');
+        $this->assertSame(1, $today->meetingCount);
+        $this->assertSame('Overnight incident bridge', $today->rows[0]->event->summary);
+    }
+
+    public function test_a_timed_event_spanning_days_is_rendered_once_across_the_range(): void
+    {
+        CalendarEvent::factory()->create([
+            'summary' => 'Migration cutover window',
+            'is_all_day' => false,
+            'starts_at' => '2026-09-09 18:00:00',
+            'ends_at' => '2026-09-11 09:00:00',
+        ]);
+
+        $days = AgendaQuery::for(AgendaRange::today());
+
+        $appearances = $days->sum(fn (AgendaDay $day): int => $day->meetingCount);
+        $this->assertSame(1, $appearances);
+        $this->assertSame(1, $this->dayFor($days, '2026-09-09')->meetingCount);
+        $this->assertSame(0, $this->dayFor($days, '2026-09-10')->meetingCount);
+        $this->assertSame('Sep 9 – Sep 11', $this->dayFor($days, '2026-09-09')->rows[0]->spanLabel);
+    }
+
+    public function test_a_clamped_timed_event_sorts_after_all_day_but_before_the_days_own_meetings(): void
+    {
+        CalendarEvent::factory()->create([
+            'summary' => 'Overnight incident bridge',
+            'is_all_day' => false,
+            'starts_at' => '2026-09-07 22:00:00',
+            'ends_at' => '2026-09-08 06:00:00',
+        ]);
+
+        CalendarEvent::factory()->allDay()->create([
+            'summary' => 'Offsite',
+            'starts_at' => '2026-09-08 00:00:00',
+            'ends_at' => '2026-09-09 00:00:00',
+        ]);
+
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(8, 45), 15)->create([
+            'summary' => 'Standup',
+        ]);
+
+        $rows = $this->dayFor(AgendaQuery::for(AgendaRange::today()), '2026-09-08')->rows;
+
+        $this->assertSame(['Offsite', 'Overnight incident bridge', 'Standup'], array_map(
+            fn ($row): string => $row->event->summary,
+            $rows,
+        ));
+    }
+
+    public function test_a_timed_event_ending_exactly_at_midnight_carries_no_span_label(): void
+    {
+        CalendarEvent::factory()->create([
+            'summary' => 'Late deploy window',
+            'is_all_day' => false,
+            'starts_at' => '2026-09-08 22:00:00',
+            'ends_at' => '2026-09-09 00:00:00',
+        ]);
+
+        $rows = $this->dayFor(AgendaQuery::for(AgendaRange::today()), '2026-09-08')->rows;
+
+        $this->assertNull($rows[0]->spanLabel);
+    }
+
     public function test_a_range_with_no_events_returns_every_date_with_zero_rows(): void
     {
         $days = AgendaQuery::for(AgendaRange::today());

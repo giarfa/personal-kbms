@@ -27,6 +27,22 @@ class MeetingDetailTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_a_timed_occurrence_spanning_days_shows_both_dates(): void
+    {
+        $event = CalendarEvent::factory()->create([
+            'summary' => 'Migration cutover window',
+            'is_all_day' => false,
+            'starts_at' => '2026-09-09 18:00:00',
+            'ends_at' => '2026-09-11 09:00:00',
+        ]);
+
+        // "Wed 9 Sep 2026, 18:00 – 09:00" would read as a trip backwards in time.
+        $this->get(route('meetings.show', $event->occurrenceKey()->toRouteKey()))
+            ->assertOk()
+            ->assertSee('Wed 9 Sep 2026, 18:00')
+            ->assertSee('Fri 11 Sep 2026, 09:00');
+    }
+
     public function test_every_mirrored_field_is_rendered(): void
     {
         $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 60)->create([

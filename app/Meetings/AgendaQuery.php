@@ -39,9 +39,12 @@ class AgendaQuery
         $byDate = $rows->groupBy(function (AgendaRow $row) use ($fromDate): string {
             $day = $row->start->toDateString();
 
-            // A multi-day all-day event is emitted once, clamped to the range's
-            // first visible day when it began before the window.
-            return $row->isAllDay && $day < $fromDate ? $fromDate : $day;
+            // A multi-day event — all-day or timed — is emitted once, clamped to
+            // the range's first visible day when it began before the window. The
+            // clamp is not optional: the overlap predicate above already fetched
+            // the row, so grouping it under a date outside the range would drop
+            // it from the agenda entirely.
+            return $day < $fromDate ? $fromDate : $day;
         });
 
         $today = CarbonImmutable::now(config('kbms.timezone'))->toDateString();
@@ -51,7 +54,21 @@ class AgendaQuery
 
             /** @var Collection<int, AgendaRow> $rowsForDay */
             $rowsForDay = $byDate->get($key, collect())
-                ->sortBy(fn (AgendaRow $row): string => ($row->isAllDay ? '0' : '1').$row->start->format('H:i:s'))
+                ->sortBy(function (AgendaRow $row) use ($key): string {
+                    if ($row->isAllDay) {
+                        return '0';
+                    }
+
+                    // A timed event clamped from an earlier day is already in
+                    // progress when this day opens, so it sorts ahead of the
+                    // meetings that actually start today rather than at its own
+                    // (earlier, and here meaningless) wall-clock time.
+                    $time = $row->start->toDateString() < $key
+                        ? '00:00:00'
+                        : $row->start->format('H:i:s');
+
+                    return '1'.$time;
+                })
                 ->values();
 
             return new AgendaDay($date, $rowsForDay->all(), $key === $today);

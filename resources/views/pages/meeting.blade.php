@@ -11,6 +11,9 @@
                 @if ($row->isAllDay)
                     {{ $row->spanLabel ? $row->spanLabel.', '.$row->start->format('Y') : $row->start->format('D j M Y') }}
                     &middot; {{ __('All day') }}
+                @elseif ($row->spanLabel)
+                    {{ $row->start->format('D j M Y, H:i') }}
+                    &ndash; {{ $row->end->format('D j M Y, H:i') }} {{ config('kbms.timezone') }}
                 @else
                     {{ $row->start->format('D j M Y') }}
                     &middot; {{ $row->start->format('H:i') }}&ndash;{{ $row->end->format('H:i') }} {{ config('kbms.timezone') }}

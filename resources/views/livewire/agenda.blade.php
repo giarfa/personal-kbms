@@ -107,7 +107,11 @@
                                             @endif
                                         @else
                                             {{ $row->start->format('H:i') }}
-                                            <small>{{ __(':minutes min', ['minutes' => $row->durationMinutes]) }}</small>
+                                            @if ($row->spanLabel)
+                                                <small>{{ $row->spanLabel }}</small>
+                                            @else
+                                                <small>{{ __(':minutes min', ['minutes' => $row->durationMinutes]) }}</small>
+                                            @endif
                                         @endif
                                     </span>
                                     <span>

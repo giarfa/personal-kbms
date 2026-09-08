@@ -37,8 +37,16 @@ final readonly class AgendaRow
         $this->routeKey = $event->occurrenceKey()->toRouteKey();
         $this->coverage = new MeetingCoverage;
 
-        $this->spanLabel = $this->isAllDay && $this->end->subDay()->isAfter($this->start)
-            ? $this->start->format('M j').' – '.$this->end->subDay()->format('M j')
+        // Both kinds store an exclusive end, so an end landing exactly on midnight
+        // belongs to the previous day. Timed occurrences span days too (an
+        // overnight bridge, a long workshop block) — labelling only all-day ones
+        // leaves a carried-over row looking like it starts today.
+        $lastDay = $this->end->equalTo($this->end->startOfDay())
+            ? $this->end->subDay()
+            : $this->end;
+
+        $this->spanLabel = $lastDay->toDateString() > $this->start->toDateString()
+            ? $this->start->format('M j').' – '.$lastDay->format('M j')
             : null;
     }
 }

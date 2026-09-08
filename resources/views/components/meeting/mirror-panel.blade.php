@@ -3,9 +3,13 @@
 @php
     $event = $row->event;
 
-    $when = $row->isAllDay
-        ? ($row->spanLabel ?? $row->start->format('D j M Y'))
-        : $row->start->format('D j M Y, H:i').' – '.$row->end->format('H:i');
+    $when = match (true) {
+        $row->isAllDay => $row->spanLabel ?? $row->start->format('D j M Y'),
+        // A timed occurrence that carries into another day needs both dates —
+        // "Wed 9 Sep, 22:00 – 06:00" reads as an eight-hour trip backwards in time.
+        $row->spanLabel !== null => $row->start->format('D j M Y, H:i').' – '.$row->end->format('D j M Y, H:i'),
+        default => $row->start->format('D j M Y, H:i').' – '.$row->end->format('H:i'),
+    };
 
     $duration = match (true) {
         $row->isAllDay => trans_choice(':count day|:count days', max(1, $row->start->diffInDays($row->end)), ['count' => max(1, $row->start->diffInDays($row->end))]),
