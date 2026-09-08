@@ -106,7 +106,13 @@
                                                 <small>{{ $row->spanLabel }}</small>
                                             @endif
                                         @else
-                                            {{ $row->start->format('H:i') }}
+                                            @if ($row->start->toDateString() !== $day->date->toDateString())
+                                                {{-- Already running when this day opened: its own wall clock
+                                                     belongs to an earlier day and reads as out of order here. --}}
+                                                {{ __('Since :time', ['time' => $row->start->format('H:i')]) }}
+                                            @else
+                                                {{ $row->start->format('H:i') }}
+                                            @endif
                                             @if ($row->spanLabel)
                                                 <small>{{ $row->spanLabel }}</small>
                                             @else

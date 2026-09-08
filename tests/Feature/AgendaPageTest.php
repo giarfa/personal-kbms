@@ -150,6 +150,46 @@ class AgendaPageTest extends TestCase
         $this->assertSame(1, substr_count($response->getContent(), 'Offsite'));
     }
 
+    public function test_a_carried_over_timed_event_renders_on_the_agenda_with_its_span(): void
+    {
+        CalendarEvent::factory()->create([
+            'summary' => 'Overnight incident bridge',
+            'is_all_day' => false,
+            'starts_at' => '2026-09-07 22:00:00',
+            'ends_at' => '2026-09-08 06:00:00',
+        ]);
+
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(8, 45), 15)->create([
+            'summary' => 'Daily standup',
+        ]);
+
+        $response = $this->get('/')
+            ->assertOk()
+            ->assertSee('Overnight incident bridge')
+            ->assertSee('Sep 7 – Sep 8')
+            ->assertSee('Since 22:00');
+
+        // It is already running when the day opens, so it sits above the
+        // meetings that actually start this morning.
+        $body = $response->getContent();
+        $this->assertLessThan(
+            strpos($body, 'Daily standup'),
+            strpos($body, 'Overnight incident bridge'),
+        );
+    }
+
+    public function test_a_timed_event_starting_today_keeps_its_plain_wall_clock(): void
+    {
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(8, 45), 15)->create([
+            'summary' => 'Daily standup',
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('08:45')
+            ->assertDontSee('Since 08:45');
+    }
+
     public function test_a_day_with_no_meetings_renders_its_empty_state(): void
     {
         CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
