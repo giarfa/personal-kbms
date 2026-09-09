@@ -111,7 +111,12 @@ class MeetingCoverageLookupTest extends TestCase
         $dir = $this->configureTranscriptsDirectory();
 
         $broken = CalendarEvent::factory()->create();
-        MeetingTranscript::factory()->forOccurrence($broken)->broken()->create();
+        // Inside the configured base but never created — Broken, not
+        // Rejected (the factory's default broken() path lives under
+        // storage_path(), which is outside this test's temp base).
+        MeetingTranscript::factory()->forOccurrence($broken)->broken()->create([
+            'path' => "{$dir}/gone.md",
+        ]);
 
         $unreadablePath = "{$dir}/locked.md";
         file_put_contents($unreadablePath, 'x');

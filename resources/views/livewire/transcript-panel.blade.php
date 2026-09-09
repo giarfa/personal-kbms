@@ -109,7 +109,7 @@ use App\Transcripts\TranscriptState;
                     type="button"
                     class="kb-iconbtn"
                     aria-label="{{ __('Copy transcript path') }}"
-                    onclick="navigator.clipboard.writeText('{{ $path }}')"
+                    onclick="navigator.clipboard.writeText(@js($path))"
                 >&#10697;</button>
             </p>
         @endif
@@ -138,7 +138,7 @@ use App\Transcripts\TranscriptState;
                 <div class="kb-stack">
                     @forelse ($pickerFiles as $file)
                         <flux:modal.close>
-                            <button type="button" class="kb-candidate" wire:click="link('{{ $file }}')">
+                            <button type="button" class="kb-candidate" wire:click="link(@js($file))">
                                 <code>{{ $file }}</code>
                             </button>
                         </flux:modal.close>

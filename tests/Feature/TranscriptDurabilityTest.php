@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Calendar\EventSynchronizer;
 use App\Calendar\ParsedOccurrence;
+use App\Livewire\TranscriptPanel;
 use App\Meetings\OccurrenceKey;
 use App\Models\CalendarEvent;
 use App\Models\MeetingTranscript;
 use App\Transcripts\TranscriptLinkSource;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class TranscriptDurabilityTest extends TestCase
@@ -169,16 +171,25 @@ class TranscriptDurabilityTest extends TestCase
         );
 
         $event = CalendarEvent::query()->where('source_uid', 'durability-uid')->first();
-        $path = realpath(sys_get_temp_dir()).'/kbms-durability-'.uniqid().'.md';
-        file_put_contents($path, 'content');
+
+        $dir = realpath(sys_get_temp_dir()).'/kbms-durability-'.uniqid();
+        mkdir($dir, 0755, true);
+        config(['kbms.transcripts_path' => $dir]);
+        // A filename matching the ORIGINAL pattern only — the point is that
+        // resolution never re-derives from the current pattern once a row
+        // exists (readerViewData() reads the persisted path directly).
+        $path = "{$dir}/2026-06-02-1200-weekly-sync.md";
+        file_put_contents($path, '# Persisted link content');
         MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $path]);
 
+        // A pattern that would not even parse the file above.
         config(['kbms.transcript_pattern' => 'totally-different-{date}_{time}_{slug}-scheme']);
 
-        $transcript = MeetingTranscript::query()->forOccurrence($event->occurrenceKey())->first();
-        $this->assertNotNull($transcript);
-        $this->assertSame($path, $transcript->path);
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertSee('Linked by convention')
+            ->assertSee('Persisted link content');
 
         unlink($path);
+        rmdir($dir);
     }
 }

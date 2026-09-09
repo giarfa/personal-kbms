@@ -152,7 +152,7 @@ final class TranscriptResolver
             }
 
             $key = $parsed->datetime->format('Y-m-d H:i');
-            $bytes = @filesize($path);
+            $bytes = is_file($path) ? filesize($path) : false;
 
             $index[$key][] = [
                 'path' => $path,

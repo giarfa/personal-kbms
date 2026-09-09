@@ -83,7 +83,7 @@ final class TranscriptsDirectory
         $configuredExtensions = config('kbms.transcript_extensions');
         $extensions = array_map(strtolower(...), $configuredExtensions);
 
-        $entries = @scandir($base);
+        $entries = is_readable($base) ? scandir($base) : false;
 
         if ($entries === false) {
             return $this->files = [];

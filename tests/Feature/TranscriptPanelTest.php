@@ -311,6 +311,21 @@ class TranscriptPanelTest extends TestCase
             ->assertSee('.txt rendered as plain text');
     }
 
+    public function test_a_filename_with_a_quote_does_not_break_out_of_the_js_context(): void
+    {
+        $this->configureDirectory();
+        // A filename a slug-derived convention could plausibly produce
+        // (an externally-influenced meeting title) containing a single
+        // quote — must not break out of the wire:click JS string literal.
+        $this->seedFile("evil'); alert(1); ('unrelated", 'md', 'x');
+        $event = $this->eventAt('2026-09-09 09:30:00', 'Nothing recorded');
+
+        $html = Livewire::test(TranscriptPanel::class, ['occurrence' => $event])->html();
+
+        $this->assertStringNotContainsString("link('evil'", $html);
+        $this->assertStringContainsString('\\u0027', $html);
+    }
+
     public function test_a_truncated_transcript_shows_the_truncation_notice(): void
     {
         config(['kbms.transcript_preview_bytes' => 5]);
