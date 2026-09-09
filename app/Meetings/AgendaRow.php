@@ -27,7 +27,7 @@ final readonly class AgendaRow
 
     public MeetingCoverage $coverage;
 
-    public function __construct(public CalendarEvent $event)
+    public function __construct(public CalendarEvent $event, MeetingCoverage $coverage = new MeetingCoverage)
     {
         $this->start = CarbonImmutable::instance($event->starts_at);
         $this->end = CarbonImmutable::instance($event->ends_at);
@@ -40,7 +40,7 @@ final readonly class AgendaRow
             : (int) round($this->start->diffInMinutes($this->end));
         $this->isCancelled = $event->cancelled_at !== null;
         $this->routeKey = $event->occurrenceKey()->toRouteKey();
-        $this->coverage = new MeetingCoverage;
+        $this->coverage = $coverage;
 
         // Both kinds store an exclusive end, so an end landing exactly on midnight
         // belongs to the previous day. Timed occurrences span days too (an
