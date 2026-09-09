@@ -206,7 +206,7 @@ Mockups are layout and flow references, **not HTML to paste**. The `kb-*` classe
 | `kb-textarea` + autosave | Livewire `wire:model.live.debounce.750ms` + a `saving`/`saved`/`error` state property |
 | `kb-scroll` transcript | Livewire component reading the file on render; **bounded** read, never `file_get_contents` on an unbounded path |
 | `kb-command` | Rendered from the same array the job dispatches, so display and execution cannot diverge |
-| `kb-cal__*` / `kb-week__*` | FullCalendar MIT core (`daygrid`, `timegrid`) in a thin Alpine wrapper; the static grids here define the visual result, not the DOM |
+| `kb-cal__*` / `kb-week__*` | Shipped as `resources/js/calendar.js` (`@fullcalendar/core`, `@fullcalendar/daygrid`, `@fullcalendar/timegrid`, MIT core only) in a thin Alpine wrapper (`resources/views/pages/calendar.blade.php`); the static grids here define the visual result, not the DOM — FullCalendar's own markup is what actually gets styled (`resources/css/app.css`). **Recorded departure:** the coverage marks render as shape-plus-colour (circle for notes, square for transcript), not the mockup's dot-only pair, because two dots differing only in hue is a WCAG 1.4.1 Use-of-Colour failure |
 | `kb-drawer-demo` | `<flux:sidebar>` collapsed variant / Flux sheet — do not hand-roll |
 | `theme.js` | Kit's own appearance setting (light/dark/system, persisted) — delete `theme.js`, do not port it |
 

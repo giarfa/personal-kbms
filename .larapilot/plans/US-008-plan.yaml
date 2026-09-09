@@ -458,7 +458,7 @@ tasks:
     id: TASK-08
     title: 'Document the calendar surface'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 1.5
     dependencies:
@@ -480,12 +480,12 @@ tasks:
       6. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] README covers the calendar surface, the URL contract and the coverage vocabulary
-      - [ ] README states the `npm run build` requirement and the blank-grid symptom
-      - [ ] MIT-core-only constraint recorded with the three package names
-      - [ ] Mockup README implementation-mapping row points at the real files and records the coverage-mark departure
-      - [ ] PRD confirmed unchanged (or updated with a revision row in this commit if a config value was introduced)
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] README covers the calendar surface, the URL contract and the coverage vocabulary
+      - [x] README states the `npm run build` requirement and the blank-grid symptom
+      - [x] MIT-core-only constraint recorded with the three package names
+      - [x] Mockup README implementation-mapping row points at the real files and records the coverage-mark departure
+      - [x] PRD confirmed unchanged (or updated with a revision row in this commit if a config value was introduced)
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — documentation only
@@ -494,4 +494,4 @@ tasks:
       - Commit: `docs(US-008): TASK-08 document the calendar surface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
-updated_at: '2026-09-09T23:35:01+02:00'
+updated_at: '2026-09-09T23:35:45+02:00'
