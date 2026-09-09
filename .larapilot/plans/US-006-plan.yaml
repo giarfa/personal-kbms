@@ -1,5 +1,5 @@
 code: US-006
-plan_body: |-
+plan_body: |
   ## Technical Solution
 
   US-006 is the first spec that gives the operator a **write** surface, and the first to add a table since US-003. Every decision in it follows from one property the spec calls non-negotiable: a note must outlive anything the feed can do to the meeting it hangs on. That rules out any dependency on `calendar_events.id`.
@@ -113,6 +113,37 @@ plan_body: |-
   | Feature — `AgendaPageTest` (extended) | an annotated meeting renders the `Notes` badge and an un-annotated one renders `Not annotated`; a blank-bodied note reads `Not annotated`; the day header's annotated count reflects reality; a note on one occurrence of the seeded series does not badge its siblings |
 
   **Manual test handoff** (Anne — required at this bar for UI, per the mockup test contract): keyboard-only pass over the note panel — tab into the tablist, switch Write/Preview with the keyboard, reach `Delete notes…`, open and dismiss the modal with `Esc` and confirm focus returns to the trigger; type and confirm the save indicator announces without stealing focus; theme toggle in both directions with the preview rendered; 375 px pass against `mobile.html`; contrast spot-check of `kb-savestate` in its three states in light and dark.
+
+  ## Rework — round 1 (2026-09-09, larapilot-review)
+
+  The increment was rejected at the human gate. **No production defect was found**: every acceptance criterion is implemented, Larastan level 5 and Pint are clean, and Lars returned GO with no Critical/High/Medium. All three findings are on the test and presentation side, and the branch `feature/US-006-meeting-notes` stays open — TASK-00 is not repeated.
+
+  ### What went wrong, and why it survived the first pass
+
+  1. **A red suite reported as green.** TASK-08 changed `AgendaQuery::for()` from one query to two (the events read plus the batched `MeetingCoverageLookup`), and correctly documented that in its own docblock — but the US-005 assertion `AgendaQueryTest::test_the_agenda_is_built_with_a_single_query` still demands `1`. It fails on roughly one run in three (`--random-order-seed=6` and `=9` fail, `=3` and `=11` pass; 5 of 15 sampled seeds fail). The implementation round happened to observe a passing seed and recorded "238/238".
+
+     The failure is intermittent because `CalendarEventFactory::definition()` draws `dateTimeBetween('-30 days', '+45 days')` while `AgendaRange::today()` is a one-day window. The three fixture events usually miss the range entirely, `MeetingCoverageLookup::for()` short-circuits on an empty `$uids`, and the count comes back 1. **On the runs where it passes it is therefore asserting nothing about batching either** — the regression guard against a future N+1 on the agenda has been inert since the day it was written.
+
+  2. **Two new assertions that cannot fail.** `resources/views/livewire/agenda.blade.php:37` renders `Not annotated` unconditionally in the coverage legend, above every day group. `assertSee('Not annotated')` is therefore satisfied on any agenda page whatever the badges say. Confirmed empirically at the gate: the blank-note test's exact assertion still passes when the note is given real content. One of the two affected tests is the agenda-level form of the spec's highest-value criterion, so this is the worst possible place for a no-op.
+
+  3. **Convention drift.** `resources/views/livewire/meeting-notes.blade.php` is the only view in the project carrying inline `style=` attributes — six of them. Every sibling view has zero, and the same commit added 161 lines of `kb-*` CSS, so the escape hatch was never needed.
+
+  ### Rework principles
+
+  - **Assert the contract, not the current number.** The agenda's real guarantee is *a fixed, small query count independent of how many meetings the week holds*. Encode that — two queries at 3 events and at 12 — rather than swapping `1` for `2` and leaving the fixtures where a change of window silently disarms the test again.
+  - **Row-scoped assertions.** Coverage badges are per-row; assert inside the row's markup, never against the whole page, so the legend can never stand in for a badge. `resources/views/livewire/agenda.blade.php` gives a clean anchor: `kb-row__title` carries the summary and `kb-row__badges` follows it inside the same `<a>`.
+  - **Every repaired assertion must be proven to fail.** Re-running a rewritten test green proves nothing — it is what produced this round. Each fixed test is temporarily exercised against an inverted badge condition (or an added query) and observed red before the mutation is reverted. The observation is recorded in the task's completion criteria.
+  - **No production code changes** beyond promoting six presentation attributes to classes. `app/` is untouched.
+
+  ### Deliberately not in this round
+
+  - The two single-row `meeting_notes` reads on the detail page (badge lookup + editor `mount()`) stay unconsolidated — both are indexed single-row lookups and merging them would couple `MeetingController` to the Livewire component for no measurable gain. Accepted at review.
+  - `MeetingNote::flushEventListeners()` in the forced-failure test stays. It clears all listeners rather than just the injected `saving` closure, but no other listener exists on the model and Laravel's per-test container prevents leakage. Revisit only if a real Observer is added.
+  - The delete modal's `@if ($hasNote)` wrapper stays. It unmounts the `<flux:modal>` in the same request that closes it, which could in principle race Flux's close animation; no functional defect was found and focus-return is already asserted. It remains on the manual keyboard-only handoff below, which is still owed.
+
+  ### Exit gate for this round
+
+  The full suite must be observed green across **several** `--random-order-seed` values, not one run, and `php artisan larapilot:quality` must stay clean, before the spec returns to REVIEW. This is TASK-14 and it runs after all three fixes land.
 tasks:
   -
     id: TASK-00
@@ -639,4 +670,204 @@ tasks:
       subject: 'docs(US-006): TASK-10 document the note surface and correct the Flux tabs mapping'
       committed_at: '2026-09-09T09:19:58+02:00'
       url: 'https://github.com/giarfa/personal-kbms/commit/149a433f216145ed2be29eab25fd235603d40a08'
-updated_at: '2026-09-09T09:19:58+02:00'
+  -
+    id: TASK-11
+    title: 'Fix the stale and inert agenda query-count assertion'
+    type: Fix
+    status: TODO
+    assignee: Anne
+    estimate_hours: 1
+    dependencies: {}
+    body: |
+      ## Description
+      Fix: `tests/Unit/Meetings/AgendaQueryTest.php` still asserts the agenda costs **one** query, while TASK-08 made it two. The suite fails on ~1 run in 3, and on the runs where it passes it asserts nothing about batching.
+
+      `AgendaQuery::for()` now issues exactly two queries — the `calendar_events` overlap read, plus `MeetingCoverageLookup::for()` — and `app/Meetings/AgendaQuery.php:36-38` documents that as the intended contract. **The implementation is correct; the test is wrong.** Do not "fix" this by reverting the batched lookup.
+
+      The test is intermittent rather than always-red because `CalendarEventFactory::definition()` draws `dateTimeBetween('-30 days', '+45 days')` while `AgendaRange::today()` spans a single day: the three unpinned fixture events usually fall outside the window, `MeetingCoverageLookup::for()` returns early on an empty `$uids`, and the count is 1. Pinning the fixtures into the range is therefore not cosmetic — it is what makes the test able to observe anything at all.
+
+      ## Files Involved
+      - tests/Unit/Meetings/AgendaQueryTest.php
+
+      ## Steps
+      1. Reproduce first, so the fix is anchored to a real failure rather than a description of one: `vendor/bin/phpunit --random-order-seed=6` and `--random-order-seed=9` both fail with `Failed asserting that 2 is identical to 1` at `AgendaQueryTest.php:287`; seeds 3 and 11 pass.
+      2. Rename `test_the_agenda_is_built_with_a_single_query` — the name is now false. Use `test_the_agenda_costs_a_fixed_two_queries_regardless_of_event_count` or equivalent.
+      3. Pin every fixture event **into** the range with `->at(now('Europe/Rome')->setTime(...), 30)`, the pattern the rest of the file already uses. The class freezes time to `2026-09-08 12:00:00 Europe/Rome` in `setUp()`, so this is deterministic.
+      4. Assert the contract, not a constant: count queries via `DB::listen` for **3** in-range events, then again for **12**, and assert both are `2`. A future N+1 in either the events read or the coverage lookup then fails the suite, which is what the original test was written to do and has never actually done.
+      5. Add one in-range event carrying a `MeetingNote` so the coverage query returns rows rather than an empty set — the empty path is what masked the bug, and it must not be the only path exercised.
+      6. Prove the repaired test can fail: temporarily add a throwaway extra query inside `AgendaQuery::for()` (e.g. `CalendarEvent::query()->count()`), observe the test go red at 3, then revert. Record the observation in the completion criteria below.
+      7. `vendor/bin/phpunit tests/Unit/Meetings/AgendaQueryTest.php`
+
+      ## Completion Criteria
+      - [ ] `AgendaQueryTest` asserts a fixed **2** queries at both 3 and 12 in-range events
+      - [ ] Fixtures are pinned into `AgendaRange::today()`; no assertion depends on `dateTimeBetween` randomness
+      - [ ] At least one fixture carries a `MeetingNote`, so the coverage query returns rows
+      - [ ] The test name no longer claims a single query
+      - [ ] Mutation observed: an injected extra query in `AgendaQuery::for()` turns the test red; mutation reverted
+      - [ ] `vendor/bin/phpunit --random-order-seed=6` and `--random-order-seed=9` both pass
+
+      ## Test Data
+      - N/A — no model, migration, factory or seeder change
+
+      ## Git Deliverables
+      - Commit: `fix(US-006): TASK-11 assert the agenda's real two-query contract`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: local PR notes only
+  -
+    id: TASK-12
+    title: 'Make the agenda coverage-badge assertions row-scoped so they can fail'
+    type: Fix
+    status: TODO
+    assignee: Anne
+    estimate_hours: 1.5
+    dependencies: {}
+    body: |
+      ## Description
+      Fix: three assertions in `tests/Feature/AgendaPageTest.php` are satisfied by the coverage legend rather than by any badge, so they cannot fail.
+
+      `resources/views/livewire/agenda.blade.php:37` renders `<span class="kb-tag kb-tag--bare">Not annotated</span>` unconditionally in the legend, above every day group. `assertSee('Not annotated')` therefore passes on any agenda page regardless of badge state. Verified at the review gate: the blank-note test's exact assertion still passes when the note is given real content.
+
+      Affected:
+      - `test_a_blank_bodied_note_reads_not_annotated` (TASK-09) — asserts nothing.
+      - `test_one_occurrence_of_a_series_is_badged_without_its_siblings` (TASK-09) — asserts nothing. This is the agenda-level form of the spec's highest-value criterion, *"a note written on one occurrence never appears on its siblings"*.
+      - `test_the_not_annotated_badge_appears_for_every_row` (inherited from US-005) — same flaw; repair it in this pass.
+
+      **The behaviour itself is correct and is genuinely covered** by `tests/Unit/Meetings/MeetingCoverageLookupTest.php::test_a_non_blank_note_flags_only_its_own_occurrence`. What is missing is any assertion that the agenda *renders* that correctly. Do not change `agenda.blade.php` to make testing easier — the legend is a deliberate PRD density requirement (mockup README line 79) and stays.
+
+      ## Files Involved
+      - tests/Feature/AgendaPageTest.php
+
+      ## Steps
+      1. Add a private helper to the test class that slices a single row's markup out of the response, so the legend is structurally out of reach:
+
+         ```php
+         private function badgesFor(string $html, string $summary): string
+         {
+             $start = strpos($html, 'kb-row__title">'.e($summary));
+             $this->assertNotFalse($start, "No agenda row found for [{$summary}].");
+             $end = strpos($html, '</a>', $start);
+
+             return substr($html, $start, $end - $start);
+         }
+         ```
+
+         The `assertNotFalse` matters: without it a renamed class or a missing row would make every caller silently vacuous again, which is the exact failure mode being repaired.
+      2. Rewrite `test_a_blank_bodied_note_reads_not_annotated` to give the event a distinct summary and assert `assertStringContainsString('Not annotated', $this->badgesFor($html, 'Blank note meeting'))` **and** `assertStringNotContainsString('Notes', ...)` — both directions, so a badge that renders both tags is caught.
+      3. Rewrite `test_one_occurrence_of_a_series_is_badged_without_its_siblings` to assert on both occurrences of the series explicitly: the annotated one's row contains `Notes` and not `Not annotated`; the sibling's row contains `Not annotated` and not `Notes`. Give the two occurrences distinguishable summaries so the helper can address each. Keep the existing `Livewire::test(Agenda::class)->call('next')` navigation if the sibling sits in the following week, or place both in the default window — either is fine, but the assertion must name each row.
+      4. Repair `test_the_not_annotated_badge_appears_for_every_row` the same way: assert the badge inside each row's slice, not on the page.
+      5. Migrate `test_an_annotated_meeting_renders_the_notes_badge` and `test_the_day_headers_annotated_count_reflects_reality` to the helper as well. The former is currently sound — `assertSeeInOrder` happens to work because the legend precedes the rows — but it is sound by accident, and one helper for all five reads better than two conventions in one file.
+      6. Prove each repaired test can fail: temporarily invert the badge condition in `resources/views/livewire/agenda.blade.php` (swap `@if ($row->coverage->hasNotes)` for `@if (! $row->coverage->hasNotes)`), observe all repaired tests go red, then revert. Record the observation below.
+      7. `vendor/bin/phpunit tests/Feature/AgendaPageTest.php`
+
+      ## Completion Criteria
+      - [ ] All five coverage-badge assertions are row-scoped via the helper; none can be satisfied by the legend
+      - [ ] The helper fails loudly when the row is not found, rather than returning an empty slice
+      - [ ] The recurrence-isolation test names both occurrences and asserts the presence *and* absence of each badge
+      - [ ] `test_the_not_annotated_badge_appears_for_every_row` is repaired in the same pass
+      - [ ] Mutation observed: inverting `$row->coverage->hasNotes` in `agenda.blade.php` turns the repaired tests red; mutation reverted
+      - [ ] `resources/views/livewire/agenda.blade.php` is unchanged at the end of the task
+
+      ## Test Data
+      - N/A — no model, migration, factory or seeder change
+
+      ## Git Deliverables
+      - Commit: `fix(US-006): TASK-12 assert coverage badges per row, not per page`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: local PR notes only
+  -
+    id: TASK-13
+    title: "Promote the note panel's inline styles into kb-* classes"
+    type: Fix
+    status: TODO
+    assignee: Joe
+    estimate_hours: 1
+    dependencies: {}
+    body: |
+      ## Description
+      Fix: `resources/views/livewire/meeting-notes.blade.php` is the only view in the project carrying inline `style=` attributes — six of them. Every sibling view (`agenda`, `sync-alert`, `sync-status`, `pages/meeting`, `pages/calendar`) has zero. TASK-02 already ported 161 lines of `kb-*` CSS for this panel in the same round, so the escape hatch was never needed.
+
+      The occurrences:
+
+      | Line context | Inline style | Replace with |
+      | --- | --- | --- |
+      | error hint under the textarea | `margin-top:0.5rem` | a modifier on the existing `kb-note-inline`, e.g. `kb-note-inline kb-note-inline--spaced` |
+      | footer delete wrapper | `margin-left:auto` | a `kb-panel__foot__end` (or equivalent) class beside the existing `kb-panel__foot` rules |
+      | delete-modal heading | `margin:0;font-size:0.9375rem` | a `kb-modal__title` class |
+      | delete-modal body copy | `margin:0;font-size:0.8125rem` | a `kb-modal__body` class |
+      | delete-modal footnote | `margin:0` | fold into `kb-modal__body` or reuse `kb-note-inline` with the spacing modifier |
+      | `Delete notes…` button | `color:var(--kb-danger)` | a `kb-btn--danger-ghost` class, keeping the `--kb-danger` token |
+
+      Keep every token reference (`var(--kb-danger)` in particular) — the mockup README maps `--kb-danger` to the destructive role and that mapping is the contract, not the hex value. This is a class-extraction task, not a restyle: the rendered appearance must be identical in light and dark.
+
+      `kb-panel__foot` (app.css:711), `kb-note-inline` (:214), `kb-stack` (:771) and `kb-inline` (:777) already exist — extend them rather than introducing a parallel naming scheme.
+
+      ## Files Involved
+      - resources/views/livewire/meeting-notes.blade.php
+      - resources/css/app.css
+      - .larapilot/mockups/kbms-app/README.md (implementation mapping table, if the new class names belong there)
+
+      ## Steps
+      1. Add the new `kb-*` rules to `resources/css/app.css` next to the block TASK-02 added, following the file's existing ordering and comment style.
+      2. Replace all six `style=` attributes in `meeting-notes.blade.php`. Confirm none remain: `grep -c 'style="' resources/views/livewire/meeting-notes.blade.php` returns `0`.
+      3. `npm run build` (or `composer run dev`) and eyeball the panel in both themes — the footer's right-aligned delete control, the modal's type scale, and the danger-coloured ghost button must be visually unchanged.
+      4. Update the mockup README's implementation mapping table if it names any of the replaced inline styles.
+      5. `vendor/bin/phpunit tests/Feature/MeetingNotesTest.php` — the delete-path test asserts on both dialog strings and must stay green.
+
+      ## Completion Criteria
+      - [ ] `grep -c 'style="' resources/views/livewire/meeting-notes.blade.php` returns `0`
+      - [ ] New rules live in `resources/css/app.css` under `kb-*` names consistent with the existing scheme
+      - [ ] `--kb-danger` is still the source of the delete control's colour — no hard-coded hex
+      - [ ] Panel renders identically in light and dark, desktop and 375 px
+      - [ ] `MeetingNotesTest` still passes
+
+      ## Test Data
+      - N/A — presentation only
+
+      ## Git Deliverables
+      - Commit: `refactor(US-006): TASK-13 replace the note panel's inline styles with kb-* classes`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: local PR notes only
+  -
+    id: TASK-14
+    title: 'Multi-seed suite and quality gate before returning to REVIEW'
+    type: Test
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies:
+      - TASK-11
+      - TASK-12
+      - TASK-13
+    body: |
+      ## Description
+      The exit gate for this rework round. A single green run is precisely what let a ~1-in-3 failure reach the human gate reported as "238/238 passing", so the suite is observed across several random orderings before the spec goes back to REVIEW.
+
+      ## Files Involved
+      - (verification only — no application files)
+
+      ## Steps
+      1. Run the full suite across several orderings, including the two seeds that reproduced the original failure:
+         ```
+         for s in 3 6 9 11 17 23; do vendor/bin/phpunit --random-order-seed=$s | tail -1; done
+         ```
+         Every run must report `"result":"passed"`. A single failure on any seed blocks the gate — re-open the responsible task rather than re-rolling for a green seed.
+      2. `php artisan larapilot:quality` — Pint and Larastan level 5 must both stay clean after TASK-13's CSS and Blade edits.
+      3. `php artisan migrate:fresh --seed` — confirm the demo dataset is still coherent and the seeded `Weekly sync` series still carries a note on exactly one occurrence. No schema changed this round, so this is a regression check, not a new verification.
+      4. Record the seeds used and their results in `.larapilot/docs/review/US-006.md` under a `## Rework round 1` heading, so the next gate can see the evidence rather than a claim. Include the mutation observations from TASK-11 and TASK-12.
+      5. Hand off the manual checks still owed from the original plan's Test Strategy — they were never run and are unaffected by this round: keyboard-only pass over the note panel (tablist, Write/Preview, `Delete notes…`, `Esc` dismiss, focus return to the trigger), save-indicator announcement without focus theft, 375 px pass against `mobile.html`, and a contrast spot-check of `kb-savestate` in all three states in both themes.
+
+      ## Completion Criteria
+      - [ ] Full suite green on at least six distinct `--random-order-seed` values, including 6 and 9
+      - [ ] `larapilot:quality` clean (Pint + Larastan level 5, 0 errors)
+      - [ ] `migrate:fresh --seed` coherent
+      - [ ] Seeds, results and both mutation observations recorded in `.larapilot/docs/review/US-006.md`
+      - [ ] Manual keyboard/responsive handoff restated for the human at the gate
+
+      ## Test Data
+      - N/A — verification only
+
+      ## Git Deliverables
+      - Commit: `test(US-006): TASK-14 record multi-seed suite and quality verification`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: local PR notes only
+updated_at: '2026-09-09T19:31:09+02:00'

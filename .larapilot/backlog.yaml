@@ -284,8 +284,8 @@ specs:
       objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
     priority: HIGH
     points: 5
-    status: REVIEW
-    body: |
+    status: PLANNED
+    body: |-
       #### US-006: Personal notes on a meeting
 
       **Epic:** EP-003 | **Priority:** HIGH | **Points:** 5 | **Status:** TODO
@@ -315,10 +315,46 @@ specs:
       - [ ] **Error case:** an autosave failure surfaces a retry affordance and does not silently discard typed content
       - [ ] **Edge case:** a note on an occurrence that later disappears from the feed window is retained, not orphaned or purged
       - [ ] Feature test asserts recurrence isolation, resync durability across retitle/reschedule/cancel, and the delete path
+
+
+      ## Rework Feedback
+
+      **Verdict: Request changes.** No production defect found — all three items are test-side. Security review is GO, quality gate (Pint + Larastan L5) is clean, and every acceptance criterion is implemented. The suite is not green, so the gate cannot pass.
+
+      ### Critical — the suite fails on ~1 run in 3
+
+      - `tests/Unit/Meetings/AgendaQueryTest.php:287` — `test_the_agenda_is_built_with_a_single_query` asserts `assertSame(1, $queries)`, but TASK-08 changed `AgendaQuery::for()` to issue **two** queries (the events read plus `MeetingCoverageLookup`), and `app/Meetings/AgendaQuery.php:36-38` now documents exactly that. Reproduced: `vendor/bin/phpunit --random-order-seed=6` and `--random-order-seed=9` both fail with `Failed asserting that 2 is identical to 1`; seeds 3 and 11 pass. 5 of 15 sampled seeds fail.
+        - Why it hides: `CalendarEventFactory::definition()` picks `dateTimeBetween('-30 days', '+45 days')` while `AgendaRange::today()` is a one-day window, so the three events usually fall outside the range, `MeetingCoverageLookup::for()` short-circuits on an empty `$uids`, and the count comes back 1. On the runs where it passes it is therefore asserting nothing about batching either.
+        - Fix: pin the fixture events **into** the range (`->at(now('Europe/Rome')->setTime(...), 30)`, as the rest of the file already does) and assert the real contract — a fixed **2** queries, and unchanged when the event count grows (e.g. 3 events vs 12 events both cost 2). Rename accordingly; `test_the_agenda_is_built_with_a_single_query` is no longer true.
+
+      ### High — two new agenda assertions cannot fail
+
+      `resources/views/livewire/agenda.blade.php:37` renders `Not annotated` unconditionally in the coverage legend, so `assertSee('Not annotated')` is satisfied on every agenda page regardless of badge state. Verified empirically: the blank-note test's exact assertion still passes when the note is given real content.
+
+      - `tests/Feature/AgendaPageTest.php` — `test_a_blank_bodied_note_reads_not_annotated` asserts nothing.
+      - `tests/Feature/AgendaPageTest.php` — `test_one_occurrence_of_a_series_is_badged_without_its_siblings` asserts nothing. This is the agenda-level form of the spec's highest-value criterion ("a note written on one occurrence never appears on its siblings"), so it is the worst place in the suite for a no-op assertion. The behaviour itself is genuinely covered by `tests/Unit/Meetings/MeetingCoverageLookupTest.php::test_a_non_blank_note_flags_only_its_own_occurrence` — the gap is the agenda-rendering assertion, not the logic.
+        - Fix: assert against the row, not the page. Either scope to the meeting row markup (`assertSeeInOrder(['Weekly sync', 'Not annotated'])` in the sibling's own group, as `test_an_annotated_meeting_renders_the_notes_badge` already does correctly) or count badge occurrences so the legend's single instance is accounted for. Whatever shape is chosen, prove it fails when the badge logic is inverted.
+        - Same flaw in the pre-existing `test_the_not_annotated_badge_appears_for_every_row` (inherited from US-005) — fix it in the same pass.
+
+      ### Low — design-system drift
+
+      - `resources/views/livewire/meeting-notes.blade.php` — the only view in the project carrying inline `style=` attributes (6 of them: `margin-left:auto`, `color:var(--kb-danger)`, `margin:0;font-size:0.9375rem`). Every sibling view (`agenda`, `sync-alert`, `sync-status`, `pages/meeting`, `pages/calendar`) has zero. The same commit added 161 lines of `kb-*` CSS to `resources/css/app.css`, so the escape hatch was not needed. Promote them to `kb-*` classes before US-007 edits this file again.
+
+      ### Re-run bar
+
+      Run the full suite across several `--random-order-seed` values (not a single run) before returning to REVIEW — a single green run is what let this through the first time.
+
+      ### Carried forward, unchanged (no action required)
+
+      - Manual keyboard-only pass over the note panel is still owed per the plan's Test Strategy — including `Esc`-dismiss of the delete modal and focus return to the trigger, which matters because the `<flux:modal>` is wrapped in `@if ($hasNote)` and unmounts in the same request that closes it.
+      - Accepted as-is: two single-row `meeting_notes` reads on the detail page; `MeetingNote::flushEventListeners()` in the forced-failure test.
+      - Lars: GO, no Critical/High/Medium.
     status_history:
       - { status: PLANNED, at: '2026-09-09T08:47:36+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-09T09:03:56+02:00' }
       - { status: REVIEW, at: '2026-09-09T09:25:11+02:00' }
+      - { status: TODO, at: '2026-09-09T19:25:44+02:00' }
+      - { status: PLANNED, at: '2026-09-09T19:31:09+02:00' }
     rework: false
   -
     code: US-007
