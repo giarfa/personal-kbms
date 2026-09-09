@@ -78,7 +78,7 @@ tasks:
     id: TASK-00
     title: 'Bootstrap feature branch from develop'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
@@ -97,9 +97,9 @@ tasks:
       5. `git commit --allow-empty -m 'chore(US-008): TASK-00 bootstrap feature branch'`
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-008-calendar-views` exists locally, branched from `develop` at `edb1c5a`
-      - [ ] Anchor commit present
-      - [ ] PR title and body drafted locally; nothing pushed
+      - [x] Branch `feature/US-008-calendar-views` exists locally, branched from `develop` at `edb1c5a`
+      - [x] Anchor commit present
+      - [x] PR title and body drafted locally; nothing pushed
 
       ## Test Data
       - N/A — no model, migration or fixture change in this task
@@ -108,11 +108,17 @@ tasks:
       - Commit: `chore(US-008): TASK-00 bootstrap feature branch` (empty commit)
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepared locally only — open a remote PR only if the operator asks
+    commit:
+      sha: 2e71adeb01f7356ab3a766e2f138c1dc5d3956a0
+      short_sha: 2e71ade
+      subject: 'chore(US-008): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-09T23:18:14+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/2e71adeb01f7356ab3a766e2f138c1dc5d3956a0'
   -
     id: TASK-01
     title: 'Add the CalendarView enum and the CalendarRange window'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2
     dependencies:
@@ -136,13 +142,13 @@ tasks:
       8. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `CalendarView` exists with the three TitleCase cases and maps to FullCalendar view ids in exactly one place
-      - [ ] `CalendarView::fromRequest()` returns `Month` for null, empty, unknown and malformed input rather than throwing
-      - [ ] `CalendarRange::visibleStart()` / `visibleEnd()` return the window each view actually paints, month always whole weeks starting Monday
-      - [ ] `previous()` / `next()` / `label()` behave per view
-      - [ ] `CalendarRange::fromRequest()` degrades to today on an unparseable date
-      - [ ] Everything is `CarbonImmutable` in `config('kbms.timezone')`; no UTC conversion anywhere
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `CalendarView` exists with the three TitleCase cases and maps to FullCalendar view ids in exactly one place
+      - [x] `CalendarView::fromRequest()` returns `Month` for null, empty, unknown and malformed input rather than throwing
+      - [x] `CalendarRange::visibleStart()` / `visibleEnd()` return the window each view actually paints, month always whole weeks starting Monday
+      - [x] `previous()` / `next()` / `label()` behave per view
+      - [x] `CalendarRange::fromRequest()` degrades to today on an unparseable date
+      - [x] Everything is `CarbonImmutable` in `config('kbms.timezone')`; no UTC conversion anywhere
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — value objects only; no model, migration, factory or seeder change
@@ -151,11 +157,17 @@ tasks:
       - Commit: `feat(US-008): TASK-01 add CalendarView and CalendarRange`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: 23ba03b7ce15801f69d1b3db9414f8043b2381e7
+      short_sha: 23ba03b
+      subject: 'feat(US-008): TASK-01 add CalendarView and CalendarRange'
+      committed_at: '2026-09-09T23:20:11+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/23ba03b7ce15801f69d1b3db9414f8043b2381e7'
   -
     id: TASK-02
     title: 'Add the bounded calendar feed query and its JSON route'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Mike
     estimate_hours: 3
     dependencies:
@@ -183,15 +195,15 @@ tasks:
       10. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `GET /calendar/events?from=&to=` returns JSON for the requested window only
-      - [ ] Window is clamped at `MAX_RANGE_DAYS = 62`; a wider or malformed request cannot return the whole mirror
-      - [ ] Timed events emit naive local ISO strings with **no** offset and no UTC conversion
-      - [ ] All-day events emit `allDay: true` with the stored exclusive end passed through unchanged
-      - [ ] A multi-day occurrence is emitted once, spanning its whole range — not clamped to day one like the agenda
-      - [ ] Coverage resolves through the batched `MeetingCoverageLookup`; the endpoint costs one events query plus the two coverage queries plus one shared directory listing, regardless of density
-      - [ ] Every payload carries `url` to the US-005 occurrence route and an `accessibleName` stating time, title and coverage in words
-      - [ ] `php artisan route:list --path=calendar` shows both routes; the endpoint is behind `EnsureLoopbackRequest`
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `GET /calendar/events?from=&to=` returns JSON for the requested window only
+      - [x] Window is clamped at `MAX_RANGE_DAYS = 62`; a wider or malformed request cannot return the whole mirror
+      - [x] Timed events emit naive local ISO strings with **no** offset and no UTC conversion
+      - [x] All-day events emit `allDay: true` with the stored exclusive end passed through unchanged
+      - [x] A multi-day occurrence is emitted once, spanning its whole range — not clamped to day one like the agenda
+      - [x] Coverage resolves through the batched `MeetingCoverageLookup`; the endpoint costs one events query plus the two coverage queries plus one shared directory listing, regardless of density
+      - [x] Every payload carries `url` to the US-005 occurrence route and an `accessibleName` stating time, title and coverage in words
+      - [x] `php artisan route:list --path=calendar` shows both routes; the endpoint is behind `EnsureLoopbackRequest`
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — reads existing `calendar_events`, `meeting_notes` and `meeting_transcripts`; no migration, model, factory or seeder change
@@ -200,11 +212,17 @@ tasks:
       - Commit: `feat(US-008): TASK-02 add the bounded calendar feed query and JSON route`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: d01cc8edd085f3986ae2a1e62eb3072a80d2a9a9
+      short_sha: d01cc8e
+      subject: 'feat(US-008): TASK-02 add the bounded calendar feed query and JSON route'
+      committed_at: '2026-09-09T23:21:54+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/d01cc8edd085f3986ae2a1e62eb3072a80d2a9a9'
   -
     id: TASK-03
     title: 'Unit- and feature-test the range, the feed query and the endpoint'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 3
     dependencies:
@@ -230,22 +248,28 @@ tasks:
       9. Do **not** add Playwright, Dusk, Pest browser or viewport suites — `settings.testing` is `NORMAL`
 
       ## Completion Criteria
-      - [ ] All three test files pass, and the full suite stays green
-      - [ ] Timezone assertions prove no offset and no UTC conversion in the payload
-      - [ ] Range-clamp, malformed-input and empty-window behaviours are all asserted
-      - [ ] Coverage combinations (none / notes / transcript / both) and the cancelled state are each asserted on the right occurrence
-      - [ ] A query-count assertion bounds the endpoint against a future N+1
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] All three test files pass, and the full suite stays green
+      - [x] Timezone assertions prove no offset and no UTC conversion in the payload
+      - [x] Range-clamp, malformed-input and empty-window behaviours are all asserted
+      - [x] Coverage combinations (none / notes / transcript / both) and the cancelled state are each asserted on the right occurrence
+      - [x] A query-count assertion bounds the endpoint against a future N+1
+      - [x] `php artisan larapilot:quality` passes
 
       ## Git Deliverables
       - Commit: `test(US-008): TASK-03 cover the calendar range, feed query and endpoint`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: ea291f44488d72420daa018c2bd743aac8ef9bab
+      short_sha: ea291f4
+      subject: 'test(US-008): TASK-03 cover the calendar range, feed query and endpoint'
+      committed_at: '2026-09-09T23:23:30+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ea291f44488d72420daa018c2bd743aac8ef9bab'
   -
     id: TASK-04
     title: 'Wire FullCalendar MIT into the calendar page with a custom toolbar'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 5
     dependencies:
@@ -277,17 +301,17 @@ tasks:
       12. `npm run build`, then `php artisan test` and `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Month, week and day views render mirrored events at `/calendar`
-      - [ ] MIT plugins only — `package.json` contains no premium FullCalendar package and the config carries no `schedulerLicenseKey`
-      - [ ] The grid fetches only the visible window; navigating months issues a new bounded request rather than loading the mirror
-      - [ ] `?view=` and `?date=` are honoured on load and kept current with `history.replaceState`
-      - [ ] Clicking an event opens the US-005 detail route
-      - [ ] All-day events render in the all-day lane, never as midnight-to-midnight blocks; a multi-day event spans correctly in month view as a single bar
-      - [ ] A day with many overlapping meetings shows `+N more` and expands — nothing is silently dropped
-      - [ ] An empty range renders an empty grid plus the sync-health-aware note, with no layout break
-      - [ ] Events render in `KBMS_TIMEZONE` digits and stay correct across the DST week
-      - [ ] `npm run build` succeeds and the full test suite stays green
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] Month, week and day views render mirrored events at `/calendar`
+      - [x] MIT plugins only — `package.json` contains no premium FullCalendar package and the config carries no `schedulerLicenseKey`
+      - [x] The grid fetches only the visible window; navigating months issues a new bounded request rather than loading the mirror
+      - [x] `?view=` and `?date=` are honoured on load and kept current with `history.replaceState`
+      - [x] Clicking an event opens the US-005 detail route
+      - [x] All-day events render in the all-day lane, never as midnight-to-midnight blocks; a multi-day event spans correctly in month view as a single bar
+      - [x] A day with many overlapping meetings shows `+N more` and expands — nothing is silently dropped
+      - [x] An empty range renders an empty grid plus the sync-health-aware note, with no layout break
+      - [x] Events render in `KBMS_TIMEZONE` digits and stay correct across the DST week
+      - [x] `npm run build` succeeds and the full test suite stays green
+      - [x] `php artisan larapilot:quality` passes
 
       ## Test Data
       - No model or migration change. Only if the seeded month renders visibly empty, extend `CalendarEventSeeder` volumes **in this same commit** — never defer a seeder update to a later task
@@ -470,4 +494,4 @@ tasks:
       - Commit: `docs(US-008): TASK-08 document the calendar surface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
-updated_at: '2026-09-09T22:50:38+02:00'
+updated_at: '2026-09-09T23:27:22+02:00'
