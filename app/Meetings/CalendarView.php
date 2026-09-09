@@ -26,10 +26,11 @@ enum CalendarView: string
 
     /**
      * `?view=` is a hand-editable, bookmarkable surface: anything unrecognised
-     * degrades to Month rather than throwing (US-005 review precedent).
+     * — including a non-string shape such as `?view[]=x` — degrades to Month
+     * rather than throwing (US-005 review precedent).
      */
-    public static function fromRequest(?string $value): self
+    public static function fromRequest(mixed $value): self
     {
-        return self::tryFrom((string) $value) ?? self::Month;
+        return is_string($value) ? (self::tryFrom($value) ?? self::Month) : self::Month;
     }
 }

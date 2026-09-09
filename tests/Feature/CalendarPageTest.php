@@ -45,6 +45,16 @@ class CalendarPageTest extends TestCase
             ->assertSee('Tuesday 8 September 2026');
     }
 
+    public function test_an_array_shaped_view_and_date_degrade_instead_of_500ing(): void
+    {
+        // ?view[]=x&date[]=y sends arrays where strings are expected — a
+        // TypeError, not a parse failure, and must degrade the same way
+        // (Lars review).
+        $this->get('/calendar?view[]=x&date[]=y')
+            ->assertOk()
+            ->assertSee('September 2026');
+    }
+
     public function test_an_unknown_view_falls_back_to_month_rather_than_500ing(): void
     {
         $this->get('/calendar?view=quarter&date=2026-09-08')

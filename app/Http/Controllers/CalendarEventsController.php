@@ -9,6 +9,7 @@ use Carbon\CarbonImmutable;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use InvalidArgumentException;
 
 /**
  * The JSON feed FullCalendar's `events` function calls for the visible
@@ -31,9 +32,13 @@ class CalendarEventsController extends Controller
     /**
      * @return array{0: CarbonImmutable, 1: CarbonImmutable}
      */
-    private function window(?string $from, ?string $to): array
+    private function window(mixed $from, mixed $to): array
     {
         try {
+            if (! is_string($from) || ! is_string($to)) {
+                throw new InvalidArgumentException('from/to must be strings.');
+            }
+
             $start = CarbonImmutable::parse($from)->startOfDay();
             $end = CarbonImmutable::parse($to)->startOfDay();
         } catch (Exception) {

@@ -64,6 +64,14 @@ class CalendarFeedTest extends TestCase
             ->assertJsonMissing(['title' => 'Far outside the clamp']);
     }
 
+    public function test_an_array_shaped_from_degrades_to_a_default_window_instead_of_500ing(): void
+    {
+        // ?from[]=x sends an array where a string is expected — a TypeError,
+        // not a parse failure, and must degrade the same way (Lars review).
+        $this->getJson('/calendar/events?from[]=x&to[]=y')
+            ->assertOk();
+    }
+
     public function test_a_malformed_from_degrades_to_a_default_window_instead_of_500ing(): void
     {
         $this->getJson('/calendar/events?from=nonsense&to=')

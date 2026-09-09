@@ -29,12 +29,17 @@ final readonly class CalendarRange
 
     /**
      * `?view=` and `?date=` are hand-editable, bookmarkable query-string
-     * values: either can be missing, unknown, or malformed, and this must
-     * degrade to today's month rather than throw (Agenda::anchor() precedent).
+     * values: either can be missing, unknown, malformed, or even a non-string
+     * shape (`?date[]=x`), and this must degrade to today's month rather than
+     * throw (Agenda::anchor() precedent).
      */
-    public static function fromRequest(?string $view, ?string $date): self
+    public static function fromRequest(mixed $view, mixed $date): self
     {
         $resolvedView = CalendarView::fromRequest($view);
+
+        if (! is_string($date)) {
+            return self::today($resolvedView);
+        }
 
         try {
             return new self($resolvedView, CarbonImmutable::parse($date)->startOfDay());
