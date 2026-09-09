@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             CalendarEventSeeder::class,
             CalendarSyncRunSeeder::class,
             MeetingNoteSeeder::class,
+            MeetingTranscriptSeeder::class,
         ]);
     }
 }
