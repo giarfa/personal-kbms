@@ -1,0 +1,473 @@
+code: US-008
+plan_body: |
+  ## Technical Solution
+
+  US-008 adds the third reading surface over the existing mirror: month, week and day grids at `/calendar`, replacing the placeholder page US-005 left there. **No new tables, no new model, no schema change** — every row it renders already exists (`calendar_events`, `meeting_notes`, `meeting_transcripts`) and coverage is already computed by `App\Meetings\MeetingCoverageLookup`. The work is a range/query seam in PHP, a JSON feed the grid pulls from, a FullCalendar MIT wrapper, and a deliberate accessibility layer on top of it.
+
+  ### Layering (John)
+
+  | Layer | Class / file | Responsibility |
+  | --- | --- | --- |
+  | View vocabulary | `app/Meetings/CalendarView.php` (enum `Month` / `Week` / `Day`) | The only place the three views are named; maps to the FullCalendar view ids (`dayGridMonth`, `timeGridWeek`, `timeGridDay`) |
+  | Visible window | `app/Meetings/CalendarRange.php` | anchor + view -> the visible `[from, to)` local-date window (month view includes the leading and trailing days FullCalendar paints), `label()`, `previous()`, `next()` |
+  | Feed | `app/Meetings/CalendarFeedQuery.php` + `app/Meetings/CalendarEventPayload.php` | window -> the event array the grid consumes, coverage folded in through the batched `MeetingCoverageLookup` |
+  | HTTP | `app/Http/Controllers/CalendarEventsController.php` (`GET /calendar/events`) | date-only `from` / `to` params, clamped, JSON out |
+  | Page | `resources/views/pages/calendar.blade.php` + `resources/js/calendar.js` | Alpine wrapper around FullCalendar, custom toolbar, URL state |
+
+  `AgendaQuery` is left untouched. `CalendarFeedQuery` repeats its overlap predicate rather than sharing it, because the two surfaces disagree on what to do with a multi-day row — the agenda emits it once, clamped to the range's first visible day (recorded decision `agenda multi-day event rendering`), while the calendar must render it as one spanning bar across every day it covers. A shared abstraction here would have to be parameterised until it said nothing.
+
+  ### Storage convention and timezone (Mike + Emily)
+
+  `EventSynchronizer` stores `starts_at` / `ends_at` as **`KBMS_TIMEZONE`-local wall-clock digits, never UTC** (see its docblock, and `AgendaQuery`'s). Two consequences this plan is built on, and which tasks must not "fix":
+
+  1. The window predicate compares against dates built in `config('kbms.timezone')`, exactly as `AgendaQuery` does. Do not convert to UTC anywhere in this path.
+  2. The feed emits **naive local ISO strings with no offset** (`2026-09-08T09:30:00`) and the grid runs on FullCalendar's default `timeZone: 'local'`. Parse-as-local followed by render-as-local is the identity function, so the digits the operator sees are the digits stored in the row — and a DST boundary cannot shift them, because no conversion happens anywhere along the path. Emitting an offset (or UTC) would reintroduce precisely the double-conversion defect the wall-clock storage convention exists to avoid.
+
+  All-day rows are emitted with `allDay: true` and the stored **exclusive** end passed straight through: FullCalendar's all-day end is exclusive too, so no plus-or-minus-one-day arithmetic is needed, and adding any would break the multi-day span.
+
+  ### Only the visible range (John + Mike)
+
+  The grid never holds the mirror. FullCalendar's `events` is a **function**, not a URL string: it takes `fetchInfo.startStr` / `endStr`, truncates both to `YYYY-MM-DD` (discarding the browser offset, which is meaningless against wall-clock storage), and fetches `GET /calendar/events?from=...&to=...`. Server side the window is clamped to `CalendarFeedQuery::MAX_RANGE_DAYS = 62`, so a hand-edited or malformed range cannot ask for the whole mirror. Query cost stays flat: one events query plus the two batched coverage queries plus one shared directory listing — the same shape the agenda already pays, over a wider window.
+
+  **No new `.env` key.** The clamp is a class constant, so this spec leaves the PRD configuration surface unchanged and needs no PRD revision row.
+
+  ### State ownership (Joe)
+
+  The grid is **Alpine + FullCalendar, not a Livewire component.** `view` and `date` live in the query string (`?view=week&date=2026-09-08`); the server reads them to render the initial toolbar label and the initial grid config, and `history.replaceState` keeps them current as the operator navigates. Event links are **plain anchors** (FullCalendar's `url` prop) producing a full page load — no `wire:navigate` on chips.
+
+  Rationale: a Livewire round-trip would re-render and destroy the DOM FullCalendar owns, and reaching for `$wire.$set(..., false)` to dodge that leaves two sources of truth for one piece of state. With the URL as the only source, "view and date position survive navigation to a meeting and back" is satisfied by the browser rather than by a cache — Back returns to `?view=week&date=...` and the page rebuilds from it. This does not contradict the recorded `livewire component style` decision, which governs how Livewire components are written, not where one is required. `SyncStatus` and `SyncAlert` stay Livewire in the layout and are unaffected.
+
+  ### Coverage indicator (Elise)
+
+  Per the mockup contract: left border plus marks on the event chip — `has notes` teal (`--kb-note`), `has transcript` indigo (`--kb-transcript`), `has both` carrying both borders. **One documented departure from the mockup:** the two marks differ in **shape as well as hue** — notes a filled circle, transcript a filled square — because two dots separated only by colour is a WCAG 2.2 **1.4.1 Use of Colour** failure for the sighted operator, and the mockup's own answer (the accessible name) only reaches screen-reader users. The legend states both shapes in words.
+
+  Every chip carries an accessible name stating **time, title and coverage in words** ("09:30 Q4 roadmap review, has notes and transcript"), so the marks are `aria-hidden` decoration on top of a signal that already exists — the rule the mockup README sets for the whole app. Cancelled occurrences stay dashed, struck and muted; all-day rows keep their own lane and are never drawn as midnight-to-midnight blocks.
+
+  ### Accessibility beyond FullCalendar (Elise + Anne)
+
+  The spec is explicit that FullCalendar's defaults are not sufficient, so TASK-06 owns the gap as work in its own right: roving-tabindex arrow-key / `Home` / `End` movement across day cells, real focusable anchors for events, an `aria-pressed` segmented view switcher in our own toolbar (`headerToolbar: false`), an `aria-live="polite"` announcement of the range label on every navigation, a visible 3 px `--ring` focus halo on cells, chips and toolbar controls (never outline-only, never suppressed), and `prefers-reduced-motion` respected. Contrast is verified for every event state — bare, notes, transcript, both, all-day, cancelled, today — against `--card` in **both** themes.
+
+  ## Git & Branching
+  - Mode: `GITFLOW` (from `settings.git_mode`) — Gitflow without automatic push
+  - Branch: `feature/US-008-calendar-views` from `develop`. Clean branch point: `develop` is at `edb1c5a` with US-007 already merged, so nothing has to be stacked on an unmerged branch
+  - TASK-00: bootstrap the branch and prepare the internal PR title and body toward `develop` **locally**
+  - Per task: exactly one atomic Conventional Commit, `type(US-008): TASK-NN short summary` — never batch two tasks into one commit
+  - Push and remote PR: **skipped** under `GITFLOW`; open only if the operator explicitly asks in-session
+  - `php artisan larapilot:quality` (Pint + Larastan level 5) must pass before every `larapilot:task-done`
+  - Merge into `develop` only after human `/larapilot-review` approval
+
+  ## Test Data Strategy
+  - **No schema change and no new model in this spec.** `CalendarEventFactory`, `MeetingNoteFactory` and `MeetingTranscriptFactory` already exist and are the fixture source for every test here; no factory and no seeder is added by US-008
+  - `CalendarEventFactory::at()` (existing state) supplies timed occurrences; tests build all-day, multi-day, cancelled and DST-straddling rows through the same factory rather than through raw inserts
+  - The seeded dataset from `migrate:fresh --seed` is the development fixture for the grid. If a month window against it renders visibly empty, extend `CalendarEventSeeder` volumes **inside TASK-04's commit**, not in a follow-up — same-task rule
+  - Each task below states `## Test Data` explicitly; `N/A` where the task genuinely touches no model or migration
+
+  ## Test Strategy
+  - Bar: `NORMAL` (from `settings.testing`) — PHPUnit feature and unit only. **No Playwright, no Dusk, no Pest browser, no viewport matrix, no axe automation.**
+  - **Unit** (`tests/Unit/Meetings/`): `CalendarRangeTest` — the month window includes leading and trailing days, the week window starts Monday, the day window is one day, `previous()` / `next()` / `label()` per view, and day arithmetic across the 25 October 2026 DST boundary in `Europe/Rome`. `CalendarFeedQueryTest` — payload shape, naive local strings with no offset, all-day exclusive end passed through unchanged, multi-day span kept whole, coverage flags, cancelled flag
+  - **Feature** (`tests/Feature/`): `CalendarFeedTest` — only the requested window comes back (an occurrence one day outside is absent), the clamp bounds an oversized window, malformed `from` / `to` degrade instead of throwing, an empty window returns `[]` with HTTP 200, notes-only / transcript-only / both coverage each appear on the right occurrence, a cancelled occurrence is flagged, and an occurrence straddling the DST boundary keeps its wall-clock digits. `CalendarPageTest` — `/calendar` renders each of the three views from `?view=`, an unknown `view` or unparseable `date` falls back to month and today rather than 500 (the `Agenda` `#[Url]` precedent from US-005 review), the legend states both coverage shapes, and the empty-range copy is the sync-health-aware wording, not "no data"
+  - **Manual test handoff** (Anne, TASK-07, written to `.larapilot/docs/test-results/US-008-manual.md`): keyboard-only pass across month, week and day (`Tab` into the grid, arrows between days, `Home` / `End`, `Enter` on a chip, `Esc` out of the `+N more` popover); theme toggle in both directions with every event state on screen; 375 px pass confirming the month grid is the only surface that scrolls horizontally; and a visual check of the DST week
+  - Every task ends with `php artisan test` (a targeted `--filter` is fine while iterating, full suite before `task-done`) and `php artisan larapilot:quality`
+
+  ## Risks & residual concerns
+  - **FullCalendar DOM ownership.** Styling reaches into `.fc-*` internals, which a future major version can move. Mitigation: prefer FullCalendar's own CSS custom properties (`--fc-border-color`, `--fc-page-bg-color`, `--fc-today-bg-color`, `--fc-event-*`, `--fc-small-font-size`) over element selectors wherever a variable exists, and keep the remaining `.fc-*` overrides in one clearly commented block in `resources/css/app.css`
+  - **MIT-only constraint (hard).** `@fullcalendar/core`, `@fullcalendar/daygrid` and `@fullcalendar/timegrid` only. No `@fullcalendar/resource*`, `@fullcalendar/timeline`, `@fullcalendar/adaptive`, and no `schedulerLicenseKey` key anywhere in the config. `@fullcalendar/interaction` is deliberately **not** installed either: the grid needs no drag, resize or `dateClick`, and this product cannot write to the calendar at all (FR-021)
+  - **Convention-resolution cost over a wider window.** `MeetingCoverageLookup` resolves transcript candidates by convention for occurrences with no `meeting_transcripts` row. Across a 42-day month window that is one shared directory listing plus in-memory matching — the same shape the agenda already pays across 7 days. If a very large transcripts directory ever makes it visible, the fix belongs in a cached index inside `TranscriptsDirectory`, not in a per-view special case
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch from develop'
+    type: Impl
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+    body: |
+      ## Description
+      Bootstrap Gitflow for US-008: branch `feature/US-008-calendar-views` from `develop` and prepare the internal PR description locally. `develop` is at `edb1c5a` with `feature/US-007-transcript-linking` already merged, so this is a clean branch point with nothing to stack on. Do **not** push — `settings.git_mode` is `GITFLOW`.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git status` — confirm the working tree is clean apart from `.larapilot/usage/ledger.jsonl`; commit or stash the ledger before branching
+      2. `git checkout develop` (no `git pull` — there is no remote configured for this project)
+      3. `git checkout -b feature/US-008-calendar-views`
+      4. Draft the internal PR title `US-008: Calendar views: month, week and day` and a body linking `.larapilot/plans/US-008-plan.yaml` and listing TASK-01 through TASK-08; keep it local
+      5. `git commit --allow-empty -m 'chore(US-008): TASK-00 bootstrap feature branch'`
+
+      ## Completion Criteria
+      - [ ] Branch `feature/US-008-calendar-views` exists locally, branched from `develop` at `edb1c5a`
+      - [ ] Anchor commit present
+      - [ ] PR title and body drafted locally; nothing pushed
+
+      ## Test Data
+      - N/A — no model, migration or fixture change in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-008): TASK-00 bootstrap feature branch` (empty commit)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepared locally only — open a remote PR only if the operator asks
+  -
+    id: TASK-01
+    title: 'Add the CalendarView enum and the CalendarRange window'
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-00
+    body: |
+      ## Description
+      Give the three views a single vocabulary and a single place that computes what each one shows. `CalendarView` is the enum every other layer branches on; `CalendarRange` turns an anchor date plus a view into the visible local-date window, its label, and its neighbours. Both are pure value types with no database access — `AgendaRange` is the shape to follow.
+
+      ## Files Involved
+      - app/Meetings/CalendarView.php
+      - app/Meetings/CalendarRange.php
+
+      ## Steps
+      1. `php artisan make:enum CalendarView` is not a generator this project has — create `app/Meetings/CalendarView.php` by hand as a backed string enum with TitleCase cases `Month`, `Week`, `Day` and values `month`, `week`, `day` (PHP rules: TitleCase enum keys, explicit return types)
+      2. Add `CalendarView::fullCalendarView(): string` returning `dayGridMonth` / `timeGridWeek` / `timeGridDay`, and `CalendarView::fromRequest(?string $value): self` returning `self::Month` for anything unrecognised — the URL is a hand-editable surface and must degrade, never throw (US-005 review precedent for `Agenda::$date`)
+      3. Create `app/Meetings/CalendarRange.php` as a `final readonly` class holding `CalendarView $view` and `CarbonImmutable $anchor`, normalising the anchor with `startOfDay()` in its constructor for the same structural reason `AgendaRange` does
+      4. Implement `visibleStart()` / `visibleEnd()` (exclusive) per view: **month** — first day of the anchor's month rolled back to Monday, through the last day of the month rolled forward to Sunday, always a whole number of weeks; **week** — Monday of the anchor's week through the following Monday; **day** — the anchor day through the next day
+      5. Implement `previous()` / `next()` stepping one month, one week or one day per view, and `label()` rendering `September 2026` (month), `7 – 13 September 2026` (week) and `Tuesday 8 September 2026` (day)
+      6. Add `static today(CalendarView $view): self` built from `CarbonImmutable::now(config('kbms.timezone'))`, and `static fromRequest(?string $view, ?string $date): self` wrapping the parse in a `try`/`catch` that falls back to today — the same defensive pattern `Agenda::anchor()` uses
+      7. Use `CarbonImmutable` throughout and never `addHours(24)`; day arithmetic must go through `addDays()` / `subDays()` so the 25 October 2026 DST boundary in `Europe/Rome` cannot shift a window edge
+      8. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `CalendarView` exists with the three TitleCase cases and maps to FullCalendar view ids in exactly one place
+      - [ ] `CalendarView::fromRequest()` returns `Month` for null, empty, unknown and malformed input rather than throwing
+      - [ ] `CalendarRange::visibleStart()` / `visibleEnd()` return the window each view actually paints, month always whole weeks starting Monday
+      - [ ] `previous()` / `next()` / `label()` behave per view
+      - [ ] `CalendarRange::fromRequest()` degrades to today on an unparseable date
+      - [ ] Everything is `CarbonImmutable` in `config('kbms.timezone')`; no UTC conversion anywhere
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — value objects only; no model, migration, factory or seeder change
+
+      ## Git Deliverables
+      - Commit: `feat(US-008): TASK-01 add CalendarView and CalendarRange`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-02
+    title: 'Add the bounded calendar feed query and its JSON route'
+    type: Impl
+    status: TODO
+    assignee: Mike
+    estimate_hours: 3
+    dependencies:
+      - TASK-01
+    body: |
+      ## Description
+      Build the read path the grid pulls from: a window-bounded query that returns the visible occurrences with coverage already folded in, and the JSON route that exposes it. This is the task that makes "only the visible range is queried" true, and it is where the wall-clock timezone convention is honoured or lost.
+
+      ## Files Involved
+      - app/Meetings/CalendarEventPayload.php
+      - app/Meetings/CalendarFeedQuery.php
+      - app/Http/Controllers/CalendarEventsController.php
+      - routes/web.php
+
+      ## Steps
+      1. Create `app/Meetings/CalendarEventPayload.php` — a `final readonly` DTO carrying `id` (the occurrence route key from `OccurrenceKey::toRouteKey()`), `title`, `start`, `end`, `allDay`, `url` (`route('meetings.show', $routeKey)`), `classNames`, and `extendedProps` (`hasNotes`, `hasTranscript`, `cancelled`, `accessibleName`). Give it `toArray(): array` with an array-shape PHPDoc so Larastan can see the shape
+      2. Create `app/Meetings/CalendarFeedQuery.php` with `public const MAX_RANGE_DAYS = 62;` and `for(CarbonImmutable $from, CarbonImmutable $to): Collection`
+      3. Reuse the overlap predicate from `AgendaQuery` verbatim — `where('starts_at', '<', $to)->where('ends_at', '>', $from)->orderBy('starts_at')` — with `$from` / `$to` built in `config('kbms.timezone')`. Read `AgendaQuery`'s docblock before touching it: `starts_at` / `ends_at` hold local wall-clock digits, so **do not** convert either side to UTC
+      4. Resolve coverage through `app(MeetingCoverageLookup::class)->for($events)` — the batched lookup, keyed `source_uid."\0".recurrence_id`. Never call `forOccurrence()` in a loop; that is the N+1 this class exists to avoid
+      5. Format `start` / `end` as **naive local ISO strings without an offset**: `$date->format('Y-m-d\TH:i:s')`. For an all-day row emit `Y-m-d` for both ends and pass the stored **exclusive** end through unchanged — FullCalendar's all-day end is exclusive too, so no adjustment is correct here
+      6. Build `classNames` from coverage and state: `kb-ev--note`, `kb-ev--transcript`, `kb-ev--both`, `kb-ev--allday`, `kb-ev--cancelled` — matching the mockup vocabulary the TASK-05 stylesheet targets
+      7. Build `accessibleName` as words, not marks: `"09:30 Q4 roadmap review, has notes and transcript"`, `"All day, Company offsite, not annotated"`, appending `", cancelled"` for a cancelled occurrence. Wrap every fragment in `__()` so the string set stays translatable like the rest of the app
+      8. Create `app/Http/Controllers/CalendarEventsController.php` as a single-action controller: read `from` / `to` as `Y-m-d` date-only strings, parse defensively (fall back to the current month's window on anything unparseable), clamp `$to` to `$from->addDays(self::MAX_RANGE_DAYS)` via the query constant, and return `response()->json($payloads)`
+      9. Register `Route::get('calendar/events', CalendarEventsController::class)->name('calendar.events');` in `routes/web.php`, above the existing `calendar` route for readability. `EnsureLoopbackRequest` is global middleware, so the endpoint inherits the loopback gate — confirm with `php artisan route:list --path=calendar`
+      10. `vendor/bin/pint --dirty --format agent` then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `GET /calendar/events?from=&to=` returns JSON for the requested window only
+      - [ ] Window is clamped at `MAX_RANGE_DAYS = 62`; a wider or malformed request cannot return the whole mirror
+      - [ ] Timed events emit naive local ISO strings with **no** offset and no UTC conversion
+      - [ ] All-day events emit `allDay: true` with the stored exclusive end passed through unchanged
+      - [ ] A multi-day occurrence is emitted once, spanning its whole range — not clamped to day one like the agenda
+      - [ ] Coverage resolves through the batched `MeetingCoverageLookup`; the endpoint costs one events query plus the two coverage queries plus one shared directory listing, regardless of density
+      - [ ] Every payload carries `url` to the US-005 occurrence route and an `accessibleName` stating time, title and coverage in words
+      - [ ] `php artisan route:list --path=calendar` shows both routes; the endpoint is behind `EnsureLoopbackRequest`
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — reads existing `calendar_events`, `meeting_notes` and `meeting_transcripts`; no migration, model, factory or seeder change
+
+      ## Git Deliverables
+      - Commit: `feat(US-008): TASK-02 add the bounded calendar feed query and JSON route`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-03
+    title: 'Unit- and feature-test the range, the feed query and the endpoint'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-02
+    body: |
+      ## Description
+      Cover the read path before any of it is visible in a browser: the window arithmetic, the payload contract, and the endpoint's bounds. These are the assertions that keep the timezone and "visible range only" guarantees honest — they are worth more than any assertion about the grid's markup.
+
+      ## Files Involved
+      - tests/Unit/Meetings/CalendarRangeTest.php
+      - tests/Unit/Meetings/CalendarFeedQueryTest.php
+      - tests/Feature/CalendarFeedTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit CalendarRangeTest` and `CalendarFeedQueryTest`, then move both under `tests/Unit/Meetings/` with the `Tests\Unit\Meetings` namespace, matching `AgendaRangeTest` / `AgendaQueryTest`
+      2. Pin the clock the way `AgendaPageTest` does — `Carbon::setTestNow(Carbon::parse('2026-09-08 12:00:00', 'Europe/Rome'))` in `setUp()`, cleared in `tearDown()`
+      3. `CalendarRangeTest`: the month window for September 2026 starts Monday 31 August and ends exclusive on Monday 5 October (whole weeks); the week window is Monday-to-Monday; the day window is one day; `previous()` / `next()` step by the right unit per view; `label()` renders per view; `fromRequest()` falls back to month and today for `null`, `''`, `'quarter'` and `'not-a-date'`; and a window spanning **25 October 2026** (the `Europe/Rome` DST end) still contains exactly seven days in week view
+      4. `CalendarFeedQueryTest`: use `CalendarEventFactory` for a timed occurrence, an all-day occurrence, a multi-day occurrence and a cancelled one. Assert the emitted `start` / `end` strings contain **no** `+` offset and no trailing `Z`; assert the all-day end is the stored exclusive end verbatim; assert the multi-day row appears once with its full span rather than clamped to day one; assert `classNames` and `extendedProps` for each coverage combination using `MeetingNoteFactory` and `MeetingTranscriptFactory`
+      5. `php artisan make:test --phpunit CalendarFeedTest` for `tests/Feature/`, using `RefreshDatabase` like `AgendaPageTest`
+      6. `CalendarFeedTest`: an occurrence one day outside the requested window is absent while one inside is present; a request for a 400-day window returns no more than `MAX_RANGE_DAYS` worth of days; `?from=nonsense&to=` returns HTTP 200 with a sane default window rather than a 500; an empty window returns `[]` with HTTP 200; notes-only, transcript-only and both-coverage occurrences each carry the right flags and `accessibleName` wording; a cancelled occurrence is flagged and still present, never hidden; an occurrence at `2026-10-25 02:30` keeps those wall-clock digits in the response
+      7. Assert the query count for a dense window with `DB::enableQueryLog()` (or `assertDatabaseCount`-style bounding) so a future N+1 regression fails here rather than at review
+      8. `php artisan test --filter=Calendar` while iterating, then the full `php artisan test`
+      9. Do **not** add Playwright, Dusk, Pest browser or viewport suites — `settings.testing` is `NORMAL`
+
+      ## Completion Criteria
+      - [ ] All three test files pass, and the full suite stays green
+      - [ ] Timezone assertions prove no offset and no UTC conversion in the payload
+      - [ ] Range-clamp, malformed-input and empty-window behaviours are all asserted
+      - [ ] Coverage combinations (none / notes / transcript / both) and the cancelled state are each asserted on the right occurrence
+      - [ ] A query-count assertion bounds the endpoint against a future N+1
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Git Deliverables
+      - Commit: `test(US-008): TASK-03 cover the calendar range, feed query and endpoint`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-04
+    title: 'Wire FullCalendar MIT into the calendar page with a custom toolbar'
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 5
+    dependencies:
+      - TASK-02
+    body: |
+      ## Description
+      Replace the US-005 placeholder at `/calendar` with a working grid: FullCalendar MIT core in a thin Alpine wrapper, our own toolbar (prev / next / Today / month label / Month-Week-Day switcher), and the query string as the single source of truth for view and date. Runs in parallel with TASK-03 — they share no files.
+
+      ## Files Involved
+      - package.json / package-lock.json
+      - resources/js/app.js
+      - resources/js/calendar.js
+      - resources/views/pages/calendar.blade.php
+      - routes/web.php
+      - database/seeders/CalendarEventSeeder.php (only if the seeded month renders empty — same-task rule)
+
+      ## Steps
+      1. `npm install --save-dev @fullcalendar/core @fullcalendar/daygrid @fullcalendar/timegrid` — latest 6.x. **MIT core only**: do not install `@fullcalendar/interaction` (no drag, resize or `dateClick` is needed and FR-021 forbids writes), and never `@fullcalendar/resource*`, `@fullcalendar/timeline` or `@fullcalendar/adaptive`. FullCalendar 6 injects its own CSS from JS, so there is no stylesheet import to add
+      2. Verify the installed licences are MIT before committing the lockfile, and record the resolved versions in the commit body
+      3. Create `resources/js/calendar.js` exporting an Alpine component registered on `alpine:init`: `Alpine.data('kbCalendar', (config) => ({ ... }))`. Import it from `resources/js/app.js` (currently empty), which `partials/head.blade.php` already loads through `@vite`
+      4. Component `init()`: construct `new Calendar(this.$refs.grid, {...})` with `plugins: [dayGridPlugin, timeGridPlugin]`, `initialView` and `initialDate` from the server-rendered config, `headerToolbar: false`, `firstDay: 1`, `timeZone: 'local'` (the default — leave it, and read the timezone section of the plan before changing it), `dayMaxEventRows: true` for the month `+N more` affordance, `eventDisplay: 'block'`, `nowIndicator: true`, `height: 'auto'`
+      5. `events` is a **function**, not a URL: take `fetchInfo.startStr.slice(0, 10)` and `fetchInfo.endStr.slice(0, 10)` and `fetch('/calendar/events?from=&to=')`, calling `failureCallback` on a non-OK response so a broken feed surfaces as a stated error rather than an empty month
+      6. `datesSet` callback: update the toolbar label from `calendar.view.title`, and `history.replaceState` the current `?view=&date=` so Back from a meeting returns to the same position. Do not push a new history entry per navigation — replace, so Back leaves the calendar rather than walking its history
+      7. Toolbar in `resources/views/pages/calendar.blade.php`, following the mockup's `kb-toolbar` + `kb-segmented` structure: prev / next icon buttons, a `Today` button, the live range label, and a three-button view switcher. Wire each to `calendar.prev()` / `next()` / `today()` / `changeView()` through Alpine
+      8. Server-render the initial state: resolve `CalendarRange::fromRequest(request('view'), request('date'))` in the Blade page (or a tiny controller — keep the route a `Route::view` only if no PHP is needed) so a bookmarked `?view=week&date=2026-09-08` opens on that view, and the first toolbar label is correct before JavaScript runs
+      9. Add the empty-range note: when the feed returns zero events for the visible window, show a `kb-empty` block reusing the agenda's sync-health-aware wording ("the mirror is current — this range is genuinely empty rather than unsynced") rather than a bare "no events". Read `SyncHealthReporter` in the Blade page for the sync sentence, exactly as `livewire/agenda.blade.php` does
+      10. Destroy the calendar in the Alpine component's `destroy()` so no instance leaks if the page is ever reached through a `wire:navigate` link elsewhere in the shell
+      11. Confirm the sidebar's existing `Calendar` item still marks `:current` (it keys on `request()->routeIs('calendar')` — unchanged)
+      12. `npm run build`, then `php artisan test` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Month, week and day views render mirrored events at `/calendar`
+      - [ ] MIT plugins only — `package.json` contains no premium FullCalendar package and the config carries no `schedulerLicenseKey`
+      - [ ] The grid fetches only the visible window; navigating months issues a new bounded request rather than loading the mirror
+      - [ ] `?view=` and `?date=` are honoured on load and kept current with `history.replaceState`
+      - [ ] Clicking an event opens the US-005 detail route
+      - [ ] All-day events render in the all-day lane, never as midnight-to-midnight blocks; a multi-day event spans correctly in month view as a single bar
+      - [ ] A day with many overlapping meetings shows `+N more` and expands — nothing is silently dropped
+      - [ ] An empty range renders an empty grid plus the sync-health-aware note, with no layout break
+      - [ ] Events render in `KBMS_TIMEZONE` digits and stay correct across the DST week
+      - [ ] `npm run build` succeeds and the full test suite stays green
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - No model or migration change. Only if the seeded month renders visibly empty, extend `CalendarEventSeeder` volumes **in this same commit** — never defer a seeder update to a later task
+
+      ## Git Deliverables
+      - Commit: `feat(US-008): TASK-04 render month, week and day views with FullCalendar MIT`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-05
+    title: 'Style the grid to the mockup contract in both themes'
+    type: Impl
+    status: TODO
+    assignee: Joe
+    estimate_hours: 4
+    dependencies:
+      - TASK-04
+    body: |
+      ## Description
+      Map the `--kb-*` token layer onto FullCalendar's DOM so the grid reads as the same product as the agenda and the meeting page, in light and dark. The mockup's `calendar.html` defines the visual result; FullCalendar's markup, not the mockup's, is what gets styled. Runs in parallel with TASK-06 — this task owns `resources/css/app.css`, that one owns the JS and Blade.
+
+      ## Files Involved
+      - resources/css/app.css
+
+      ## Steps
+      1. Add one clearly delimited `/* --- FullCalendar (US-008) --- */` block at the end of `resources/css/app.css`, after the existing `kb-*` component rules
+      2. Drive as much as possible through FullCalendar's own custom properties rather than element selectors — `--fc-border-color: var(--border)`, `--fc-page-bg-color: var(--card)`, `--fc-neutral-bg-color: var(--muted)`, `--fc-today-bg-color`, `--fc-small-font-size`, `--fc-event-*` — so a FullCalendar upgrade cannot silently break the theme
+      3. Port the mockup's event chip: `.fc-event` picking up the `kb-ev` treatment (compact, monospace time via `--kb-mono`, tabular numerals, truncating title), with the coverage variants `kb-ev--note` (3 px left border `--kb-note`), `kb-ev--transcript` (3 px left border `--kb-transcript`), `kb-ev--both` (note left, transcript right), `kb-ev--allday` (`--kb-transcript-bg` fill in the all-day lane) and `kb-ev--cancelled` (dashed border, muted fill, struck title)
+      4. Render the coverage marks with **distinct shapes as well as hues** — notes a filled circle, transcript a filled square (`border-radius: 0`). This is the documented departure from the mockup's dot-only rendering and it is what keeps the indicator out of a WCAG 1.4.1 Use-of-Colour failure. Marks stay `aria-hidden`; TASK-06 owns the accessible name underneath
+      5. Style the legend above the grid to state both shapes in words, mirroring the agenda's `kb-legend`: notes, transcript, both, cancelled
+      6. Week and day views: hour gutter in `--kb-mono` at the mockup's scale, all-day lane with its own label cell, today column tint via `--fc-today-bg-color`, `nowIndicator` line in `--kb-transcript`
+      7. Month view: `min-height` on day cells per `kb-cal__day`, out-of-month cells on `--muted` with a dimmed day number, today's number as a filled pill, `+N more` styled as the mockup's `kb-cal__more` underlined text button and its popover on `--card` with the standard border
+      8. Below 768 px: `overflow-x: auto` on the month grid only — the one place horizontal scroll is accepted, per the mockup's responsive table — with a `2.5rem` minimum column, and hide the chip time label the way `kb-ev__time` does at that width. Icon buttons and segmented-control buttons reach 44 px minimum
+      9. Neutralise FullCalendar's transitions under `prefers-reduced-motion: reduce`, matching the blanket rule the mockup sets
+      10. Verify AA contrast for **every** event state — bare, notes, transcript, both, all-day, cancelled, today, out-of-month — against `--card` in light **and** dark. The `--kb-*` dark values flip lightness rather than reusing light values; do not "simplify" that
+      11. `npm run build`, then `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Grid, chips, hour gutter, all-day lane and `+N more` match the mockup's visual result in both themes
+      - [ ] Coverage marks differ in shape and colour, and the legend states both in words
+      - [ ] Cancelled occurrences are visually distinct — dashed, muted, struck — and never hidden
+      - [ ] AA contrast verified for every event state in light and dark
+      - [ ] Month grid is the only surface that scrolls horizontally below 768 px; nothing is clipped at 375 px
+      - [ ] `prefers-reduced-motion` neutralises animation
+      - [ ] All overrides live in one commented block and prefer FullCalendar CSS variables over element selectors
+      - [ ] `npm run build` succeeds; `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — stylesheet only; no model, migration, factory or seeder change
+
+      ## Git Deliverables
+      - Commit: `feat(US-008): TASK-05 style the calendar grid to the mockup contract`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-06
+    title: 'Add the keyboard and screen-reader layer FullCalendar does not ship'
+    type: Impl
+    status: TODO
+    assignee: Elise
+    estimate_hours: 4
+    dependencies:
+      - TASK-04
+    body: |
+      ## Description
+      The acceptance criteria call FullCalendar's defaults insufficient, and they are: the grid is a table of divs with no roving focus, and the view switcher has no pressed state. This task makes the calendar operable and legible without a mouse. Runs in parallel with TASK-05 — this task owns the JS and Blade, that one owns the stylesheet.
+
+      ## Files Involved
+      - resources/js/calendar.js
+      - resources/views/pages/calendar.blade.php
+      - resources/css/app.css (focus-ring rules only — coordinate with TASK-05 to avoid a conflicting edit in the same block)
+
+      ## Steps
+      1. Give the grid container an accessible name that states the view and range (`aria-label="September 2026, month view"`, per the mockup's `kb-cal` section) and keep it updated from `datesSet`
+      2. Roving tabindex across day cells: exactly one `.fc-daygrid-day` / `.fc-timegrid-col` carries `tabindex="0"` at a time, the rest `-1`. Arrow keys move one day (left/right) or one week (up/down) in month view and one day left/right in week view; `Home` / `End` jump to the first and last day of the visible row; `PageUp` / `PageDown` step the view. Moving past an edge navigates the calendar and lands focus on the corresponding cell in the newly rendered range
+      3. Event chips are **real anchors** — FullCalendar's `url` prop already produces one; confirm each is reachable with `Tab` from its day cell and activates on `Enter`
+      4. Set each chip's accessible name from the payload's `extendedProps.accessibleName` in `eventDidMount`, and mark the decorative coverage marks `aria-hidden="true"` — the name already states the coverage in words, so the marks are never the only signal
+      5. View switcher: three buttons in a `role="group"` with `aria-label`, each carrying `aria-pressed="true|false"` and updated on `datesSet` — the mockup's `kb-segmented` contract
+      6. Add an `aria-live="polite"` region (visually hidden or the visible label itself, as `livewire/agenda.blade.php` does with `kb-toolbar__range`) announcing the range label after every navigation, so a screen-reader user knows the grid moved
+      7. Focus ring: a visible 3 px `--ring` halo on day cells, chips, toolbar buttons and the `+N more` control. Never `outline: none` without a replacement, and never rely on hover alone
+      8. `+N more` popover: confirm focus moves into it, `Esc` closes it, and focus returns to the trigger. If FullCalendar's own popover does not return focus, add the handler rather than accepting the drop
+      9. Confirm the skip link still reaches `#main` ahead of the grid and that the page has exactly one `<h1>`, with the grid section under an `<h2>`
+      10. Keyboard-only pass over month, week and day before `task-done` — this is the acceptance criterion, not a nicety
+      11. `npm run build`, then `php artisan test` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Every view is fully operable from the keyboard: into the grid, across days, onto a chip, through to the meeting page
+      - [ ] Focus is visible at every stop and never suppressed
+      - [ ] Each chip's accessible name states time, title and coverage in words; marks are `aria-hidden`
+      - [ ] The view switcher exposes `aria-pressed`; the grid exposes a range-stating accessible name
+      - [ ] Range changes are announced through a polite live region
+      - [ ] `+N more` traps and returns focus correctly and closes on `Esc`
+      - [ ] One `<h1>`; skip link still lands ahead of the grid
+      - [ ] `npm run build` succeeds; the full test suite stays green; `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — no model, migration, factory or seeder change
+
+      ## Git Deliverables
+      - Commit: `feat(US-008): TASK-06 add keyboard navigation and screen-reader semantics to the grid`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-07
+    title: 'Feature-test the calendar page and write the manual test handoff'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-05
+      - TASK-06
+    body: |
+      ## Description
+      Cover what the server still owns once the grid is JavaScript: the route, the URL contract, the fallbacks, and the copy the acceptance criteria name. Then write down the parts that genuinely need a human at the `NORMAL` bar, so the review gate has a checklist instead of a shrug.
+
+      ## Files Involved
+      - tests/Feature/CalendarPageTest.php
+      - .larapilot/docs/test-results/US-008-manual.md
+
+      ## Steps
+      1. `php artisan make:test --phpunit CalendarPageTest`, using `RefreshDatabase` and the pinned clock from `AgendaPageTest`
+      2. Assert `/calendar` returns 200 and server-renders the initial view and range label for `?view=month`, `?view=week` and `?view=day`
+      3. Assert the degradation path the US-005 review made a standing rule: `?view=quarter`, `?view=`, `?date=not-a-date` and a truncated bookmark each return 200 on month/today rather than a 500
+      4. Assert the coverage legend is rendered and names notes, transcript, both and cancelled in words — the "legible without hovering" criterion has a server-side half
+      5. Assert the empty-range copy is the sync-health-aware wording and not a generic "no events", distinguishing it from the never-synced and failed strings in `states.html` — the same discrimination `SyncStatusTest` already enforces
+      6. Assert the page links to `calendar.events` and that the sidebar `Calendar` item is marked current on this route
+      7. `php artisan test --filter=CalendarPageTest`, then the full `php artisan test`
+      8. Write `.larapilot/docs/test-results/US-008-manual.md` as a numbered checklist a human can run in ten minutes: keyboard-only pass across the three views (`Tab` in, arrows, `Home`/`End`, `Enter` on a chip, `Esc` out of `+N more`); theme toggle in both directions with bare / notes / transcript / both / all-day / cancelled all on screen; a 375 px pass confirming the month grid is the only horizontal scroll and no control is clipped; a visual check of the week containing 25 October 2026; and a confirmation that navigating into a meeting and pressing Back returns to the same view and date
+      9. Do **not** add Playwright, Dusk, Pest browser or viewport suites — `settings.testing` is `NORMAL`, and this file is what stands in for them
+
+      ## Completion Criteria
+      - [ ] `CalendarPageTest` passes and the full suite stays green
+      - [ ] Malformed `view` and `date` are proven to degrade rather than throw
+      - [ ] Legend and empty-range copy are asserted as strings, not just status codes
+      - [ ] `.larapilot/docs/test-results/US-008-manual.md` exists and is runnable by a human without reading the plan
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Git Deliverables
+      - Commit: `test(US-008): TASK-07 cover the calendar page and add the manual test handoff`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-08
+    title: 'Document the calendar surface'
+    type: Impl
+    status: TODO
+    assignee: Albert
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-06
+    body: |
+      ## Description
+      Baseline documentation only, per the recorded `documentation scope` decision: no OpenAPI (there is no public API), no diagrams, no manuals. What changes here is that the product now has a third reading surface and a JavaScript build step that matters — a reader who skips `npm run build` gets a blank grid and no error.
+
+      ## Files Involved
+      - README.md
+      - .larapilot/mockups/kbms-app/README.md (implementation-mapping row only)
+
+      ## Steps
+      1. Add a short **Calendar views** section to `README.md`: what month, week and day show, that the coverage marks mean notes / transcript / both, that `?view=` and `?date=` are bookmarkable, and that the grid queries only the visible range
+      2. State plainly that the frontend must be built — `npm install && npm run build` (or `npm run dev`) — and that a blank calendar with a populated agenda is the symptom of a stale Vite build, not of a sync problem. This is the one failure mode `kbms:doctor` cannot see
+      3. Record the FullCalendar dependency and the **MIT-core-only** constraint in the README's stack notes, naming the three installed packages, so a future contributor does not reach for a premium plugin
+      4. Confirm no `.env` key was added by this spec — the range clamp is a class constant — and therefore **no PRD revision row is due**. If TASK-02 ended up introducing a config value after all, add the PRD `## Configuration surface` entry and a `## PRD Revision History` row in this same commit
+      5. Update the `kb-cal__* / kb-week__*` row of the mockup README's implementation-mapping table to name `resources/js/calendar.js` and the FullCalendar packages actually installed, and note the shape-plus-colour coverage mark as the recorded departure from the dot-only rendering
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] README covers the calendar surface, the URL contract and the coverage vocabulary
+      - [ ] README states the `npm run build` requirement and the blank-grid symptom
+      - [ ] MIT-core-only constraint recorded with the three package names
+      - [ ] Mockup README implementation-mapping row points at the real files and records the coverage-mark departure
+      - [ ] PRD confirmed unchanged (or updated with a revision row in this commit if a config value was introduced)
+      - [ ] `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-008): TASK-08 document the calendar surface`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+updated_at: '2026-09-09T22:50:38+02:00'

@@ -506,4 +506,56 @@ decisions:
     source: chat
     spec: US-007
     supersedes: null
-updated_at: '2026-09-09T22:40:24+02:00'
+  -
+    id: f7c3d5c79bcb21bd
+    ts: '2026-09-09T22:50:52+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'us-008 branch point'
+    label: 'us-008 branch point'
+    value: 'TASK-00 branches feature/US-008-calendar-views straight from develop at edb1c5a — US-007 is already merged, so nothing has to be stacked on an unmerged feature branch.'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-008
+    supersedes: null
+  -
+    id: 137d88133150ecac
+    ts: '2026-09-09T22:50:52+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'us-008 calendar state ownership'
+    label: 'us-008 calendar state ownership'
+    value: 'The calendar grid is Alpine + FullCalendar, NOT a Livewire component. view and date live in the query string (?view=&date=), server-rendered on load and kept current with history.replaceState; event chips are plain anchors with a full page load, no wire:navigate. A Livewire round-trip would destroy the DOM FullCalendar owns, and $wire.$set(...,false) would leave two sources of truth for one piece of state.'
+    question: null
+    rationale: "Makes 'view and date survive navigation to a meeting and back' a browser guarantee rather than a cache guarantee. Does not contradict the recorded 'livewire component style' decision, which governs how Livewire components are written, not where one is required."
+    source: chat
+    spec: US-008
+    supersedes: null
+  -
+    id: b645d72cd4734e61
+    ts: '2026-09-09T22:50:53+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'us-008 calendar event feed and timezone'
+    label: 'us-008 calendar event feed and timezone'
+    value: "A dedicated JSON endpoint GET /calendar/events takes date-only from/to params (FullCalendar's events callback truncates fetchInfo start/end to Y-m-d), clamped server-side to 62 days by a class constant — no new .env key. Payloads carry naive local ISO strings with NO offset and the grid runs on FullCalendar's default timeZone: 'local', so parse-as-local then render-as-local is the identity function and a DST boundary cannot shift the digits."
+    question: null
+    rationale: 'EventSynchronizer stores starts_at/ends_at as KBMS_TIMEZONE-local wall-clock digits, never UTC. Emitting an offset or UTC would reintroduce the double-conversion defect that storage convention exists to avoid.'
+    source: chat
+    spec: US-008
+    supersedes: null
+  -
+    id: 321c697f03a19bdb
+    ts: '2026-09-09T22:50:53+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'us-008 coverage indicator shape'
+    label: 'us-008 coverage indicator shape'
+    value: "Calendar coverage marks differ in SHAPE as well as hue — notes a filled circle, transcript a filled square — a documented departure from the mockup's dot-only rendering, with the legend stating both shapes in words."
+    question: null
+    rationale: "Two marks separated only by colour is a WCAG 2.2 1.4.1 Use of Colour failure for the sighted operator; the mockup's own mitigation (the accessible name) only reaches screen-reader users. The PRD sets WCAG 2.2 AA as the product baseline."
+    source: chat
+    spec: US-008
+    supersedes: null
+updated_at: '2026-09-09T22:50:53+02:00'
