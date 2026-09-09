@@ -213,7 +213,7 @@ tasks:
     id: TASK-02
     title: 'Port the note editor styles from the mockup (parallel with TASK-01)'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 1.5
     dependencies:
@@ -235,11 +235,11 @@ tasks:
       5. Smoke-check the mockup panel rendering at 1280, 768 and 375 px against `meeting.html` and `mobile.html`
 
       ## Completion Criteria
-      - [ ] Every class the note panel view will use exists in `resources/css/app.css`
-      - [ ] No `--kb-*` token and no already-ported class was redefined
-      - [ ] Saving-dot pulse is neutralised under `prefers-reduced-motion: reduce`
-      - [ ] `npm run build` succeeds
-      - [ ] Panel readable at 375 px — nothing clipped, touch targets ≥44 px below 768 px
+      - [x] Every class the note panel view will use exists in `resources/css/app.css`
+      - [x] No `--kb-*` token and no already-ported class was redefined
+      - [x] Saving-dot pulse is neutralised under `prefers-reduced-motion: reduce`
+      - [x] `npm run build` succeeds
+      - [x] Panel readable at 375 px — nothing clipped, touch targets ≥44 px below 768 px
 
       ## Test Data
       - N/A — stylesheet only
@@ -248,11 +248,17 @@ tasks:
       - Commit: `feat(US-006): TASK-02 port note editor styles from the mockup`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: cddd21e7ba3b00c7c126c35be481d5f7daa98fa7
+      short_sha: cddd21e
+      subject: 'feat(US-006): TASK-02 port note editor styles from the mockup'
+      committed_at: '2026-09-09T09:06:33+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/cddd21e7ba3b00c7c126c35be481d5f7daa98fa7'
   -
     id: TASK-03
     title: 'Unit-test the MeetingNote occurrence keying'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies:
@@ -272,19 +278,25 @@ tasks:
       5. Do **not** add Playwright, Dusk, Pest browser or viewport suites
 
       ## Completion Criteria
-      - [ ] Tests pass locally
-      - [ ] Sibling isolation is asserted at the model layer, not only later at the UI layer
-      - [ ] Coverage matches the `NORMAL` bar
+      - [x] Tests pass locally
+      - [x] Sibling isolation is asserted at the model layer, not only later at the UI layer
+      - [x] Coverage matches the `NORMAL` bar
 
       ## Git Deliverables
       - Commit: `test(US-006): TASK-03 cover MeetingNote occurrence keying`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: e447771fa5253397ee4785135ff7ff9481477980
+      short_sha: e447771
+      subject: 'test(US-006): TASK-03 cover MeetingNote occurrence keying'
+      committed_at: '2026-09-09T09:07:01+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/e447771fa5253397ee4785135ff7ff9481477980'
   -
     id: TASK-04
     title: 'Add the hardened MarkdownRenderer (parallel with TASK-01)'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
@@ -308,10 +320,10 @@ tasks:
       5. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] All three unsafe defaults explicitly overridden
-      - [ ] Docblock states why `escape` beats `strip` and why the nesting level is bounded
-      - [ ] `composer.json` untouched
-      - [ ] Pint + Larastan level 5 clean
+      - [x] All three unsafe defaults explicitly overridden
+      - [x] Docblock states why `escape` beats `strip` and why the nesting level is bounded
+      - [x] `composer.json` untouched
+      - [x] Pint + Larastan level 5 clean
 
       ## Test Data
       - N/A — no model or schema change in this task
@@ -320,11 +332,17 @@ tasks:
       - Commit: `feat(US-006): TASK-04 add hardened Markdown renderer for note bodies`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: 9ccb0274f2d80a7e8ff344ccf9e66157779e1a9a
+      short_sha: 9ccb027
+      subject: 'feat(US-006): TASK-04 add hardened Markdown renderer for note bodies'
+      committed_at: '2026-09-09T09:10:46+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/9ccb0274f2d80a7e8ff344ccf9e66157779e1a9a'
   -
     id: TASK-05
     title: 'Unit-test Markdown rendering safety'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1.5
     dependencies:
@@ -346,14 +364,20 @@ tasks:
       7. Do **not** add Playwright, Dusk, Pest browser or viewport suites
 
       ## Completion Criteria
-      - [ ] Tests pass locally
-      - [ ] Each of the three overridden options has at least one assertion that fails if it is reverted
-      - [ ] Coverage matches the `NORMAL` bar
+      - [x] Tests pass locally
+      - [x] Each of the three overridden options has at least one assertion that fails if it is reverted
+      - [x] Coverage matches the `NORMAL` bar
 
       ## Git Deliverables
       - Commit: `test(US-006): TASK-05 cover Markdown rendering safety`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: cd4b75dab4258616e85c7107a43bfacbf22c4d77
+      short_sha: cd4b75d
+      subject: 'test(US-006): TASK-05 cover Markdown rendering safety'
+      committed_at: '2026-09-09T09:11:29+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/cd4b75dab4258616e85c7107a43bfacbf22c4d77'
   -
     id: TASK-06
     title: 'Build the autosaving note editor with Write/Preview'
@@ -585,4 +609,4 @@ tasks:
       - Commit: `docs(US-006): TASK-10 document the note surface and correct the Flux tabs mapping`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`
-updated_at: '2026-09-09T09:05:57+02:00'
+updated_at: '2026-09-09T09:11:29+02:00'
