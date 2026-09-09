@@ -36,8 +36,10 @@ Every machine-specific assumption is a `.env` value, never a code constant. All 
 | `KBMS_ICS_SYNC_MINUTES` | `15` | No | US-001 (schedule), US-003 |
 | `KBMS_ICS_WINDOW_PAST_DAYS` | `90` | No | US-003, US-005 (agenda window) |
 | `KBMS_ICS_WINDOW_FUTURE_DAYS` | `180` | No | US-003, US-005 |
-| `KBMS_TRANSCRIPTS_PATH` | — | Yes | US-006 (transcript resolution) |
-| `KBMS_TRANSCRIPT_PATTERN` | `{date}-{time}-{slug}` | No | US-006 |
+| `KBMS_TRANSCRIPTS_PATH` | — | Yes | US-007 (transcript resolution) |
+| `KBMS_TRANSCRIPT_PATTERN` | `{date}-{time}-{slug}` | No | US-007 |
+| `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` | `10` | No | US-007 (start-time drift tolerance) |
+| `KBMS_TRANSCRIPT_PREVIEW_BYTES` | `2097152` | No | US-007 (preview truncation cap, 2 MiB) |
 | `KBMS_CLAUDE_LAUNCHER` | — | Yes | US-007, US-009 (launch bridge) |
 | `KBMS_OUTLOOK_URL_TEMPLATE` | — | No | US-005 ("Open in Outlook" fallback) |
 | `KBMS_TIMEZONE` | `Europe/Rome` | No | US-001 (also binds `app.timezone`) |
@@ -88,6 +90,18 @@ Every meeting can carry a Markdown note, written straight into a Write/Preview p
 
 Clearing the editor is an **edit**, not a deletion: the blank body is saved and the row is kept (the agenda badge just drops to "Not annotated"). The only thing that removes a note is the explicit **Delete notes…** confirmation dialog in the panel footer. Note bodies are stored as plain text and rendered through a hardened Markdown converter that escapes embedded HTML and neutralises unsafe links instead of executing them.
 
+## Transcript linking
+
+Every meeting resolves to **at most one** transcript file under `KBMS_TRANSCRIPTS_PATH`, driven by `KBMS_TRANSCRIPT_PATTERN` (default `{date}-{time}-{slug}`). Placeholders: `{date}` renders `Y-m-d`, `{time}` renders **`Hi`** (four digits, no colon — a filename cannot portably carry `:`, and the convention's own example is `2026-09-07-1430-standup.md`), `{slug}` is the meeting title slugified. **The pattern must end with `{slug}`** — the trailing portion varies freely, and it is the date-and-time prefix that carries identity.
+
+**This is a deliberate divergence from `KBMS_OUTLOOK_URL_TEMPLATE`**, where `{time}` is `H:i` — the two templates address different media (a filename vs. a URL) and must not be "simplified" to match each other.
+
+Matching tolerates start-time drift within `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`), because a recording rarely starts on the exact calendar minute. When the tolerance window yields exactly one candidate, it is linked automatically the first time the meeting page is opened (never from the agenda, which never writes). When it yields **two or more**, the resolver surfaces every candidate with its drift and size and **does not guess** — the operator chooses. A **manual override** (an in-app file picker, no free-text path field) always wins over the convention, including a pattern change made afterwards; clearing a link writes an explicit tombstone rather than deleting the row, so the convention cannot silently re-link a file the operator just rejected.
+
+The preview reads at most `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`, 2 MiB) — a larger file shows its first bounded chunk with a truncation notice rather than loading the whole file. `.md` renders through the same hardened Markdown converter as notes; `.txt` is shown as escaped plain text. **Resolution is single-level and non-recursive** — a nested pipeline layout is a pattern change, not a code change. The application only ever **reads** `KBMS_TRANSCRIPTS_PATH`; it never writes, moves, or deletes a transcript file.
+
+For local development, point `KBMS_TRANSCRIPTS_PATH` at `storage/app/transcripts` (already gitignored) — `MeetingTranscriptSeeder` writes real sample files there so every panel state (linked, ambiguous, `.txt`, manual, broken) is visible after a plain `php artisan migrate:fresh --seed`.
+
 ## The launcher script contract
 
 `KBMS_CLAUDE_LAUNCHER` points at an operator-owned shell script, invoked with **exactly two positional arguments, in order**:
@@ -112,6 +126,11 @@ osascript -e "tell application \"Terminal\" to do script \"claude '$2' --file '$
 3. `php artisan schedule:list` — confirms the calendar sync entry and its interval.
 4. If `database/database.sqlite` is missing or unreadable, the shell shows an actionable message naming the exact remedy (`touch` + `migrate`, or a permissions fix) instead of a stack trace.
 5. A stale calendar mirror: run `kbms:doctor` first to confirm the feed itself is reachable and parses, then check the latest `calendar_sync_runs` row for the actual failure reason.
+6. Transcript panel states, each with a different fix — the wording is the contract, not decoration:
+   - **Not configured** — `KBMS_TRANSCRIPTS_PATH` is unset; set it and re-run `kbms:doctor`.
+   - **Missing** — no candidate file was found within the tolerance window; use the in-app picker to link one manually.
+   - **Unreadable** — the file exists but permissions block it; `chmod`, not relink.
+   - **Rejected** — the linked path resolves outside `KBMS_TRANSCRIPTS_PATH` (e.g. after the env value changed); relink to a file the server can index inside the base.
 
 ## Access model
 
