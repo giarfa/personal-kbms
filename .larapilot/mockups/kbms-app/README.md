@@ -202,7 +202,7 @@ Mockups are layout and flow references, **not HTML to paste**. The `kb-*` classe
 | `sk-sidebar__nav a` | `<flux:navlist.item :current="…">` |
 | `kb-sync` pill | Livewire component polled or refreshed on the sync job's broadcast; `wire:poll.60s` is acceptable for a local tool |
 | `kb-row` | Blade partial in a `@foreach`; the whole row is one `<a>` to the occurrence route |
-| `kb-tabs` (Write/Preview) | `<flux:tab.group>` |
+| `kb-tabs` (Write/Preview) | Hand-rolled ARIA tablist (`role="tablist"` + `role="tab"` + `aria-selected`) — `<flux:tab.group>` is **Flux Pro** and unavailable on the installed free `livewire/flux`; the mockup's own markup is the implementation, ported as-is |
 | `kb-textarea` + autosave | Livewire `wire:model.live.debounce.750ms` + a `saving`/`saved`/`error` state property |
 | `kb-scroll` transcript | Livewire component reading the file on render; **bounded** read, never `file_get_contents` on an unbounded path |
 | `kb-command` | Rendered from the same array the job dispatches, so display and execution cannot diverge |
