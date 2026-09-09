@@ -42,17 +42,7 @@
         <x-meeting.mirror-panel :row="$row" />
 
         <div class="kb-owned">
-            <section class="kb-panel" aria-labelledby="notes-h">
-                <div class="kb-panel__head">
-                    <div>
-                        <p class="kb-owned-flag">{{ __('Yours') }}</p>
-                        <h2 id="notes-h">{{ __('Notes') }}</h2>
-                    </div>
-                </div>
-                <div class="kb-panel__body">
-                    <p class="kb-note-inline">{{ __('Meeting notes arrive with US-006.') }}</p>
-                </div>
-            </section>
+            <livewire:meeting-notes :occurrence="$row->event" />
 
             <section class="kb-panel" aria-labelledby="transcript-h">
                 <div class="kb-panel__head">
