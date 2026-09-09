@@ -320,6 +320,12 @@ tasks:
       - Commit: `feat(US-008): TASK-04 render month, week and day views with FullCalendar MIT`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: a75cde6ee7f62efec2fabf4fdf142c34599ebf2f
+      short_sha: a75cde6
+      subject: 'feat(US-008): TASK-04 render month, week and day views with FullCalendar MIT'
+      committed_at: '2026-09-09T23:27:26+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a75cde6ee7f62efec2fabf4fdf142c34599ebf2f'
   -
     id: TASK-05
     title: 'Style the grid to the mockup contract in both themes'
@@ -366,6 +372,12 @@ tasks:
       - Commit: `feat(US-008): TASK-05 style the calendar grid to the mockup contract`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: 5d396b3a78b75919e6ad979c78c67ca64f6a7b7f
+      short_sha: 5d396b3
+      subject: 'feat(US-008): TASK-05 style the calendar grid to the mockup contract'
+      committed_at: '2026-09-09T23:29:39+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/5d396b3a78b75919e6ad979c78c67ca64f6a7b7f'
   -
     id: TASK-06
     title: 'Add the keyboard and screen-reader layer FullCalendar does not ship'
@@ -414,6 +426,12 @@ tasks:
       - Commit: `feat(US-008): TASK-06 add keyboard navigation and screen-reader semantics to the grid`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: af91a6ad15901d8f112cb18aa80bc353201b2d3e
+      short_sha: af91a6a
+      subject: 'feat(US-008): TASK-06 add keyboard navigation and screen-reader semantics to the grid'
+      committed_at: '2026-09-09T23:33:31+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/af91a6ad15901d8f112cb18aa80bc353201b2d3e'
   -
     id: TASK-07
     title: 'Feature-test the calendar page and write the manual test handoff'
@@ -454,6 +472,12 @@ tasks:
       - Commit: `test(US-008): TASK-07 cover the calendar page and add the manual test handoff`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: 81fc1de80b850adbbcac1c415057b3aba61c3e68
+      short_sha: 81fc1de
+      subject: 'test(US-008): TASK-07 cover the calendar page and add the manual test handoff'
+      committed_at: '2026-09-09T23:35:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/81fc1de80b850adbbcac1c415057b3aba61c3e68'
   -
     id: TASK-08
     title: 'Document the calendar surface'
@@ -494,4 +518,10 @@ tasks:
       - Commit: `docs(US-008): TASK-08 document the calendar surface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
-updated_at: '2026-09-09T23:35:45+02:00'
+    commit:
+      sha: 70e82e74c05ebfd044b715d477a8a564665ffeb0
+      short_sha: 70e82e7
+      subject: 'docs(US-008): TASK-08 document the calendar surface'
+      committed_at: '2026-09-09T23:35:46+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/70e82e74c05ebfd044b715d477a8a564665ffeb0'
+updated_at: '2026-09-09T23:40:51+02:00'
