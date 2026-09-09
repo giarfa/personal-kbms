@@ -6,7 +6,7 @@ epic:
   objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
 priority: HIGH
 points: 5
-status: TODO
+status: 'IN PROGRESS'
 body: |
   #### US-006: Personal notes on a meeting
 
@@ -37,3 +37,11 @@ body: |
   - [ ] **Error case:** an autosave failure surfaces a retry affordance and does not silently discard typed content
   - [ ] **Edge case:** a note on an occurrence that later disappears from the feed window is retained, not orphaned or purged
   - [ ] Feature test asserts recurrence isolation, resync durability across retitle/reschedule/cancel, and the delete path
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-09T08:47:36+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-09T09:03:56+02:00'
+rework: false

@@ -1,0 +1,576 @@
+code: US-006
+plan_body: |-
+  ## Technical Solution
+
+  US-006 is the first spec that gives the operator a **write** surface, and the first to add a table since US-003. Every decision in it follows from one property the spec calls non-negotiable: a note must outlive anything the feed can do to the meeting it hangs on. That rules out any dependency on `calendar_events.id`.
+
+  ### 1. Occurrence-keyed storage, and deliberately no foreign key (Mike + John)
+
+  `meeting_notes` — `id` (UUID, `HasUuids` like `calendar_events`), `event_uid` (string), `event_recurrence_id` (string, default `''`), `body` (text, default `''`), timestamps. `unique(['event_uid', 'event_recurrence_id'])`.
+
+  **No foreign key to `calendar_events`, on purpose.** The only column an FK could target is the UUID surrogate `id`, which is exactly the identity a resync is allowed to change; and `ON DELETE CASCADE` against it would hand the feed a route to destroy operator data. Keying on (`event_uid`, `event_recurrence_id`) instead means a note is addressed by the same pair the detail route already uses, and is reachable the moment an occurrence with that pair exists — before it, after it, or never.
+
+  **Trap — Eloquent has no composite-key relation.** `hasOne(MeetingNote::class, 'event_uid', 'source_uid')->where('event_recurrence_id', $this->recurrence_id)` reads correctly and is wrong under eager loading: `with()` builds the relation from a single parent instance, so that one parent's `recurrence_id` is applied to the whole `whereIn` batch and every sibling occurrence on an agenda page receives the first occurrence's note. **Do not add such a relation to `CalendarEvent`.** Reads go through `MeetingNote::scopeForOccurrence(OccurrenceKey)` for the single case and `MeetingCoverageLookup` for the batch case (§5).
+
+  Storage is plain text. `body` is written and read verbatim; the only transformation ever applied is at render time (§2), so nothing is lost or mangled between what the operator typed and what is stored.
+
+  ### 2. Markdown rendering — one hardened choke point (Lars + Alex)
+
+  `Str::markdown()` is built on `GithubFlavoredMarkdownConverter` (`vendor/laravel/framework/src/Illuminate/Support/Str.php:817`), so GFM tables, task lists, strikethrough and autolinks come free — and FR-016's `- [ ]` checklists already render as checkboxes without extra work.
+
+  But league/commonmark's defaults are hostile here, verified in `vendor/league/commonmark/src/Environment/Environment.php:434-436`:
+
+  | Option | Library default | Required here |
+  | --- | --- | --- |
+  | `html_input` | `allow` | **`escape`** |
+  | `allow_unsafe_links` | `true` | **`false`** |
+  | `max_nesting_level` | `PHP_INT_MAX` | **`20`** |
+
+  A bare `Str::markdown($note->body)` therefore renders an embedded `<script>` verbatim and lets a `javascript:` href through — the precise opposite of the acceptance criterion. `escape` rather than `strip` is chosen on purpose: the operator sees the HTML they typed rendered as literal text, instead of it silently vanishing.
+
+  `app/Meetings/MarkdownRenderer.php` — one `final` class, one `render(string $body): HtmlString` method, that option set applied in exactly one place. Views call it and nothing else calls `Str::markdown()` on note content. **No dependency change:** `league/commonmark ^2.8.1` is a hard `require` of `laravel/framework` (`composer.lock:1372`), so this is a framework API, not a vendor addition.
+
+  ### 3. Autosave (Alex + Joe)
+
+  `App\Livewire\MeetingNotes` — class-based per the recorded `livewire component style` decision, mounted into the owned column of `resources/views/pages/meeting.blade.php`. That is the seam US-005 left open: the page stays a controller + Blade view, and this spec replaces its `Meeting notes arrive with US-006.` placeholder with `<livewire:meeting-notes :occurrence="$row->event" />`.
+
+  - `wire:model.live.debounce.750ms` on `$body`, the mapping the mockup README records for `kb-textarea` + autosave. `updatedBody()` performs the write.
+  - `$saveState` (`idle` | `saving` | `saved` | `error`) drives `kb-savestate`; `$savedAt` renders the mockup's `Saved 12:04`. The indicator is `aria-live="polite"`; the error variant is `role="alert"` — per the mockup a11y contract, Livewire must update **inside** these nodes, not replace them.
+  - **A failure never discards typed content.** The write is wrapped so a failure sets `error` and leaves `$body` alone; Livewire's client already holds the typed value, so a failed round-trip cannot roll the textarea back. A `retry()` action re-attempts the same write, matching `states.html`: `Not saved` + `Retry` + `Typed content stays in the editor. Nothing is discarded silently.`
+  - **No save button and no state gate.** The component is byte-identical before and after `starts_at`; there is deliberately no `isPast()` branch anywhere in this spec, and a test pins that.
+  - **Write / Preview is a hand-rolled ARIA tablist, not `<flux:tab.group>`.** The mockup README's implementation mapping names Flux tabs, but tabs are a **Flux Pro** component and this project has free `livewire/flux 2.19.0` — `vendor/livewire/flux/stubs/resources/views/flux/` contains no `tab` directory. The mockup's own markup is already the correct contract (`role="tablist"`, `role="tab"`, `aria-selected`) and ports as-is with a `$mode` property. `<flux:modal>` **is** in the free set and carries the delete confirmation (§4).
+  - Preview renders `$body` — the live property, not the stored row — so it reflects text that has not finished saving.
+
+  ### 4. Delete path (Violet + Alex)
+
+  `Delete notes…` sits in the panel footer as a ghost-destructive control and opens a `<flux:modal>`. Both strings the mockup marks as spec commitments are kept in meaning:
+
+  - `Only this occurrence is affected — other meetings in the series keep theirs.`
+  - `The linked transcript file is not touched. The pipeline owns it.`
+
+  Confirming deletes the row, resets `$body` to `''` and returns the save state to `idle`. This is the concrete discharge of PRD **Privacy & data handling** obligation 2.
+
+  Autosave never deletes. Per the recorded `meeting note blank body semantics` decision, clearing the editor is an **edit**: the blank body is persisted and the row is kept, so a stray select-all-delete cannot destroy a note without confirmation, while the coverage badge still drops off (§5).
+
+  ### 5. Coverage — filling the US-005 seam (Mike)
+
+  `MeetingCoverage::$hasNotes` is a hard `false` marked for this spec. Filling it from the agenda is the one place in US-006 where an N+1 is genuinely available, since `AgendaQuery` renders a whole week of rows.
+
+  `app/Meetings/MeetingCoverageLookup.php` takes the `CalendarEvent` collection `AgendaQuery` has already fetched and issues **one** query — `select event_uid, event_recurrence_id from meeting_notes where event_uid in (…) and body <> ''` — returning a map keyed on `sourceUid."\0".recurrenceId`. `AgendaRow::__construct()` gains a second parameter defaulting to an empty `MeetingCoverage`, so `MeetingController` and every existing test keep compiling; the controller passes its own single-occurrence lookup.
+
+  Result: **two queries per agenda page** regardless of how dense the week is. The `unique(['event_uid','event_recurrence_id'])` index serves the `whereIn('event_uid', …)` by leftmost prefix and the single-occurrence read outright — no additional index is warranted on a table this size.
+
+  Coverage reads the **body**, not row existence, per the recorded decision, so `Notes` / `Not annotated` on the agenda is an honest coverage map rather than a record of which meetings were once opened. `AgendaDay::$annotatedCount` and the existing legend light up with no view restructuring — which is what the US-005 seam was for.
+
+  ### 6. Resync durability and the orphan edge case (Sabrine + Anne)
+
+  Nothing in this spec has to *act* to achieve durability — that is the whole point of keying on the natural key — but three paths must be pinned by tests, because a later refactor could break them in silence:
+
+  - **retitle / reschedule / relocate** — `EventSynchronizer::upsertOne()` updates mirrored fields on the same row; the note is untouched and still reachable at the same route.
+  - **upstream cancellation** — `sweep()` sets `cancelled_at` and never deletes a row (its own docblock states this); the note stays editable on the cancelled occurrence, beneath the banner US-005 already renders.
+  - **disappearance from the feed window** — no row is ever deleted, so this cannot orphan a note. The test proves the stronger property instead: delete the `calendar_events` row outright, and the `meeting_notes` row survives and re-attaches when an occurrence with the same (`source_uid`, `recurrence_id`) reappears.
+
+  ### 7. Out of scope, stated rather than assumed
+
+  - **Note history / versioning** — not in the spec and not in the PRD; autosave overwrites, and nothing here promises otherwise.
+  - **FTS5 indexing of note bodies** — FR-013, Future Phases.
+  - **Extracting action items from note checklists** — FR-016, Future Phases. GFM task lists render from day one, but nothing reads them.
+  - **Notes on anything other than a meeting occurrence** — the only key this table knows.
+
+  ## Git & Branching
+
+  - **Mode:** `GITFLOW` (from `settings.git_mode`) — branch, atomic per-task commits, PR body prepared **locally**; nothing is pushed.
+  - **Branch point:** `feature/US-006-meeting-notes` from `develop`. `develop` is at `5bc10b2` and already contains the US-005 merge (`59ef569`), so this branches cleanly — no repeat of the US-004/US-005 catch-up TASK-00.
+  - Per task: one Conventional Commit `type(US-006): TASK-NN summary`. No batched multi-task commits.
+  - `php artisan larapilot:quality` (Pint + Larastan level 5) green before every `task-done`.
+  - `CHANGELOG.md` `[Unreleased]` entry lands with the docs task, not after review — the US-004 review gate found that omission once already.
+  - Merge to `develop` only after human `larapilot-review` approval.
+
+  ## Test Data Strategy
+
+  - **New model → new factory, same task as the migration.** `MeetingNoteFactory` with:
+    - `forOccurrence(CalendarEvent $event)` — derives `event_uid` / `event_recurrence_id` from the occurrence, so no test hand-copies a natural key.
+    - `blank()` — empty `body`, for the coverage-honesty path (row present, badge off).
+    - default `body` is realistic multi-section Markdown (`## Prep` / `## Outcomes`, a bold decision line, a `- [ ]` item), matching the mockup's fixture note so the preview surface is meaningful without editing the database.
+  - **`MeetingNoteSeeder`** (registered in `DatabaseSeeder` after `CalendarEventSeeder`, which it depends on):
+    - a note on **exactly one** occurrence of the seeded 12-week `Weekly sync` series — the current week's — so sibling isolation is visible in the running app, not only green in the suite;
+    - a note on today's `Client kickoff` and on the cancelled `Budget review`, so the cancelled-but-annotated combination is on screen;
+    - one **blank-bodied** note on `Design review`, so an emptied note visibly reads `Not annotated`;
+    - the deliberately empty day and the un-annotated meetings are left alone — the agenda must still show `Not annotated` rows.
+  - `php artisan migrate:fresh --seed` must produce an agenda with mixed `Notes` / `Not annotated` badges before the entity task is done.
+
+  ## Test Strategy
+
+  **Bar: `NORMAL`** (from `settings.testing`) — PHPUnit feature and unit tests. No Playwright, Dusk, Pest browser, or viewport matrix. Test tasks are interleaved with implementation, not stacked at the end.
+
+  | Layer | Coverage |
+  | --- | --- |
+  | Unit — `MeetingNoteTest` | `forOccurrence()` scope hits the composite key; `occurrenceKey()` round-trips; the unique constraint rejects a second note on the same occurrence; factory `forOccurrence()` / `blank()` produce valid rows |
+  | Unit — `MarkdownRendererTest` | `<script>alert(1)</script>` is **escaped**, not emitted; `<img onerror=…>` escaped; a `javascript:` link is neutralised; an `onclick` attribute in raw HTML never reaches the output; a normal heading/list/bold/table/task-list body renders as expected HTML; deeply nested input is bounded rather than exhausting the stack |
+  | Unit — `MeetingCoverageLookupTest` | a non-blank note flags its occurrence and **only** its occurrence; a blank-bodied note does not flag; an occurrence with no row does not flag; the batch issues one query for N events (`DB::listen` count assertion, so a future N+1 fails the suite) |
+  | Feature — `MeetingNotesTest` (Livewire) | **recurrence isolation — the highest-value test in the suite:** two occurrences of one series, a note written on one, the sibling's component mounts empty and the sibling's page does not render the first's text; autosave writes without any explicit save action; the saved indicator advances `saving` → `saved`; a forced write failure renders `Not saved` with `Retry`, **keeps `$body` intact**, and a successful retry persists it; Write/Preview renders the body through the hardened renderer and an HTML-bearing note appears escaped on the page; the component behaves identically for a past and a future occurrence (no state gate); clearing the editor persists a blank body and **keeps** the row; the delete path removes the row, renders both required dialog strings, and resets the editor |
+  | Feature — `MeetingNoteDurabilityTest` | a note survives an `EventSynchronizer` run that retitles, reschedules and relocates the occurrence, and is still reachable at the same route; survives upstream `STATUS:CANCELLED` and stays editable on the cancelled occurrence; survives the disappearance sweep; survives outright deletion of the `calendar_events` row and re-attaches when the same (`source_uid`, `recurrence_id`) reappears |
+  | Feature — `AgendaPageTest` (extended) | an annotated meeting renders the `Notes` badge and an un-annotated one renders `Not annotated`; a blank-bodied note reads `Not annotated`; the day header's annotated count reflects reality; a note on one occurrence of the seeded series does not badge its siblings |
+
+  **Manual test handoff** (Anne — required at this bar for UI, per the mockup test contract): keyboard-only pass over the note panel — tab into the tablist, switch Write/Preview with the keyboard, reach `Delete notes…`, open and dismiss the modal with `Esc` and confirm focus returns to the trigger; type and confirm the save indicator announces without stealing focus; theme toggle in both directions with the preview rendered; 375 px pass against `mobile.html`; contrast spot-check of `kb-savestate` in its three states in light and dark.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch from develop'
+    type: Impl
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+    body: |-
+      ## Description
+      Bootstrap Gitflow for US-006. `develop` is at `5bc10b2` and already contains the US-005 merge (`59ef569`) plus its review artifacts, so this branches cleanly from `develop` with no catch-up merge — unlike US-005's TASK-00.
+
+      Under `git_mode: GITFLOW` nothing is pushed: the internal PR description is prepared locally.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop` and confirm a clean tree (`git status --short` empty)
+      2. `git checkout -b feature/US-006-meeting-notes`
+      3. Draft the internal PR title/body toward `develop`: title `US-006: Personal notes on a meeting`; body links `.larapilot/plans/US-006-plan.yaml` and lists the planned tasks. Keep it local.
+      4. Anchor commit: `chore(US-006): TASK-00 bootstrap feature branch` (empty commit allowed)
+
+      ## Completion Criteria
+      - [ ] Branch `feature/US-006-meeting-notes` exists locally, branched from `develop` at `5bc10b2` or later
+      - [ ] PR title/body drafted toward `develop` (nothing pushed)
+
+      ## Test Data
+      - N/A — git only
+
+      ## Git Deliverables
+      - Commit: `chore(US-006): TASK-00 bootstrap feature branch` (empty commit allowed)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepared locally — open/update remote only if the operator asks
+  -
+    id: TASK-01
+    title: 'Add MeetingNote with migration, factory and seeder'
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 3
+    dependencies:
+      - TASK-00
+    body: |-
+      ## Description
+      Add the `meeting_notes` table and `MeetingNote` model keyed on the occurrence's natural key (`event_uid`, `event_recurrence_id`) — never on `calendar_events.id` — plus the factory and seeder entries that make the coverage and isolation shapes demonstrable in the running app.
+
+      **Do not add a foreign key to `calendar_events`.** The only targetable column is the UUID surrogate `id`, which is exactly the identity a resync may change, and a cascade against it would give the feed a route to delete operator data. See plan `## Technical Solution` §1.
+
+      **Do not add a `hasOne`/`hasMany` relation between `CalendarEvent` and `MeetingNote`.** Eloquent has no composite-key relation, and the `->where('event_recurrence_id', $this->recurrence_id)` workaround silently cross-contaminates siblings under `with()` — the trap is documented in plan §1. Reads use the scope and (from TASK-08) the batch lookup.
+
+      ## Files Involved
+      - app/Models/MeetingNote.php
+      - database/migrations/xxxx_create_meeting_notes_table.php
+      - database/factories/MeetingNoteFactory.php
+      - database/seeders/MeetingNoteSeeder.php
+      - database/seeders/DatabaseSeeder.php
+
+      ## Steps
+      1. `php artisan make:model MeetingNote -mf --no-interaction`
+      2. Migration: `uuid('id')->primary()`, `string('event_uid')`, `string('event_recurrence_id')->default('')`, `text('body')->default('')`, `timestamps()`, `unique(['event_uid', 'event_recurrence_id'])`. No foreign key.
+      3. Model: `HasFactory`, `HasUuids`, `$guarded = []`, PHPDoc `@property` block matching `CalendarEvent`'s style. Add `scopeForOccurrence(Builder $query, OccurrenceKey $key): Builder` and `occurrenceKey(): OccurrenceKey`, mirroring `CalendarEvent`. Add `hasContent(): bool` returning `trim($this->body) !== ''` — the single definition of "annotated", consumed by TASK-08.
+      4. Factory: default `body` is realistic multi-section Markdown (`## Prep` / `## Outcomes`, a bold `**Decision:**` line, a `- [ ]` item) matching the mockup fixture note; `forOccurrence(CalendarEvent $event): static` deriving both key columns from the occurrence; `blank(): static` with an empty body.
+      5. `MeetingNoteSeeder`: a note on **exactly one** occurrence of the seeded 12-week `Weekly sync` series (the current week's), one on today's `Client kickoff`, one on the cancelled `Budget review`, and a `blank()` one on `Design review`. Resolve the targets by querying `calendar_events`, so the seeder cannot drift from `CalendarEventSeeder`. Register it in `DatabaseSeeder` **after** `CalendarEventSeeder`.
+      6. `php artisan migrate:fresh --seed`
+      7. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `meeting_notes` exists with the composite unique index and **no** foreign key
+      - [ ] `MeetingNote::forOccurrence()` returns the single row for a natural key and nothing for a sibling
+      - [ ] No Eloquent relation was added between `CalendarEvent` and `MeetingNote`
+      - [ ] `migrate:fresh --seed` succeeds and the seeded series carries a note on exactly one occurrence
+      - [ ] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - [ ] `database/factories/MeetingNoteFactory.php` created with `forOccurrence()` and `blank()` states
+      - [ ] `MeetingNoteSeeder` registered in `DatabaseSeeder`, producing mixed annotated / blank / un-annotated meetings
+      - [ ] Factory and seeder land in **this** task, alongside the migration
+
+      ## Git Deliverables
+      - Commit: `feat(US-006): TASK-01 add MeetingNote with factory and seeder`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-02
+    title: 'Port the note editor styles from the mockup (parallel with TASK-01)'
+    type: Impl
+    status: TODO
+    assignee: Joe
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-00
+    body: |-
+      ## Description
+      Port the `kb-*` classes the note panel needs from `.larapilot/mockups/kbms-app/kbms.css` into `resources/css/app.css`, additive-only. Shares no files with TASK-01 or TASK-04, so it can run beside them.
+
+      The `--kb-*` `@theme` tokens are already in place from US-001/US-004/US-005 and **must not be redefined**. `kb-panel`, `kb-panel__head`, `kb-panel__body`, `kb-panel__foot`, `kb-owned-flag`, `kb-sronly`, `kb-stack` and `kb-inline` are already ported — do not duplicate them.
+
+      ## Files Involved
+      - resources/css/app.css
+
+      ## Steps
+      1. Port, from `kbms.css`, only what is still missing: `.kb-tabs` (+ `button`, `button[aria-selected='true']`, `:focus-visible`), `.kb-textarea` (+ `:focus-visible`, `--sm`), `.kb-savestate` (+ `__dot`, `--saving`, `--error`), and the `.kb-md` rendered-Markdown block (headings, `p`, `ul`/`ol`, `li`, `code`, `strong`, `blockquote`). Include the `kb-pulse` keyframe only if US-004 did not already bring it.
+      2. Verify the `prefers-reduced-motion: reduce` block already in `app.css` neutralises the `kb-savestate--saving` pulse; extend it if it does not.
+      3. Add the GFM shapes the mockup CSS does not cover but the renderer can emit: `.kb-md table` and `.kb-md input[type=checkbox]` (task lists), styled to match the existing density.
+      4. `npm run build`
+      5. Smoke-check the mockup panel rendering at 1280, 768 and 375 px against `meeting.html` and `mobile.html`
+
+      ## Completion Criteria
+      - [ ] Every class the note panel view will use exists in `resources/css/app.css`
+      - [ ] No `--kb-*` token and no already-ported class was redefined
+      - [ ] Saving-dot pulse is neutralised under `prefers-reduced-motion: reduce`
+      - [ ] `npm run build` succeeds
+      - [ ] Panel readable at 375 px — nothing clipped, touch targets ≥44 px below 768 px
+
+      ## Test Data
+      - N/A — stylesheet only
+
+      ## Git Deliverables
+      - Commit: `feat(US-006): TASK-02 port note editor styles from the mockup`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-03
+    title: 'Unit-test the MeetingNote occurrence keying'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 1
+    dependencies:
+      - TASK-01
+    body: |-
+      ## Description
+      Pin the model's occurrence keying and the factory states TASK-01 introduced, before any UI reads them.
+
+      ## Files Involved
+      - tests/Unit/Models/MeetingNoteTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit MeetingNoteTest` and move it under `tests/Unit/Models/` to match the existing layout
+      2. Use `MeetingNoteFactory` — do not restate the factory definition in the test
+      3. Cover: `forOccurrence()` returns the row for its natural key; `forOccurrence()` on a **sibling** recurrence id returns nothing; `occurrenceKey()` round-trips through `toRouteKey()`/`fromRouteKey()`; a second note on the same (`event_uid`, `event_recurrence_id`) violates the unique constraint; `hasContent()` is `false` for `blank()`, for whitespace-only, and `true` for a real body
+      4. `php artisan test --filter=MeetingNoteTest`
+      5. Do **not** add Playwright, Dusk, Pest browser or viewport suites
+
+      ## Completion Criteria
+      - [ ] Tests pass locally
+      - [ ] Sibling isolation is asserted at the model layer, not only later at the UI layer
+      - [ ] Coverage matches the `NORMAL` bar
+
+      ## Git Deliverables
+      - Commit: `test(US-006): TASK-03 cover MeetingNote occurrence keying`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-04
+    title: 'Add the hardened MarkdownRenderer (parallel with TASK-01)'
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-00
+    body: |-
+      ## Description
+      Add the single choke point through which note Markdown becomes HTML, with league/commonmark's unsafe defaults overridden. Shares no files with TASK-01 or TASK-02, so it can run beside them.
+
+      `Str::markdown()` is a `GithubFlavoredMarkdownConverter` (`vendor/laravel/framework/src/Illuminate/Support/Str.php:817`), so GFM tables and task lists come free. Its inherited defaults are the problem — verified at `vendor/league/commonmark/src/Environment/Environment.php:434-436`: `html_input => 'allow'`, `allow_unsafe_links => true`, `max_nesting_level => PHP_INT_MAX`. A bare call renders an embedded `<script>` verbatim.
+
+      **No dependency change:** `league/commonmark ^2.8.1` is a hard `require` of `laravel/framework` (`composer.lock:1372`). Do not touch `composer.json`.
+
+      ## Files Involved
+      - app/Meetings/MarkdownRenderer.php
+
+      ## Steps
+      1. `php artisan make:class Meetings/MarkdownRenderer --no-interaction`
+      2. `final` class, one method: `render(string $body): HtmlString`, delegating to `Str::markdown($body, ['html_input' => 'escape', 'allow_unsafe_links' => false, 'max_nesting_level' => 20])`
+      3. `html_input => 'escape'`, not `'strip'`: the operator must see the HTML they typed rendered as literal text rather than silently losing it. Record that reasoning in the class docblock, along with the three overridden defaults and why each matters — the next reader must not "simplify" this back to a bare `Str::markdown()`.
+      4. Return `HtmlString` so views read `{!! $renderer->render($body) !!}` at exactly one call site and the escaping guarantee travels with the value
+      5. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] All three unsafe defaults explicitly overridden
+      - [ ] Docblock states why `escape` beats `strip` and why the nesting level is bounded
+      - [ ] `composer.json` untouched
+      - [ ] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-006): TASK-04 add hardened Markdown renderer for note bodies`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-05
+    title: 'Unit-test Markdown rendering safety'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-04
+    body: |-
+      ## Description
+      Pin the acceptance criterion that note content renders without executing embedded HTML or scripts. These assertions are the only thing standing between the renderer and a future "simplification" back to a bare `Str::markdown()`.
+
+      ## Files Involved
+      - tests/Unit/Meetings/MarkdownRendererTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit MarkdownRendererTest` and move it under `tests/Unit/Meetings/`
+      2. Escaping: `<script>alert(1)</script>` appears **escaped** in the output and no literal `<script` tag is emitted; `<img src=x onerror=alert(1)>` likewise; a raw `<div onclick="…">` never reaches the output as an attribute
+      3. Links: a `[x](javascript:alert(1))` link does not produce a `javascript:` href; a normal `https://` link does
+      4. Correct rendering still works: heading, unordered list, `**bold**`, inline `code`, a GFM table, and a `- [ ]` task list all produce their expected elements
+      5. Bounding: a pathologically nested body (e.g. 200 levels of `>` blockquote) returns rather than exhausting the stack
+      6. `php artisan test --filter=MarkdownRendererTest`
+      7. Do **not** add Playwright, Dusk, Pest browser or viewport suites
+
+      ## Completion Criteria
+      - [ ] Tests pass locally
+      - [ ] Each of the three overridden options has at least one assertion that fails if it is reverted
+      - [ ] Coverage matches the `NORMAL` bar
+
+      ## Git Deliverables
+      - Commit: `test(US-006): TASK-05 cover Markdown rendering safety`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-06
+    title: 'Build the autosaving note editor with Write/Preview'
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 5
+    dependencies:
+      - TASK-01
+      - TASK-02
+      - TASK-04
+    body: |-
+      ## Description
+      Add the `MeetingNotes` Livewire component and mount it into the owned column of the meeting detail page, replacing the `Meeting notes arrive with US-006.` placeholder US-005 left there. Autosave with a visible save state, Write/Preview tabs, and no state gate of any kind.
+
+      Class-based component per the recorded `livewire component style` decision — `php artisan make:livewire MeetingNotes --class`, tests written separately with `make:test --phpunit`.
+
+      **Write/Preview is a hand-rolled ARIA tablist, not `<flux:tab.group>`.** The mockup README's implementation table names Flux tabs, but tabs are **Flux Pro** and this project has free `livewire/flux 2.19.0` (`vendor/livewire/flux/stubs/resources/views/flux/` has no `tab`). The mockup's own markup — `role="tablist"` + `role="tab"` + `aria-selected` — is the contract and ports directly. Flag the README mapping as corrected in TASK-10.
+
+      ## Files Involved
+      - app/Livewire/MeetingNotes.php
+      - resources/views/livewire/meeting-notes.blade.php
+      - resources/views/pages/meeting.blade.php
+
+      ## Steps
+      1. `php artisan make:livewire MeetingNotes --class --no-interaction`
+      2. `mount(CalendarEvent $occurrence)`: store the `OccurrenceKey` parts as plain string properties (never the model — a Livewire-hydrated model would reintroduce the surrogate id as the identity), load the existing note via `MeetingNote::forOccurrence()`, seed `$body`.
+      3. `$body` bound with `wire:model.live.debounce.750ms` — the mapping recorded in the mockup README for `kb-textarea` + autosave. `updatedBody()` performs an `updateOrCreate` on (`event_uid`, `event_recurrence_id`).
+      4. `$saveState` (`idle`|`saving`|`saved`|`error`) and `$savedAt` drive `kb-savestate`: `Saving…`, `Saved H:i`, `Not saved` + a `Retry` button calling `retry()`. Wrap the write so a failure sets `error` and **leaves `$body` untouched** — never reassign the property from the database on the error path, or typed content is silently discarded. Log the throwable.
+      5. Indicator markup: `aria-live="polite"` on the container, `role="alert"` on the error variant. Livewire must update **inside** these nodes, not replace them — keep them outside any `@if` that would swap the element.
+      6. Write/Preview: `$mode` property, `role="tablist"` with two `role="tab"` buttons and `aria-selected`; textarea gets a `kb-sronly` label (`Meeting notes, Markdown`); Preview renders `{!! app(MarkdownRenderer::class)->render($this->body) !!}` inside `.kb-md` — from the **live property**, so preview reflects text that has not finished saving.
+      7. Panel footer per the mockup: `Autosaves as you type · Markdown supported · stored as plain text, rendered without HTML`.
+      8. **No state gate.** No `starts_at`/`isPast()` branch anywhere in this component or view — a note is writable before and after the meeting, and on a cancelled occurrence.
+      9. Replace the placeholder in `resources/views/pages/meeting.blade.php` with `<livewire:meeting-notes :occurrence="$row->event" />`, keeping the existing `kb-panel` / `Yours` flag / `#notes-h` heading structure the mirror-vs-owned contract depends on.
+      10. Smoke-check layout at 375, 768 and 1280 px against `meeting.html` and `mobile.html`
+      11. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Typing persists with no explicit save action; the indicator moves `saving` → `saved` with a timestamp
+      - [ ] A failed write renders `Not saved` with `Retry` and the typed text is still in the editor
+      - [ ] Preview renders through `MarkdownRenderer`; an HTML-bearing note shows as literal text
+      - [ ] No `isPast()`/state gate in the component or view; a cancelled occurrence is editable
+      - [ ] The component keys on (`event_uid`, `event_recurrence_id`) only — no `calendar_events.id` anywhere
+      - [ ] Panel usable at mobile/tablet/desktop (manual smoke at this bar)
+      - [ ] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task (TASK-01 owns them)
+
+      ## Git Deliverables
+      - Commit: `feat(US-006): TASK-06 add autosaving Markdown note editor`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-07
+    title: "Add the confirmed delete path for a meeting's notes"
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-06
+    body: |-
+      ## Description
+      Add the explicit delete path for a meeting's notes — PRD **Privacy & data handling** obligation 2. A ghost-destructive `Delete notes…` in the panel footer opens a `<flux:modal>`; confirming removes the row.
+
+      Autosave must **not** delete. Per the recorded `meeting note blank body semantics` decision, clearing the editor persists a blank body and keeps the row; only this dialog removes it.
+
+      `<flux:modal>` is in the free Flux set (`vendor/livewire/flux/stubs/resources/views/flux/modal/`) — do not hand-roll a dialog.
+
+      ## Files Involved
+      - app/Livewire/MeetingNotes.php
+      - resources/views/livewire/meeting-notes.blade.php
+
+      ## Steps
+      1. Footer control: ghost variant tinted `--kb-danger`, label `Delete notes…`, wired to open the modal. Render it only when a note row exists — there is nothing to delete otherwise.
+      2. `<flux:modal>` body carries both strings the mockup marks as spec commitments, in meaning: `The note on {title}, {when} will be permanently removed. Only this occurrence is affected — other meetings in the series keep theirs.` and `The linked transcript file is not touched. The pipeline owns it.` Do not soften either.
+      3. `deleteNote()`: delete via `MeetingNote::forOccurrence()`, reset `$body` to `''`, `$saveState` to `idle`, `$savedAt` to `null`, close the modal. Deleting must not trip `updatedBody()` into recreating the row — reset the property without going through the autosave path.
+      4. Confirm keyboard behaviour: `Esc` and the scrim both close, focus moves into the dialog on open and returns to the trigger on close (Flux handles this — verify it, do not reimplement it).
+      5. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Deletion requires confirmation; the dialog renders both required strings
+      - [ ] Confirming removes the row and empties the editor without recreating it
+      - [ ] Cancelling leaves the note untouched
+      - [ ] Autosave still never deletes — an emptied editor keeps the row with a blank body
+      - [ ] `Esc` closes the dialog and focus returns to the trigger
+      - [ ] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-006): TASK-07 add confirmed delete path for meeting notes`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-08
+    title: 'Wire note coverage into the agenda without an N+1 (parallel with TASK-06)'
+    type: Impl
+    status: TODO
+    assignee: Mike
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-01
+    body: |-
+      ## Description
+      Fill `MeetingCoverage::$hasNotes` — hard `false` and marked for this spec since US-005 — so meetings carrying notes are flagged in the agenda and the list doubles as a coverage map. Touches no file TASK-06 owns, so it can run beside it.
+
+      This is the one place in US-006 where an N+1 is genuinely available: `AgendaQuery` renders a whole week of rows. The lookup is therefore a **single batched query**, and the test asserts the query count so a future regression fails the suite.
+
+      Coverage reads the **body**, not row existence, per the recorded `meeting note blank body semantics` decision — an emptied note reads `Not annotated`.
+
+      ## Files Involved
+      - app/Meetings/MeetingCoverageLookup.php
+      - app/Meetings/MeetingCoverage.php
+      - app/Meetings/AgendaRow.php
+      - app/Meetings/AgendaQuery.php
+      - app/Http/Controllers/MeetingController.php
+
+      ## Steps
+      1. `php artisan make:class Meetings/MeetingCoverageLookup --no-interaction`
+      2. `for(Collection $events): array` — one query, `MeetingNote::query()->select('event_uid', 'event_recurrence_id', 'body')->whereIn('event_uid', $uids)->get()`, filtered on `hasContent()` in PHP so the "annotated" definition stays in the model. Return a map keyed on `sourceUid."\0".recurrenceId`. Add `forOccurrence(CalendarEvent $event): MeetingCoverage` for the single-row detail case.
+      3. The `unique(['event_uid','event_recurrence_id'])` index serves the `whereIn('event_uid', …)` by leftmost prefix — do **not** add another index; note that in the class docblock so it is not "optimised" later.
+      4. `AgendaRow::__construct()`: add a second parameter `MeetingCoverage $coverage = new MeetingCoverage` and assign it instead of constructing one. The default keeps `MeetingController` and every existing test compiling.
+      5. `AgendaQuery::for()`: build the row collection, run the lookup once over the fetched events, and pass each row its coverage. Two queries per agenda page, regardless of week density.
+      6. `MeetingController`: pass `$lookup->forOccurrence($occurrence)` into the `AgendaRow`, so the detail page's badge agrees with the agenda's.
+      7. Update `MeetingCoverage`'s docblock — `hasNotes` is now real; `hasTranscript` stays `false` and stays marked for US-007.
+      8. `php artisan migrate:fresh --seed` and eyeball the agenda: mixed `Notes` / `Not annotated` badges, the seeded series badged on exactly one occurrence, and the day header's annotated count matching.
+      9. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] An annotated meeting renders the `Notes` badge; an un-annotated one renders `Not annotated`
+      - [ ] A blank-bodied note reads `Not annotated`
+      - [ ] A note on one occurrence of a series does not badge its siblings
+      - [ ] The agenda issues **two** queries regardless of how many rows the week holds
+      - [ ] `AgendaDay::$annotatedCount` and the existing legend are correct with no view restructuring
+      - [ ] No new index added; the composite unique index is documented as serving both reads
+      - [ ] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — reads the rows TASK-01's seeder already creates
+
+      ## Git Deliverables
+      - Commit: `feat(US-006): TASK-08 flag meetings carrying notes in the agenda`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-09
+    title: 'Feature-test recurrence isolation, resync durability, coverage and the delete path'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 5
+    dependencies:
+      - TASK-06
+      - TASK-07
+      - TASK-08
+    body: |-
+      ## Description
+      The acceptance suite for this spec. The recurrence-isolation case is the one the spec and the PRD both name as the highest-value test in the codebase; the durability cases pin properties that nothing in the code actively enforces, so a later refactor could break them in silence.
+
+      `NORMAL` bar — PHPUnit feature tests via `Livewire::test()` and HTTP assertions. No Playwright, Dusk, Pest browser or viewport suites.
+
+      ## Files Involved
+      - tests/Feature/MeetingNotesTest.php
+      - tests/Feature/MeetingNoteDurabilityTest.php
+      - tests/Unit/Meetings/MeetingCoverageLookupTest.php
+      - tests/Feature/AgendaPageTest.php (extended)
+
+      ## Steps
+      1. `php artisan make:test --phpunit MeetingNotesTest`, `MeetingNoteDurabilityTest`, and a unit test for the lookup; use `CalendarEventFactory` and `MeetingNoteFactory` throughout — no hand-built rows
+      2. **`MeetingNotesTest`** — recurrence isolation first: two occurrences of one `source_uid` with different `recurrence_id`s, a note written on one, then assert the sibling's component mounts with an empty body **and** the sibling's page does not render the first's text. Then: autosave persists with no save action; the indicator advances `saving` → `saved`; a forced write failure renders `Not saved` + `Retry`, leaves `$body` intact, and a successful `retry()` persists it; Preview renders through the renderer and an HTML-bearing note appears escaped in the response; the component behaves identically for a **past** and a **future** occurrence and on a **cancelled** one (no state gate); clearing the editor persists a blank body and keeps the row; the delete path removes the row, renders both required dialog strings, and empties the editor without recreating it
+      3. **`MeetingNoteDurabilityTest`** — drive `EventSynchronizer` (not a hand-written `update()`) so the test exercises the real sync path: a note survives a run that retitles, reschedules and relocates its occurrence and is still reachable at the same route; survives an upstream `STATUS:CANCELLED` and stays editable on the cancelled occurrence; survives the disappearance sweep; and survives outright deletion of the `calendar_events` row, re-attaching when the same (`source_uid`, `recurrence_id`) reappears
+      4. **`MeetingCoverageLookupTest`** — a non-blank note flags only its own occurrence; a blank-bodied note does not flag; an occurrence with no row does not flag; assert the **query count** via `DB::listen` so a future N+1 fails here
+      5. **`AgendaPageTest`** — extend with the badge assertions: annotated vs `Not annotated`, blank note reads `Not annotated`, the day header's annotated count, and one occurrence of a series badged without its siblings
+      6. `php artisan test` (full suite — this spec changes `AgendaRow`'s constructor signature, so the existing agenda and detail suites must be re-verified, not just the new files)
+      7. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Recurrence isolation asserted at both the component and the rendered-page level
+      - [ ] Resync durability asserted across retitle, reschedule, relocate, cancel and disappearance — driven through `EventSynchronizer`
+      - [ ] The orphan edge case asserted: the note survives its occurrence row and re-attaches
+      - [ ] Autosave-failure path asserted to preserve typed content
+      - [ ] Delete path and both required dialog strings asserted
+      - [ ] Agenda coverage badges and the query-count bound asserted
+      - [ ] Full suite green; Pint + Larastan level 5 clean
+      - [ ] Coverage matches the `NORMAL` bar — no browser or viewport suites added
+
+      ## Git Deliverables
+      - Commit: `test(US-006): TASK-09 cover recurrence isolation, resync durability and note coverage`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+  -
+    id: TASK-10
+    title: 'Document the note surface and correct the mockup Flux mapping'
+    type: Impl
+    status: TODO
+    assignee: Albert
+    estimate_hours: 1
+    dependencies:
+      - TASK-09
+    body: |-
+      ## Description
+      Baseline documentation only, per the recorded `documentation scope` decision. No new `.env` key ships in this spec, so the configuration surface and the PRD need no revision — but two things do need recording, and the `CHANGELOG` omission the US-004 review gate caught must not repeat.
+
+      ## Files Involved
+      - CHANGELOG.md
+      - README.md
+      - .larapilot/mockups/kbms-app/README.md
+
+      ## Steps
+      1. `CHANGELOG.md` `[Unreleased] / ### Added`: the note surface — autosaved Markdown notes keyed to the occurrence, surviving retitle, reschedule, cancellation and disappearance; rendered preview with embedded HTML escaped rather than executed; confirmed delete path; agenda coverage badges. Match the existing entries' register: specific, and stating what the operator can now rely on.
+      2. `README.md`: a short **Notes** subsection — notes belong to the occurrence and not to the calendar row, so nothing the feed does can move or destroy one; clearing the editor is an edit and the explicit `Delete notes…` dialog is the only thing that removes a note; note bodies are stored as plain text and rendered with HTML escaped.
+      3. `.larapilot/mockups/kbms-app/README.md`, implementation mapping table: correct the `kb-tabs (Write/Preview)` row — `<flux:tab.group>` is **Flux Pro** and unavailable on the installed free `livewire/flux`; the implementation is the mockup's own ARIA tablist markup. Leave every other row alone.
+      4. Confirm no PRD change is needed (no new configuration key, no architectural change) and state that in the task completion notes.
+      5. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] `[Unreleased]` entry present before review, not added during it
+      - [ ] README states the occurrence-keyed durability, the delete-vs-clear distinction and the plain-text/escaped-render guarantee
+      - [ ] Mockup README's Flux tabs mapping corrected, nothing else touched
+      - [ ] No PRD revision needed, and that is recorded rather than assumed
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-006): TASK-10 document the note surface and correct the Flux tabs mapping`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: finalise the local PR body toward `develop`
+updated_at: '2026-09-09T08:47:36+02:00'

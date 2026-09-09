@@ -389,4 +389,56 @@ decisions:
     source: chat
     spec: US-005
     supersedes: null
-updated_at: '2026-09-09T07:59:50+02:00'
+  -
+    id: abf780763918f290
+    ts: '2026-09-09T08:42:41+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'meeting note blank body semantics'
+    label: 'meeting note blank body semantics'
+    value: "Clearing the editor is an EDIT, not a deletion: autosave persists an empty body and the meeting_notes row is kept. Agenda coverage reads the body (non-blank = has notes), so the badge flips to 'Not annotated' while the row survives. Only the explicit 'Delete notes...' confirmation dialog removes the row (PRD privacy obligation 2)."
+    question: null
+    rationale: "Keeps the agenda an honest coverage map without letting a stray select-all-delete destroy notes unconfirmed, which would contradict the spec's 'never silently discard typed content' criterion."
+    source: askquestion
+    spec: US-006
+    supersedes: null
+  -
+    id: 7275ece22d159799
+    ts: '2026-09-09T08:47:50+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'meeting note storage keying'
+    label: 'meeting note storage keying'
+    value: "meeting_notes is keyed on (event_uid, event_recurrence_id) with a composite unique index and NO foreign key to calendar_events: the only targetable column is the UUID surrogate id, exactly the identity a resync may change, and a cascade would give the feed a route to destroy operator data. No Eloquent relation is added between CalendarEvent and MeetingNote either — Eloquent has no composite-key relation, and hasOne(...)->where('event_recurrence_id', $this->recurrence_id) silently applies one parent's recurrence_id to the whole whereIn batch under with(), cross-contaminating sibling occurrences. Reads use MeetingNote::scopeForOccurrence() and a batched MeetingCoverageLookup."
+    question: null
+    rationale: null
+    source: chat
+    spec: US-006
+    supersedes: null
+  -
+    id: 44c983f69d9da721
+    ts: '2026-09-09T08:47:50+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'note markdown rendering'
+    label: 'note markdown rendering'
+    value: "Note bodies render through a single final App\\Meetings\\MarkdownRenderer wrapping Str::markdown() with html_input=escape, allow_unsafe_links=false and max_nesting_level=20. league/commonmark's defaults are html_input=allow / allow_unsafe_links=true / max_nesting_level=PHP_INT_MAX, so a bare Str::markdown() renders an embedded <script> verbatim. 'escape' rather than 'strip' so the operator sees typed HTML as literal text instead of losing it silently. No dependency change: league/commonmark ^2.8.1 is a hard require of laravel/framework."
+    question: null
+    rationale: null
+    source: chat
+    spec: US-006
+    supersedes: null
+  -
+    id: f768e78221becaad
+    ts: '2026-09-09T08:47:50+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'note editor write/preview tabs'
+    label: 'note editor write/preview tabs'
+    value: "Write/Preview is a hand-rolled ARIA tablist (role=tablist + role=tab + aria-selected, the mockup's own kb-tabs markup), NOT <flux:tab.group>. Tabs are a Flux Pro component and this project has free livewire/flux 2.19.0, whose stubs contain no tab directory; the mockup README's implementation mapping is corrected in TASK-10. <flux:modal> IS in the free set and carries the delete confirmation."
+    question: null
+    rationale: null
+    source: chat
+    spec: US-006
+    supersedes: null
+updated_at: '2026-09-09T08:47:50+02:00'
