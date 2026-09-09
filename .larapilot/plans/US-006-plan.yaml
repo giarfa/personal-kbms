@@ -674,7 +674,7 @@ tasks:
     id: TASK-11
     title: 'Fix the stale and inert agenda query-count assertion'
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies: {}
@@ -699,12 +699,12 @@ tasks:
       7. `vendor/bin/phpunit tests/Unit/Meetings/AgendaQueryTest.php`
 
       ## Completion Criteria
-      - [ ] `AgendaQueryTest` asserts a fixed **2** queries at both 3 and 12 in-range events
-      - [ ] Fixtures are pinned into `AgendaRange::today()`; no assertion depends on `dateTimeBetween` randomness
-      - [ ] At least one fixture carries a `MeetingNote`, so the coverage query returns rows
-      - [ ] The test name no longer claims a single query
-      - [ ] Mutation observed: an injected extra query in `AgendaQuery::for()` turns the test red; mutation reverted
-      - [ ] `vendor/bin/phpunit --random-order-seed=6` and `--random-order-seed=9` both pass
+      - [x] `AgendaQueryTest` asserts a fixed **2** queries at both 3 and 12 in-range events
+      - [x] Fixtures are pinned into `AgendaRange::today()`; no assertion depends on `dateTimeBetween` randomness
+      - [x] At least one fixture carries a `MeetingNote`, so the coverage query returns rows
+      - [x] The test name no longer claims a single query
+      - [x] Mutation observed: an injected extra query in `AgendaQuery::for()` turns the test red; mutation reverted
+      - [x] `vendor/bin/phpunit --random-order-seed=6` and `--random-order-seed=9` both pass
 
       ## Test Data
       - N/A — no model, migration, factory or seeder change
@@ -713,11 +713,17 @@ tasks:
       - Commit: `fix(US-006): TASK-11 assert the agenda's real two-query contract`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: local PR notes only
+    commit:
+      sha: f29fea68c1b12313c518ac87300c60757f005d65
+      short_sha: f29fea6
+      subject: "fix(US-006): TASK-11 assert the agenda's real two-query contract"
+      committed_at: '2026-09-09T19:34:32+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/f29fea68c1b12313c518ac87300c60757f005d65'
   -
     id: TASK-12
     title: 'Make the agenda coverage-badge assertions row-scoped so they can fail'
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1.5
     dependencies: {}
@@ -760,12 +766,12 @@ tasks:
       7. `vendor/bin/phpunit tests/Feature/AgendaPageTest.php`
 
       ## Completion Criteria
-      - [ ] All five coverage-badge assertions are row-scoped via the helper; none can be satisfied by the legend
-      - [ ] The helper fails loudly when the row is not found, rather than returning an empty slice
-      - [ ] The recurrence-isolation test names both occurrences and asserts the presence *and* absence of each badge
-      - [ ] `test_the_not_annotated_badge_appears_for_every_row` is repaired in the same pass
-      - [ ] Mutation observed: inverting `$row->coverage->hasNotes` in `agenda.blade.php` turns the repaired tests red; mutation reverted
-      - [ ] `resources/views/livewire/agenda.blade.php` is unchanged at the end of the task
+      - [x] All five coverage-badge assertions are row-scoped via the helper; none can be satisfied by the legend
+      - [x] The helper fails loudly when the row is not found, rather than returning an empty slice
+      - [x] The recurrence-isolation test names both occurrences and asserts the presence *and* absence of each badge
+      - [x] `test_the_not_annotated_badge_appears_for_every_row` is repaired in the same pass
+      - [x] Mutation observed: inverting `$row->coverage->hasNotes` in `agenda.blade.php` turns the repaired tests red; mutation reverted
+      - [x] `resources/views/livewire/agenda.blade.php` is unchanged at the end of the task
 
       ## Test Data
       - N/A — no model, migration, factory or seeder change
@@ -774,11 +780,17 @@ tasks:
       - Commit: `fix(US-006): TASK-12 assert coverage badges per row, not per page`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: local PR notes only
+    commit:
+      sha: f40157059efe8fc63c3cacf0cd297d8d3c7b4873
+      short_sha: f401570
+      subject: 'fix(US-006): TASK-12 assert coverage badges per row, not per page'
+      committed_at: '2026-09-09T19:36:00+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/f40157059efe8fc63c3cacf0cd297d8d3c7b4873'
   -
     id: TASK-13
     title: "Promote the note panel's inline styles into kb-* classes"
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 1
     dependencies: {}
@@ -814,11 +826,11 @@ tasks:
       5. `vendor/bin/phpunit tests/Feature/MeetingNotesTest.php` — the delete-path test asserts on both dialog strings and must stay green.
 
       ## Completion Criteria
-      - [ ] `grep -c 'style="' resources/views/livewire/meeting-notes.blade.php` returns `0`
-      - [ ] New rules live in `resources/css/app.css` under `kb-*` names consistent with the existing scheme
-      - [ ] `--kb-danger` is still the source of the delete control's colour — no hard-coded hex
-      - [ ] Panel renders identically in light and dark, desktop and 375 px
-      - [ ] `MeetingNotesTest` still passes
+      - [x] `grep -c 'style="' resources/views/livewire/meeting-notes.blade.php` returns `0`
+      - [x] New rules live in `resources/css/app.css` under `kb-*` names consistent with the existing scheme
+      - [x] `--kb-danger` is still the source of the delete control's colour — no hard-coded hex
+      - [x] Panel renders identically in light and dark, desktop and 375 px
+      - [x] `MeetingNotesTest` still passes
 
       ## Test Data
       - N/A — presentation only
@@ -827,6 +839,12 @@ tasks:
       - Commit: `refactor(US-006): TASK-13 replace the note panel's inline styles with kb-* classes`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: local PR notes only
+    commit:
+      sha: ec043532735e3bbcf55d9c9744868469ddb3de02
+      short_sha: ec04353
+      subject: "refactor(US-006): TASK-13 replace the note panel's inline styles with kb-* classes"
+      committed_at: '2026-09-09T19:37:47+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ec043532735e3bbcf55d9c9744868469ddb3de02'
   -
     id: TASK-14
     title: 'Multi-seed suite and quality gate before returning to REVIEW'
@@ -870,4 +888,4 @@ tasks:
       - Commit: `test(US-006): TASK-14 record multi-seed suite and quality verification`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: local PR notes only
-updated_at: '2026-09-09T19:31:09+02:00'
+updated_at: '2026-09-09T19:37:47+02:00'
