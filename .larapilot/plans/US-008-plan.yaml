@@ -418,7 +418,7 @@ tasks:
     id: TASK-07
     title: 'Feature-test the calendar page and write the manual test handoff'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 3
     dependencies:
@@ -444,11 +444,11 @@ tasks:
       9. Do **not** add Playwright, Dusk, Pest browser or viewport suites — `settings.testing` is `NORMAL`, and this file is what stands in for them
 
       ## Completion Criteria
-      - [ ] `CalendarPageTest` passes and the full suite stays green
-      - [ ] Malformed `view` and `date` are proven to degrade rather than throw
-      - [ ] Legend and empty-range copy are asserted as strings, not just status codes
-      - [ ] `.larapilot/docs/test-results/US-008-manual.md` exists and is runnable by a human without reading the plan
-      - [ ] `php artisan larapilot:quality` passes
+      - [x] `CalendarPageTest` passes and the full suite stays green
+      - [x] Malformed `view` and `date` are proven to degrade rather than throw
+      - [x] Legend and empty-range copy are asserted as strings, not just status codes
+      - [x] `.larapilot/docs/test-results/US-008-manual.md` exists and is runnable by a human without reading the plan
+      - [x] `php artisan larapilot:quality` passes
 
       ## Git Deliverables
       - Commit: `test(US-008): TASK-07 cover the calendar page and add the manual test handoff`
@@ -494,4 +494,4 @@ tasks:
       - Commit: `docs(US-008): TASK-08 document the calendar surface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
-updated_at: '2026-09-09T23:33:26+02:00'
+updated_at: '2026-09-09T23:35:01+02:00'
