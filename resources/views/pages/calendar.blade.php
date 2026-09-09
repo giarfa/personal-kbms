@@ -12,6 +12,7 @@
             initialDate: '{{ $range->anchor->toDateString() }}',
             initialLabel: '{{ $range->label() }}',
             eventsUrl: '{{ route('calendar.events') }}',
+            todayIso: '{{ $today }}',
             viewMap: {
                 month: 'dayGridMonth',
                 week: 'timeGridWeek',
@@ -55,6 +56,8 @@
             <h3>{{ __('Nothing in this range') }}</h3>
             <p>{{ __('The mirror is current — this range is genuinely empty rather than unsynced.') }} {{ $syncNote }}</p>
         </div>
+
+        <h2 class="kb-sronly">{{ __('Calendar grid') }}</h2>
 
         <div
             class="kb-cal"

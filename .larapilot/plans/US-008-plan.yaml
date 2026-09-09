@@ -370,7 +370,7 @@ tasks:
     id: TASK-06
     title: 'Add the keyboard and screen-reader layer FullCalendar does not ship'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Elise
     estimate_hours: 4
     dependencies:
@@ -398,14 +398,14 @@ tasks:
       11. `npm run build`, then `php artisan test` and `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Every view is fully operable from the keyboard: into the grid, across days, onto a chip, through to the meeting page
-      - [ ] Focus is visible at every stop and never suppressed
-      - [ ] Each chip's accessible name states time, title and coverage in words; marks are `aria-hidden`
-      - [ ] The view switcher exposes `aria-pressed`; the grid exposes a range-stating accessible name
-      - [ ] Range changes are announced through a polite live region
-      - [ ] `+N more` traps and returns focus correctly and closes on `Esc`
-      - [ ] One `<h1>`; skip link still lands ahead of the grid
-      - [ ] `npm run build` succeeds; the full test suite stays green; `php artisan larapilot:quality` passes
+      - [x] Every view is fully operable from the keyboard: into the grid, across days, onto a chip, through to the meeting page
+      - [x] Focus is visible at every stop and never suppressed
+      - [x] Each chip's accessible name states time, title and coverage in words; marks are `aria-hidden`
+      - [x] The view switcher exposes `aria-pressed`; the grid exposes a range-stating accessible name
+      - [x] Range changes are announced through a polite live region
+      - [x] `+N more` traps and returns focus correctly and closes on `Esc`
+      - [x] One `<h1>`; skip link still lands ahead of the grid
+      - [x] `npm run build` succeeds; the full test suite stays green; `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model, migration, factory or seeder change
@@ -494,4 +494,4 @@ tasks:
       - Commit: `docs(US-008): TASK-08 document the calendar surface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
-updated_at: '2026-09-09T23:29:38+02:00'
+updated_at: '2026-09-09T23:33:26+02:00'
