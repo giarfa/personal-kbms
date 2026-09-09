@@ -284,7 +284,7 @@ specs:
       objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
     priority: HIGH
     points: 5
-    status: 'IN PROGRESS'
+    status: REVIEW
     body: |
       #### US-006: Personal notes on a meeting
 
@@ -318,6 +318,7 @@ specs:
     status_history:
       - { status: PLANNED, at: '2026-09-09T08:47:36+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-09T09:03:56+02:00' }
+      - { status: REVIEW, at: '2026-09-09T09:25:11+02:00' }
     rework: false
   -
     code: US-007
