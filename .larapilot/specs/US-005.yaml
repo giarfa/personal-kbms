@@ -6,7 +6,7 @@ epic:
   objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
 priority: HIGH
 points: 10
-status: REVIEW
+status: DONE
 body: |-
   #### US-005: Agenda view, meeting detail and Open in Outlook
 
@@ -24,21 +24,21 @@ body: |-
   After implementing this spec, the agenda lists recent and upcoming meetings defaulting to today, each row opens a meeting detail page showing all mirrored feed data, and an "Open in Outlook" call-to-action reaches the right place in Outlook on the web.
 
   **Acceptance Criteria**
-  - [ ] The agenda lists meetings chronologically, **defaults to today**, and supports date-range navigation forward and back
-  - [ ] The agenda is fully **keyboard navigable** with visible focus states, and rows are reachable without a pointer
-  - [ ] Each meeting occurrence has a canonical detail route addressed by (`source_uid`, `recurrence_id`) — **not** by a surrogate row id that a resync could change
-  - [ ] The detail page shows mirrored feed fields read-only: title, start, end, duration, location, organizer, attendees, description
-  - [ ] Mirrored feed data is **visually distinct** from operator-owned surfaces, so it is obvious which side can change under you on the next sync
-  - [ ] Cancelled occurrences are clearly marked in both agenda and detail rather than hidden
-  - [ ] "Open in Outlook" **prefers a feed-carried link** (`event_url`) when present, and otherwise falls back to the configurable `KBMS_OUTLOOK_URL_TEMPLATE` with the event's date and time substituted
-  - [ ] When a Teams join URL was captured, it is offered as a **distinct action** from the Outlook calendar call-to-action
-  - [ ] Both links open in a new tab and are safe against tab-nabbing (`rel="noopener"`)
-  - [ ] Layout is desktop-first, does not break below `768px`, and meets WCAG 2.2 AA contrast in both light and dark themes
-  - [ ] **Error case:** requesting a detail route for an occurrence that no longer exists returns a clear not-found state, not an exception
-  - [ ] **Edge case:** with `KBMS_OUTLOOK_URL_TEMPLATE` unset and no feed-carried link, the call-to-action is disabled with an explanatory tooltip rather than producing a broken URL
-  - [ ] **Edge case:** a date range containing no meetings shows an explicit empty state
-  - [ ] **Edge case:** overlapping and multi-day events render without collapsing into each other or being dropped
-  - [ ] Feature tests cover agenda ranges, detail rendering, link preference order, and the disabled call-to-action path
+  - [x] The agenda lists meetings chronologically, **defaults to today**, and supports date-range navigation forward and back
+  - [x] The agenda is fully **keyboard navigable** with visible focus states, and rows are reachable without a pointer
+  - [x] Each meeting occurrence has a canonical detail route addressed by (`source_uid`, `recurrence_id`) — **not** by a surrogate row id that a resync could change
+  - [x] The detail page shows mirrored feed fields read-only: title, start, end, duration, location, organizer, attendees, description
+  - [x] Mirrored feed data is **visually distinct** from operator-owned surfaces, so it is obvious which side can change under you on the next sync
+  - [x] Cancelled occurrences are clearly marked in both agenda and detail rather than hidden
+  - [x] "Open in Outlook" **prefers a feed-carried link** (`event_url`) when present, and otherwise falls back to the configurable `KBMS_OUTLOOK_URL_TEMPLATE` with the event's date and time substituted
+  - [x] When a Teams join URL was captured, it is offered as a **distinct action** from the Outlook calendar call-to-action
+  - [x] Both links open in a new tab and are safe against tab-nabbing (`rel="noopener"`)
+  - [x] Layout is desktop-first, does not break below `768px`, and meets WCAG 2.2 AA contrast in both light and dark themes
+  - [x] **Error case:** requesting a detail route for an occurrence that no longer exists returns a clear not-found state, not an exception
+  - [x] **Edge case:** with `KBMS_OUTLOOK_URL_TEMPLATE` unset and no feed-carried link, the call-to-action is disabled with an explanatory tooltip rather than producing a broken URL
+  - [x] **Edge case:** a date range containing no meetings shows an explicit empty state
+  - [x] **Edge case:** overlapping and multi-day events render without collapsing into each other or being dropped
+  - [x] Feature tests cover agenda ranges, detail rendering, link preference order, and the disabled call-to-action path
 
 
   ## Rework Feedback
@@ -79,4 +79,13 @@ status_history:
   -
     status: REVIEW
     at: '2026-09-08T23:47:37+02:00'
+  -
+    status: DONE
+    at: '2026-09-09T07:59:43+02:00'
 rework: false
+merge_commit:
+  sha: 835948451742a416e67ccf97b1afe8fac8c059d0
+  short_sha: '8359484'
+  subject: 'chore(US-005): log rework usage ledger entry'
+  committed_at: '2026-09-08T23:47:46+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/835948451742a416e67ccf97b1afe8fac8c059d0'
