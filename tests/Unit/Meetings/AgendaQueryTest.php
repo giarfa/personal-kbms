@@ -274,7 +274,7 @@ class AgendaQueryTest extends TestCase
         $this->assertTrue($today->rows[0]->isCancelled);
     }
 
-    public function test_the_agenda_costs_a_fixed_two_queries_regardless_of_event_count(): void
+    public function test_the_agenda_costs_a_fixed_three_queries_regardless_of_event_count(): void
     {
         $noted = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(8, 0), 15)->create();
         MeetingNote::factory()->forOccurrence($noted)->create();
@@ -283,13 +283,16 @@ class AgendaQueryTest extends TestCase
             CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 0)->addMinutes(20 * $i), 15)->create();
         }
 
-        $this->assertSame(2, $this->countQueriesForAgenda());
+        // Events query + batched notes query + batched transcripts query
+        // (US-007) — the directory listing the transcripts lookup may also
+        // perform is filesystem, not SQL, so it does not add to this count.
+        $this->assertSame(3, $this->countQueriesForAgenda());
 
         for ($i = 0; $i < 9; $i++) {
             CalendarEvent::factory()->at(now('Europe/Rome')->setTime(12, 0)->addMinutes(20 * $i), 15)->create();
         }
 
-        $this->assertSame(2, $this->countQueriesForAgenda());
+        $this->assertSame(3, $this->countQueriesForAgenda());
     }
 
     private function countQueriesForAgenda(): int

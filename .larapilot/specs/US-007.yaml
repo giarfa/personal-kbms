@@ -6,7 +6,7 @@ epic:
   objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
 priority: HIGH
 points: 8
-status: TODO
+status: DONE
 body: |
   #### US-007: Transcript linking and in-place preview
 
@@ -24,22 +24,42 @@ body: |
   After implementing this spec, opening a meeting that has a transcript shows the resolved absolute path and the readable transcript inline, and any meeting can be manually linked to or unlinked from a file.
 
   **Acceptance Criteria**
-  - [ ] A configurable resolver maps a meeting to **at most one** candidate path under `KBMS_TRANSCRIPTS_PATH`, driven by `KBMS_TRANSCRIPT_PATTERN`
-  - [ ] The default pattern implements the **date-and-time-prefix convention** (e.g. `2026-09-07-1430-standup.md`), keyed primarily off the meeting's start datetime with the title slug as a secondary hint
-  - [ ] Matching tolerates the trailing slug portion varying freely — the prefix carries the identity
-  - [ ] Matching tolerates **start-time drift** within a configurable window, because a recording rarely starts on the exact calendar minute
-  - [ ] When the tolerance window yields **multiple candidates**, the resolver surfaces them for the operator to choose and **does not guess**
-  - [ ] The resolved path is verified to **exist and be readable** before it is offered
-  - [ ] A **manual override** lets the operator pick or clear the file for a meeting, and a manual link **always wins** over the convention
-  - [ ] Once linked, the path is persisted with `link_source` (`convention` or `manual`), so changing the pattern does not silently break existing links
-  - [ ] `.md` renders as Markdown and `.txt` renders as monospace, both scrollable within a bounded region without leaving the meeting page
-  - [ ] The resolved absolute path is displayed and copyable
-  - [ ] Transcript content is **read on demand** and never duplicated into the database (PRD privacy obligation 3)
-  - [ ] Clearing a link removes the association only — **the file itself is never deleted**, since the pipeline owns it (PRD privacy obligation 2)
-  - [ ] Meetings carrying a linked transcript are flagged in the agenda
-  - [ ] **Error case:** a linked file that has since been moved or deleted shows a clear broken-link state with a relink affordance, not an exception
-  - [ ] **Error case:** an unreadable file (permissions) is reported distinctly from a missing file
-  - [ ] **Edge case:** resolution never escapes `KBMS_TRANSCRIPTS_PATH` — path traversal via pattern or manual input is rejected
-  - [ ] **Edge case:** a very large transcript does not exhaust memory; reading is bounded
-  - [ ] **Edge case:** with `KBMS_TRANSCRIPTS_PATH` unset, the transcript panel shows a configuration prompt rather than an error
-  - [ ] Feature tests use a temporary filesystem covering exact match, drift match, ambiguous multi-candidate, manual override precedence, broken link, and traversal rejection
+  - [x] A configurable resolver maps a meeting to **at most one** candidate path under `KBMS_TRANSCRIPTS_PATH`, driven by `KBMS_TRANSCRIPT_PATTERN`
+  - [x] The default pattern implements the **date-and-time-prefix convention** (e.g. `2026-09-07-1430-standup.md`), keyed primarily off the meeting's start datetime with the title slug as a secondary hint
+  - [x] Matching tolerates the trailing slug portion varying freely — the prefix carries the identity
+  - [x] Matching tolerates **start-time drift** within a configurable window, because a recording rarely starts on the exact calendar minute
+  - [x] When the tolerance window yields **multiple candidates**, the resolver surfaces them for the operator to choose and **does not guess**
+  - [x] The resolved path is verified to **exist and be readable** before it is offered
+  - [x] A **manual override** lets the operator pick or clear the file for a meeting, and a manual link **always wins** over the convention
+  - [x] Once linked, the path is persisted with `link_source` (`convention` or `manual`), so changing the pattern does not silently break existing links
+  - [x] `.md` renders as Markdown and `.txt` renders as monospace, both scrollable within a bounded region without leaving the meeting page
+  - [x] The resolved absolute path is displayed and copyable
+  - [x] Transcript content is **read on demand** and never duplicated into the database (PRD privacy obligation 3)
+  - [x] Clearing a link removes the association only — **the file itself is never deleted**, since the pipeline owns it (PRD privacy obligation 2)
+  - [x] Meetings carrying a linked transcript are flagged in the agenda
+  - [x] **Error case:** a linked file that has since been moved or deleted shows a clear broken-link state with a relink affordance, not an exception
+  - [x] **Error case:** an unreadable file (permissions) is reported distinctly from a missing file
+  - [x] **Edge case:** resolution never escapes `KBMS_TRANSCRIPTS_PATH` — path traversal via pattern or manual input is rejected
+  - [x] **Edge case:** a very large transcript does not exhaust memory; reading is bounded
+  - [x] **Edge case:** with `KBMS_TRANSCRIPTS_PATH` unset, the transcript panel shows a configuration prompt rather than an error
+  - [x] Feature tests use a temporary filesystem covering exact match, drift match, ambiguous multi-candidate, manual override precedence, broken link, and traversal rejection
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-09T20:54:32+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-09T21:38:09+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-09T22:12:15+02:00'
+  -
+    status: DONE
+    at: '2026-09-09T22:40:17+02:00'
+rework: false
+merge_commit:
+  sha: 31deefb326b17d35428bdda6a63fb4420b8cc784
+  short_sha: 31deefb
+  subject: 'chore(US-007): record Robert + Lars review notes'
+  committed_at: '2026-09-09T22:12:08+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/31deefb326b17d35428bdda6a63fb4420b8cc784'

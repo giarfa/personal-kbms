@@ -1,0 +1,836 @@
+code: US-007
+plan_body: |
+  ## Technical Solution
+
+  US-007 joins the second of the product's two sources to the first. Everything in it follows from one asymmetry the PRD states outright: **the pipeline owns the files, this application owns nothing but the association.** So the tool reads on demand, never copies, never writes and never deletes a transcript — and the only thing it persists is a path plus how that path was chosen.
+
+  The spec's nineteen acceptance criteria collapse into four hard problems: compiling a *configurable* convention into something matchable, tolerating drift without guessing, refusing to leave the transcripts directory, and reading a file that may be enormous, missing, or unreadable — each of those a distinct state, never one collapsed "error".
+
+  ### 1. Where the code lives (John)
+
+  A new `app/Transcripts/` domain folder, sibling to the existing `app/Calendar/` and `app/Meetings/`. That mirrors the shape already in the repo: `Calendar` holds the ICS integration, `Transcripts` holds the filesystem integration, `Meetings` holds the surfaces that compose them. Nothing new is introduced at the `app/` root beyond that one folder.
+
+  | Class | Responsibility |
+  | --- | --- |
+  | `App\Transcripts\TranscriptsDirectory` | Canonical base path, the one-shot file index, containment checks. Bound **`scoped`** so an agenda render lists the directory once. |
+  | `App\Transcripts\TranscriptPattern` | Compiles `KBMS_TRANSCRIPT_PATTERN` into a regex **once**; parses an indexed filename into (datetime, slug part). |
+  | `App\Transcripts\TranscriptResolver` | Tolerance window → ordered candidates; the one place that decides link vs. ambiguity vs. nothing. |
+  | `App\Transcripts\TranscriptCandidate` | Readonly DTO: absolute path, filename, drift minutes, bytes, mtime, whether the slug matched. |
+  | `App\Transcripts\TranscriptReader` | Bounded, UTF-8-safe read; distinguishes missing / unreadable / rejected. |
+  | `App\Transcripts\TranscriptState` | Backed enum: the eight states below. |
+  | `App\Transcripts\TranscriptLinkSource` | Backed enum `convention` \| `manual`. |
+  | `App\Models\MeetingTranscript` | The persisted association. |
+  | `App\Livewire\TranscriptPanel` | The meeting-detail surface. Named `TranscriptPanel`, **not** `MeetingTranscript`, to avoid colliding with the model. |
+
+  `MarkdownRenderer` is **reused, not duplicated**. It already applies `html_input => escape`, `allow_unsafe_links => false` and `max_nesting_level => 20` (US-006 §2), and a transcript is far more obviously untrusted third-party content than a note the operator typed. Do not introduce a second converter, and do not call `Str::markdown()` anywhere outside that class.
+
+  ### 2. The pattern is compiled once, not matched per meeting (Mike + Alex)
+
+  The naive reading of "tolerate drift" is: for each meeting, render the pattern at every minute in the window and test every filename against every rendering. On a week of 30 rows with a ±10-minute window that is 30 × 21 prefix comparisons against the whole directory.
+
+  Invert it instead. `KBMS_TRANSCRIPT_PATTERN` is compiled **once per request** into a regex — literals escaped, placeholders substituted:
+
+  | Placeholder | Renders as | Regex |
+  | --- | --- | --- |
+  | `{date}` | `Y-m-d` | `(\d{4}-\d{2}-\d{2})` |
+  | `{time}` | `Hi` | `(\d{4})` |
+  | `{slug}` | `Str::slug($summary)` | `(.*)` |
+
+  **`{time}` is `Hi`, with no colon** — a filename cannot portably carry `:` (it is the legacy path separator on macOS), and the recorded `transcript filename convention` decision's own example is `2026-09-07-1430-standup.md`. Note the deliberate divergence from `KBMS_OUTLOOK_URL_TEMPLATE`, where `{time}` *is* `H:i`. The two templates address different media; the README and `.env.example` must say so, because a silent mismatch here produces zero matches and no error.
+
+  Every file in the index is parsed once through that regex into `(datetime, slugPart)` and bucketed into a map keyed `Y-m-d H:i`. Resolution is then 21 map lookups per meeting. Filenames the regex does not match are simply not candidates — an unparseable name is not an error, it is a file this convention does not claim.
+
+  The pattern must end with `{slug}`: the acceptance criterion says the trailing portion varies freely and the prefix carries identity. A pattern that puts `{slug}` before `{date}` still compiles, but `(.*)` would swallow the date — validate at compile time and fall back to the packaged default with a logged warning rather than matching nothing in silence.
+
+  ### 3. Tolerance, ambiguity, and the refusal to guess (Tom + Alex)
+
+  For a timed occurrence starting at local `S`, candidates are every indexed file in `[S − tolerance, S + tolerance]`, ordered by absolute drift, then exact-slug-match first, then filename. `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` defaults to **10**.
+
+  | Candidate count | Outcome |
+  | --- | --- |
+  | 0 | `Missing` — no transcript found; the picker is still offered |
+  | 1 | Auto-link, `link_source = convention` |
+  | ≥ 2 | `Ambiguous` — every candidate surfaced with its drift and size, operator chooses |
+
+  **An exact-minute match does not break a tie.** Three candidates where one has zero drift and an exactly-matching slug still renders the chooser, because the spec says the resolver surfaces them and does not guess, and `states.html` draws precisely that case with the exact-prefix file merely pre-selected. The slug is a *hint that orders the list*, never a filter and never a tiebreaker that links on its own.
+
+  **All-day occurrences** have no meaningful start minute, so they match on `{date}` alone across every time. Two files on that date are two candidates, and the operator chooses — the same rule, with a wider window.
+
+  Auto-linking is a write, so it happens **only** when the meeting detail page resolves — never from the agenda. An agenda render must not mutate thirty rows as a side effect of being looked at.
+
+  ### 4. Persistence, and the manual-unlink tombstone (Mike + Violet)
+
+  `meeting_transcripts` — `id` (UUID), `event_uid`, `event_recurrence_id` (default `''`), `path` (**nullable**), `link_source` (`convention` \| `manual`), `file_size` (nullable), `file_mtime` (nullable), `linked_at` (nullable), timestamps, `unique(['event_uid','event_recurrence_id'])`.
+
+  **No foreign key to `calendar_events`, for exactly the reason recorded for `meeting_notes`** (decision `meeting note storage keying`): the only targetable column is the UUID surrogate `id`, which is precisely the identity a resync may change, and a cascade would hand the feed a route to destroy operator data. **No Eloquent relation either** — Eloquent has no composite-key relation, and the `hasOne(...)->where('event_recurrence_id', $this->recurrence_id)` workaround applies one parent's recurrence id to the whole `whereIn` batch under `with()`, cross-contaminating siblings. Reads go through `scopeForOccurrence(OccurrenceKey)` and the batched lookup in §8.
+
+  Precedence, in order:
+
+  1. **A `manual` row wins absolutely** — including a row whose `path` is `NULL`.
+  2. A `convention` row is revalidated (§5) and used; if its file is gone it renders `Broken` and the row is **kept**, never silently re-resolved to some other file. `states.html`: *"The link is kept so nothing is lost silently."*
+  3. No row → resolve by convention (§3).
+
+  `path` is nullable to carry the **manual-unlink tombstone** (recorded decision `transcript clear link semantics`). Without it, `Clear link` on a convention-resolved file is a no-op the operator can see: the next render finds the same single candidate and re-links it. With it, clearing writes `link_source = manual, path = NULL`, the panel states *"the convention will not re-link this meeting"*, and a `Use the convention again` action deletes the row to reopen convention resolution. That is `a manual link always wins` applied honestly to a manual **non**-link.
+
+  `file_size` / `file_mtime` are link-time provenance. The panel footer shows the **current** stat, so a file that changed under the link is visible rather than described from a stale row. Neither column, nor any other, ever holds transcript **content** — PRD privacy obligation 3.
+
+  ### 5. Containment: nothing escapes `KBMS_TRANSCRIPTS_PATH` (Lars)
+
+  `TranscriptsDirectory` resolves the base with `realpath()` once. Unset, non-existent, not a directory, or unreadable → `NotConfigured`, which is a configuration prompt, never an exception (`states.html`: *"Set `KBMS_TRANSCRIPTS_PATH` … A configuration prompt — not an error page."*).
+
+  Containment has one subtlety worth stating, because getting it wrong collapses two states the spec requires to stay distinct: **`realpath()` returns `false` for a file that does not exist**, so it cannot be the only check — a deleted-but-legitimate path would report as an escape attempt rather than a broken link. Therefore:
+
+  1. Reject any candidate name containing a directory separator, a null byte, or `..` **before** joining it to the base.
+  2. **Lexically** canonicalize the joined path (resolve `.` / `..` on the string) and require the base plus a separator as a prefix. Failing this is `Rejected`, whether or not the file exists.
+  3. Only then `realpath()`. If it succeeds and the *resolved* path falls outside the base — a symlink pointing out of the directory — that is also `Rejected`.
+  4. A path that passes 1–3 but does not exist is `Broken`. One that exists and is not readable is `Unreadable`.
+
+  Every persisted path is revalidated on **every** read, not only at link time: `KBMS_TRANSCRIPTS_PATH` is a `.env` value that can change under a stored absolute path.
+
+  The picker (recorded decision `transcript manual override mechanism`) removes most of this surface by construction — the operator can only select an entry the server itself indexed inside the base — but the server revalidates the submitted choice anyway, because a Livewire action parameter is client input.
+
+  ### 6. Bounded, on-demand reading (Alex + Anne)
+
+  `KBMS_TRANSCRIPT_PREVIEW_BYTES` defaults to **2 MiB** (`2097152`).
+
+  - **Never `file_get_contents()`.** `fopen` + a single `fread($handle, $limit + 1)`: the extra byte is how truncation is detected without reading the rest of the file.
+  - Truncate on a UTF-8 boundary with `mb_strcut($chunk, 0, $limit, 'UTF-8')`. A byte-count truncation mid-codepoint yields invalid UTF-8, which Blade renders as a replacement character and CommonMark can choke on.
+  - Truncated reads render the mockup's notice: *"showing first 2 MB — open the file for the rest"*.
+  - `.md` → `MarkdownRenderer`. `.txt` → escaped text in `kb-scroll--mono` (`white-space: pre-wrap`). Extension decides, and the footer states which rendering was applied.
+  - Content is read at render time and held only for that render. Nothing is cached to disk or database.
+
+  ### 7. The eight states, and why they must not collapse (Elise + Tom)
+
+  `states.html` says it plainly: *"'Missing', 'unreadable' and 'unconfigured' must not collapse into one message."* The wording is contract, not decoration — Anne asserts the distinguishing strings, not just a status code.
+
+  | State | Surface |
+  | --- | --- |
+  | `NotConfigured` | `kb-empty`: *Transcripts directory not configured* + `KBMS_TRANSCRIPTS_PATH` + `php artisan kbms:doctor` |
+  | `Missing` | No transcript found for this meeting; `Browse for a file…` offered |
+  | `Ambiguous` | `kb-panel` chooser: radio per candidate with drift (`−2 min`) and size, `Link selected` + `Browse for another file…`, `Choose one` warn tag |
+  | `Linked` | `Linked by convention` / `Linked manually` tag, copyable absolute path, bounded scroll preview, footer `{size} · modified {when} · .md rendered as Markdown`, `Relink…` + `Clear link` |
+  | `Broken` | `kb-banner` alert: *Linked file is gone*, the path, *The link is kept so nothing is lost silently*, `Relink…` + `Clear link` |
+  | `Unreadable` | `kb-banner` alert: *File exists but is not readable* — *the fix is different: `chmod`, not relink* |
+  | `Rejected` | `Rejected` tag: a resolved path escaping the base is refused outright, whether or not the file exists |
+  | `Suppressed` | Manual unlink: *the convention will not re-link this meeting* + `Use the convention again` |
+
+  Panel chrome follows the mockup's owned-surface contract: `Yours` flag, `kb-scroll` with `tabindex="0"`, `role="region"` and an accessible name so it is keyboard-scrollable, and the footer line **Read on demand — never copied into the database**. That last string is a stated privacy commitment; keep it.
+
+  ### 8. Coverage on the agenda without an N+1 (Mike)
+
+  `MeetingCoverage::$hasTranscript` is the hard `false` US-005 left marked for this spec, and the agenda blade already renders the `Transcript` badge behind it — no view restructuring is needed, which is what the seam was for.
+
+  `MeetingCoverageLookup::for()` gains one batched `meeting_transcripts` query (`whereIn('event_uid', …)`, served by the composite unique index on its leftmost prefix) and consults the **already-built** directory index for convention candidates. The agenda page goes from **two queries to three**, plus exactly one directory listing per request — hence `TranscriptsDirectory` being bound `scoped`. The existing `DB::listen` count assertion in `MeetingCoverageLookupTest` must be updated deliberately, not deleted; the US-006 rework already caught one stale-and-inert version of it.
+
+  `hasTranscript` is defined narrowly and honestly: **a transcript is linked and currently readable**. `Broken`, `Unreadable`, `Ambiguous` and `Suppressed` all badge `false`, because the agenda's three-tag vocabulary (`Notes` / `Transcript` / `Not annotated`) has no room for "probably, pending a choice", and claiming coverage the meeting page then contradicts is worse than under-claiming. The docblocks on `MeetingCoverage` and `MeetingCoverageLookup` currently say the opposite is pending — update them in the same task.
+
+  ### 9. Configuration surface additions (Albert)
+
+  Two new keys, both with working defaults, plus a fixed extension list in `config/kbms.php` (not env — one place, not two):
+
+  | Key | Default |
+  | --- | --- |
+  | `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` | `10` |
+  | `KBMS_TRANSCRIPT_PREVIEW_BYTES` | `2097152` |
+  | `kbms.transcript_extensions` (no env) | `['md', 'txt']` |
+
+  `config/kbms.php`'s array-shape PHPDoc, `.env.example`, **both** assertions in `ConfigurationSurfaceTest`, the README configuration section, and the PRD `### Configuration surface` list all move together. The PRD also gains a revision-history row (living document) recording the two keys, the `{time}` = `Hi` divergence, and the nullable `path` on `meeting_transcripts`.
+
+  ### 10. Out of scope, stated rather than assumed
+
+  - **FR-014 unmatched-transcript inbox** and the `kbms:scan-transcripts` command — Future Phases. `TranscriptsDirectory` deliberately exposes the index that FR-014 will need, but nothing lists orphans in US-007.
+  - **FR-013 FTS5 indexing of transcript content** — Future Phases, and it would be the first derived copy of content, so it needs its own rebuildable/droppable design.
+  - **Recursive directory scanning.** The convention is flat and the index is a single-level listing. A nested pipeline layout is a pattern change, not a code change — say so in the README instead of walking arbitrary depth.
+  - **US-009 launch bridge.** This spec produces the resolved context path that FR-008 consumes; the `Ask Claude Code` placeholder panel stays untouched.
+  - **Writing, editing, moving or deleting a transcript file.** Never, in any release. The pipeline owns them (PRD privacy obligation 2).
+
+  ## Git & Branching
+
+  - **Mode:** `GITFLOW` (from `settings.git_mode`) — branch, atomic per-task commits, PR body prepared **locally**; nothing is pushed.
+  - **Branch point:** `feature/US-007-transcript-linking` from `develop`. `develop` is at `999d2aa` (the US-006 merge), so this branches cleanly.
+  - Per task: one Conventional Commit `type(US-007): TASK-NN summary`. No batched multi-task commits.
+  - `php artisan larapilot:quality` (Pint + Larastan level 5) green before every `task-done`.
+  - `CHANGELOG.md` `[Unreleased]` entry lands with the docs task, not after review.
+  - Merge to `develop` only after human `larapilot-review` approval.
+
+  ## Test Data Strategy
+
+  - **New model → new factory, same task as the migration.** `MeetingTranscriptFactory` with `forOccurrence(CalendarEvent $event)` deriving both key columns, and states `convention()`, `manual()`, `suppressed()` (manual + `path = null`), `broken()` (a path inside the base that does not exist).
+  - **`MeetingTranscriptSeeder` writes real sample files.** Static fixture files cannot work: the seeded calendar is relative to *today*, so filenames matching the convention have to be generated. The seeder renders them through `TranscriptPattern` — the same compiler the resolver uses, so the demo data cannot drift from the matcher — into `storage/app/transcripts/` (already gitignored; dev-only, and it is the *seeder* writing there, never the application). It produces:
+    - an **exact match** for today's `Client kickoff` (`.md`, realistic multi-speaker transcript);
+    - a **drift match** at −3 minutes for one occurrence of the `Weekly sync` series, and for that same occurrence **only** — sibling isolation must be visible in the running app, not merely green in the suite;
+    - **two files within tolerance** for `Design review`, so the chooser is on screen after a plain `migrate:fresh --seed`;
+    - a `.txt` for `Sprint planning`, so both rendering modes are demonstrable;
+    - a **manual** link on `Architecture discussion` pointing at a file whose name matches no pattern at all, proving manual precedence;
+    - a **broken** row on `Retro` whose file the seeder deliberately does not create;
+    - `Budget review` (cancelled) left unlinked, and the empty day left alone.
+  - README documents `KBMS_TRANSCRIPTS_PATH=/absolute/path/to/repo/storage/app/transcripts` as the local-dev pointer, and states that the application only ever reads it.
+  - `php artisan migrate:fresh --seed` must produce an agenda with mixed `Notes` / `Transcript` / `Not annotated` badges before the entity task is done.
+
+  ## Test Strategy
+
+  **Bar: `NORMAL`** (from `settings.testing`) — PHPUnit feature and unit tests. No Playwright, Dusk, Pest browser, or viewport matrix. Test tasks interleave with implementation rather than stacking at the end. Every filesystem test builds its own temporary directory and tears it down, so nothing depends on a real pipeline directory.
+
+  | Layer | Coverage |
+  | --- | --- |
+  | Unit — `TranscriptsDirectoryTest` | Unset / missing / file-not-directory / unreadable base each report `NotConfigured` rather than throwing; the index lists only `.md` and `.txt` (case-insensitive) at one level and does not recurse; `..`, a separator and a null byte in a name are rejected pre-join; a symlink inside the base pointing **outside** it is `Rejected`; a **missing** path inside the base is `Broken`, not `Rejected` — the two must not collapse |
+  | Unit — `TranscriptPatternTest` | The default `{date}-{time}-{slug}` compiles and parses `2026-09-07-0930-q4-roadmap-review`; `{time}` parses `0930`, never `09:30`; a custom pattern with different literals compiles; a filename the regex does not match yields no candidate and no error; a pattern lacking `{slug}` or ordering it before `{date}` falls back to the default with a warning instead of matching nothing silently; regex metacharacters in the literal portion are escaped |
+  | Unit — `TranscriptResolverTest` | Exact-minute single file links by convention; a −2 min file inside tolerance links; a +11 min file outside a 10-minute tolerance does not; **three files in the window return three ordered candidates and link nothing** — including when one is an exact datetime *and* slug match; candidate ordering is drift, then slug match, then name; an all-day occurrence matches every file on its date; a manual row (and a `NULL`-path manual tombstone) short-circuits resolution entirely; resolution is minute-map lookups, not an O(rows × window × files) scan (`TranscriptPattern` compiled once — assert the regex is built a single time for N events) |
+  | Unit — `TranscriptReaderTest` | A file larger than the configured cap returns exactly the cap, flags truncation and renders the notice; truncation lands on a **UTF-8 boundary** for multibyte content (assert `mb_check_encoding`); a file at exactly the cap is not falsely flagged; a missing file is `Broken` and an unreadable one (`chmod 000`) is `Unreadable` — asserted as different states *and* different strings; `.md` renders through `MarkdownRenderer` so an embedded `<script>` in a transcript is **escaped**; `.txt` is escaped, never Markdown-converted |
+  | Unit — `MeetingTranscriptTest` | `forOccurrence()` hits the composite key and not a sibling; the unique constraint rejects a second row per occurrence; `link_source` casts to the enum; a `NULL`-path manual row is valid and reads as suppressed |
+  | Unit — `MeetingCoverageLookupTest` (extended) | A readable linked transcript flags its occurrence and only its occurrence; broken, unreadable, ambiguous and suppressed all flag **false**; an un-linked occurrence with exactly one convention candidate flags true; the batch issues the documented query count for N events and lists the directory **once** — the assertion is updated, not deleted, and must be able to fail |
+  | Feature — `TranscriptPanelTest` (Livewire) | Each of the eight states renders its own distinguishing string from `states.html`; an unambiguous convention match auto-links on first render and persists `link_source = convention`; a second render does not write again; the ambiguous chooser links the selected candidate as `manual`; the picker lists only files inside the base and a submitted path outside it is refused server-side; `Clear link` writes the tombstone, keeps the file on disk (assert `is_file` after) and the next render does **not** re-link; `Use the convention again` deletes the row and re-resolves; the absolute path is rendered and copyable; the preview region carries `role="region"`, `tabindex="0"` and an accessible name; the panel behaves identically on a cancelled occurrence |
+  | Feature — `TranscriptDurabilityTest` | A link survives an `EventSynchronizer` run that retitles, reschedules and relocates the occurrence and is still reachable at the same route; **a retitle does not invalidate a convention link** even though the slug no longer matches — the persisted path wins over re-derivation; survives upstream `STATUS:CANCELLED`; survives deletion of the `calendar_events` row and re-attaches when the same (`source_uid`, `recurrence_id`) reappears; changing `KBMS_TRANSCRIPT_PATTERN` does not break an existing persisted link |
+  | Feature — `AgendaPageTest` (extended) | A linked meeting renders the `Transcript` badge; a broken link renders `Not annotated`, not `Transcript`; a meeting with both renders both badges; a transcript on one occurrence of the seeded series does not badge its siblings |
+  | Feature — `ConfigurationSurfaceTest` (extended) | The two new keys resolve to their documented defaults and appear in `.env.example` |
+
+  **Manual test handoff** (Anne — required at this bar for UI, per the mockup test contract): keyboard-only pass over the transcript panel — tab into the preview region and scroll it with the arrow keys, reach `Relink…` / `Clear link`, open the picker modal, filter, select and dismiss with `Esc`, confirm focus returns to the trigger; copy the path with the keyboard and verify the clipboard; point `KBMS_TRANSCRIPTS_PATH` at a directory containing a genuinely large transcript and confirm the page still renders promptly with the truncation notice; `chmod 000` a linked file and confirm the unreadable wording; delete a linked file and confirm the broken wording; theme toggle in both directions with a rendered transcript; 375 px pass against `mobile.html`.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch from develop'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for US-007: create the feature branch from `develop` and prepare the internal PR description locally. Do **not** push — `settings.git_mode` is `GITFLOW`.
+
+      `develop` is at `999d2aa` (the US-006 merge) and the tree is clean, so this branches cleanly. No catch-up merge is needed.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop`
+      2. `git checkout -b feature/US-007-transcript-linking`
+      3. Draft the internal PR title/body toward `develop` — title `US-007: Transcript linking and in-place preview`; body links this plan and lists the planned tasks
+      4. `git commit --allow-empty -m "chore(US-007): TASK-00 bootstrap feature branch"`
+
+      ## Completion Criteria
+      - [x] Branch `feature/US-007-transcript-linking` exists locally, off `999d2aa`
+      - [x] PR title/body drafted for `develop`, kept local
+      - [x] Nothing pushed
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-007): TASK-00 bootstrap feature branch` (empty commit)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepared locally only
+    type: Impl
+    status: DONE
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+    commit:
+      sha: d04bbf69a3c47ff4deadfb58e2ff550730011555
+      short_sha: d04bbf6
+      subject: 'chore(US-007): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-09T21:38:12+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/d04bbf69a3c47ff4deadfb58e2ff550730011555'
+  -
+    id: TASK-01
+    title: 'Extend the configuration surface with tolerance and preview bounds'
+    body: |-
+      ## Description
+      Add the two new `.env` keys the resolver and reader need, plus the fixed extension list, and keep every place that documents the configuration surface in step. See plan `## Technical Solution` §9.
+
+      The surface is tested in three places at once (`config/kbms.php` PHPDoc, `.env.example`, `ConfigurationSurfaceTest`) — that is deliberate, and all three move in this task.
+
+      ## Files Involved
+      - config/kbms.php
+      - .env.example
+      - tests/Feature/ConfigurationSurfaceTest.php
+
+      ## Steps
+      1. `config/kbms.php`: add `'transcript_tolerance_minutes' => (int) env('KBMS_TRANSCRIPT_TOLERANCE_MINUTES', 10)`, `'transcript_preview_bytes' => (int) env('KBMS_TRANSCRIPT_PREVIEW_BYTES', 2097152)`, and `'transcript_extensions' => ['md', 'txt']` (no env — one place, not two)
+      2. Extend the file's array-shape PHPDoc with the three new entries, matching the existing style
+      3. `.env.example`: add both keys with their defaults under the Personal KBMS block. Add a comment above `KBMS_TRANSCRIPT_PATTERN` documenting the placeholder grammar — `{date}` = `Y-m-d`, `{time}` = `Hi` (**no colon**, unlike `KBMS_OUTLOOK_URL_TEMPLATE` where `{time}` is `H:i`), `{slug}` = slugified title — and stating that the pattern must end with `{slug}`
+      4. `ConfigurationSurfaceTest`: add both keys to the documented-defaults assertions **and** to the `.env.example` key list
+      5. `php artisan test --filter=ConfigurationSurfaceTest`
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Both keys resolve to their documented defaults with no `.env` entry
+      - [x] `.env.example` documents both keys and the `{time}` = `Hi` divergence
+      - [x] Array-shape PHPDoc covers all three new config entries
+      - [x] `ConfigurationSurfaceTest` green and asserts the new keys in both tests
+      - [x] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-007): TASK-01 add transcript tolerance and preview configuration`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1
+    dependencies:
+      - TASK-00
+    commit:
+      sha: 01d117ef1b791f7c7b924f83a23161489cd73ce5
+      short_sha: 01d117e
+      subject: 'feat(US-007): TASK-01 add transcript tolerance and preview configuration'
+      committed_at: '2026-09-09T21:39:01+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/01d117ef1b791f7c7b924f83a23161489cd73ce5'
+  -
+    id: TASK-02
+    title: 'Add TranscriptsDirectory and the compiled TranscriptPattern'
+    body: |-
+      ## Description
+      The two primitives every later task builds on: the canonical, containment-checked base directory with its one-shot file index, and the pattern compiler that turns `KBMS_TRANSCRIPT_PATTERN` into a regex once. Plan §2 and §5.
+
+      **Do not resolve candidates here** — no meeting, no tolerance, no persistence. This task knows about files and filenames only.
+
+      **The containment trap, in full (plan §5).** `realpath()` returns `false` for a file that does not exist, so it cannot be the only check: a deleted-but-legitimate path would report as an escape attempt and collapse `Broken` into `Rejected`, which the spec requires to stay distinct. Reject separators / null bytes / `..` pre-join, canonicalize **lexically** and compare the prefix, and only then `realpath()` to catch a symlink pointing out of the base.
+
+      ## Files Involved
+      - app/Transcripts/TranscriptsDirectory.php
+      - app/Transcripts/TranscriptPattern.php
+      - app/Providers/AppServiceProvider.php
+
+      ## Steps
+      1. `php artisan make:class Transcripts/TranscriptsDirectory --no-interaction` and `php artisan make:class Transcripts/TranscriptPattern --no-interaction`
+      2. `TranscriptsDirectory`: `configured(): bool`; `base(): ?string` (`realpath` of `config('kbms.transcripts_path')`, must be a readable directory, `null` otherwise); `files(): array<string, int>` — single-level listing of `kbms.transcript_extensions` (case-insensitive), memoized for the instance's lifetime, mapping absolute path to mtime; `contains(string $path): bool` implementing steps 1–3 of the containment rule; `resolve(string $filename): ?string` joining a bare filename to the base with the same checks. **No recursion.**
+      3. `TranscriptPattern`: `::compile(): self` from config; escapes literals, substitutes `{date}` → `(\d{4}-\d{2}-\d{2})`, `{time}` → `(\d{4})`, `{slug}` → `(.*)`; `parse(string $basename): ?ParsedFilename` returning the datetime and slug part, `null` when the name does not match; `render(CarbonInterface $at, string $slug): string` for the seeder (TASK-07) so demo data and matching share one compiler
+      4. Validate at compile time that the pattern contains `{date}` and ends with `{slug}`; on failure `Log::warning()` and fall back to the packaged default rather than compiling a regex that matches nothing in silence
+      5. Bind `TranscriptsDirectory` as **`scoped`** in `AppServiceProvider` — the agenda must list the directory once per request, not once per row (plan §8)
+      6. Docblocks must record why `realpath()` alone is wrong and why `{time}` is `Hi` and not `H:i`. The next reader must not "simplify" either
+      7. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] `TranscriptsDirectory` reports `NotConfigured` conditions without throwing, and never lists outside one level
+      - [x] A missing path inside the base is distinguishable from a path escaping it
+      - [x] A symlink inside the base resolving outside it is refused
+      - [x] The pattern regex is compiled once per instance and metacharacters in literals are escaped
+      - [x] `TranscriptsDirectory` bound `scoped`
+      - [x] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-007): TASK-02 add transcripts directory index and compiled pattern`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 3
+    dependencies:
+      - TASK-01
+    commit:
+      sha: f3acc9dd776da84523cde8fba4b9a55fed9f0627
+      short_sha: f3acc9d
+      subject: 'feat(US-007): TASK-02 add transcripts directory index and compiled pattern'
+      committed_at: '2026-09-09T21:41:45+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/f3acc9dd776da84523cde8fba4b9a55fed9f0627'
+  -
+    id: TASK-03
+    title: 'Add TranscriptResolver with the tolerance window and candidate ordering'
+    body: |-
+      ## Description
+      Turn an occurrence into an ordered candidate set, and decide link / ambiguous / nothing. Plan §3. Shares no files with TASK-05, so the two can run in parallel.
+
+      **The resolver never guesses.** Two or more candidates always surface for the operator, *including* when one is an exact datetime and slug match — `states.html` draws exactly that case with the exact-prefix file merely pre-selected. The slug orders the list; it never filters and never breaks a tie.
+
+      **Do not scan per meeting.** Parse each indexed filename once through `TranscriptPattern` into a map keyed `Y-m-d H:i`, then do 21 map lookups per occurrence. The naive rendering of the pattern at every minute for every meeting is O(rows × window × files) and is the wrong shape for the agenda in TASK-10.
+
+      ## Files Involved
+      - app/Transcripts/TranscriptResolver.php
+      - app/Transcripts/TranscriptCandidate.php
+      - app/Transcripts/TranscriptState.php
+      - app/Transcripts/TranscriptLinkSource.php
+
+      ## Steps
+      1. `php artisan make:class Transcripts/TranscriptResolver --no-interaction`; `TranscriptCandidate` as a `final readonly` DTO (absolute path, filename, drift minutes, bytes, mtime, `slugMatches`); `TranscriptState` as a backed enum (`NotConfigured`, `Missing`, `Ambiguous`, `Linked`, `Broken`, `Unreadable`, `Rejected`, `Suppressed`); `TranscriptLinkSource` as a backed enum (`convention`, `manual`)
+      2. Build the minute-keyed index once per resolver instance from `TranscriptsDirectory::files()` + `TranscriptPattern::parse()`
+      3. `candidatesFor(CalendarEvent $event): array<int, TranscriptCandidate>` — timed occurrences take `[start − tolerance, start + tolerance]` in `config('kbms.timezone')`; **all-day occurrences match `{date}` alone across every time** (plan §3)
+      4. Order by absolute drift, then `slugMatches` first, then filename
+      5. `stateFor(...)`: 0 candidates → `Missing`, 1 → `Linked` by convention, ≥2 → `Ambiguous`
+      6. Resolution is pure — **no writes here**. Persistence is TASK-09's job, and only from the detail page
+      7. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] A single in-window file resolves; a file outside the tolerance does not
+      - [x] Three in-window files return three ordered candidates and link nothing
+      - [x] All-day occurrences match on date alone
+      - [x] The pattern is compiled once and the file index parsed once per resolver instance
+      - [x] The resolver performs no database writes
+      - [x] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-007): TASK-03 add transcript resolver with drift tolerance`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-02
+    commit:
+      sha: a0d7c0e1913196ecf8f2739ad3d1d907bc4c65b5
+      short_sha: a0d7c0e
+      subject: 'feat(US-007): TASK-03 add transcript resolver with drift tolerance'
+      committed_at: '2026-09-09T21:42:57+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a0d7c0e1913196ecf8f2739ad3d1d907bc4c65b5'
+  -
+    id: TASK-04
+    title: 'Unit-test the directory index, pattern compiler and resolver'
+    body: |-
+      ## Description
+      Pin the matching rules and — more importantly — the state distinctions the spec refuses to let collapse. Every test builds its own temporary directory and removes it in `tearDown()`; nothing here touches a real pipeline directory.
+
+      ## Files Involved
+      - tests/Unit/Transcripts/TranscriptsDirectoryTest.php
+      - tests/Unit/Transcripts/TranscriptPatternTest.php
+      - tests/Unit/Transcripts/TranscriptResolverTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit TranscriptsDirectoryTest` (and the other two), then move them under `tests/Unit/Transcripts/` matching the existing `tests/Unit/Calendar` layout
+      2. `TranscriptsDirectoryTest`: unset / missing / file-not-directory / unreadable base each report not-configured without throwing; the index lists only `.md` and `.txt`, case-insensitively, at one level, and does **not** recurse into a subdirectory; `..`, `/` and a null byte in a name are refused pre-join; a symlink inside the base pointing outside is refused; **a missing path inside the base is broken, not rejected** — assert the two states differ
+      3. `TranscriptPatternTest`: the default pattern parses `2026-09-07-0930-q4-roadmap-review`; `{time}` parses `0930` and rejects `09:30`; a custom pattern with different literals compiles and parses; a non-matching filename yields `null` and no error; regex metacharacters in the literal portion are escaped rather than interpreted; a pattern without `{slug}`, or with `{slug}` before `{date}`, falls back to the default and logs a warning (`Log::shouldReceive`/fake) instead of matching nothing silently
+      4. `TranscriptResolverTest`: exact-minute match; −2 min inside a 10-minute tolerance; +11 min outside it; three in-window files → three ordered candidates and no link, **including** when one is an exact datetime *and* slug match; ordering is drift → slug → name; an all-day occurrence matches every file on its date; the pattern is compiled once for N occurrences
+      5. `php artisan test --filter=Transcript`
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Broken vs. rejected vs. unconfigured asserted as three distinct outcomes
+      - [x] Ambiguity is asserted to link nothing, exact-match candidate included
+      - [x] No test depends on a directory outside the temporary fixture
+      - [x] Tests pass; Pint + Larastan level 5 clean
+
+      ## Git Deliverables
+      - Commit: `test(US-007): TASK-04 cover directory containment, pattern parsing and resolution`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-03
+    commit:
+      sha: 1574355f4e48ee5dfd613f85583066d48fa30014
+      short_sha: '1574355'
+      subject: 'test(US-007): TASK-04 cover directory containment, pattern parsing and resolution'
+      committed_at: '2026-09-09T21:46:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1574355f4e48ee5dfd613f85583066d48fa30014'
+  -
+    id: TASK-05
+    title: 'Add the bounded, UTF-8-safe TranscriptReader'
+    body: |-
+      ## Description
+      Read a linked file for display without ever loading it whole and without collapsing missing / unreadable / rejected into one failure. Plan §6. Shares no files with TASK-03, so it can run beside it.
+
+      **Never `file_get_contents()`.** `fopen` + one `fread($handle, $limit + 1)`: the extra byte detects truncation without reading the remainder of a 40 MB file.
+
+      **Truncate on a UTF-8 boundary.** A byte-count cut mid-codepoint produces invalid UTF-8, which renders as a replacement character and can upset CommonMark. Use `mb_strcut($chunk, 0, $limit, 'UTF-8')`.
+
+      **Reuse `MarkdownRenderer`.** It already escapes HTML input, blocks unsafe links and bounds nesting (US-006 §2), and a transcript is more obviously untrusted than a note the operator typed. Do not add a second converter and do not call `Str::markdown()` here.
+
+      ## Files Involved
+      - app/Transcripts/TranscriptReader.php
+      - app/Transcripts/TranscriptContent.php
+
+      ## Steps
+      1. `php artisan make:class Transcripts/TranscriptReader --no-interaction`; `TranscriptContent` as a `final readonly` DTO (rendered `HtmlString` or escaped text, `isMarkdown`, `truncated`, `bytesRead`, `totalBytes`, `modifiedAt`)
+      2. `read(string $absolutePath): TranscriptContent|TranscriptState` — revalidate containment through `TranscriptsDirectory` **on every read** (the base is a `.env` value that can change under a stored absolute path); then `is_file` → `Broken`, `is_readable` or a failed `fopen` → `Unreadable`, containment failure → `Rejected`
+      3. Read at most `config('kbms.transcript_preview_bytes')`; flag truncation from the `limit + 1` probe; cut with `mb_strcut`
+      4. `.md` → `MarkdownRenderer::render()`; `.txt` → escaped text for `kb-scroll--mono`. Extension decides; the footer (TASK-09) states which applied
+      5. Do not use the `@` suppression operator anywhere; every failure is an explicit branch returning a state
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] A file larger than the cap reads exactly the cap and reports truncation
+      - [x] Truncated multibyte content is still valid UTF-8
+      - [x] Missing, unreadable and rejected return three different states
+      - [x] `file_get_contents` appears nowhere in the class; no `@` suppression
+      - [x] Markdown goes through the existing `MarkdownRenderer`
+      - [x] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-007): TASK-05 add bounded transcript reader`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-02
+    commit:
+      sha: 39495a643c275c2417c47732e1c0748c665c7805
+      short_sha: 39495a6
+      subject: 'feat(US-007): TASK-05 add bounded transcript reader'
+      committed_at: '2026-09-09T21:47:17+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/39495a643c275c2417c47732e1c0748c665c7805'
+  -
+    id: TASK-06
+    title: 'Unit-test bounded reading and the read failure states'
+    body: |-
+      ## Description
+      Pin the memory bound, the UTF-8 boundary and the three failure states. Temporary fixture directory per test, torn down after.
+
+      ## Files Involved
+      - tests/Unit/Transcripts/TranscriptReaderTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit TranscriptReaderTest`, moved under `tests/Unit/Transcripts/`
+      2. A file larger than a small configured cap returns exactly the cap and flags truncation; a file at exactly the cap is **not** flagged; an empty file reads cleanly
+      3. Multibyte content truncated mid-codepoint still satisfies `mb_check_encoding($text, 'UTF-8')`
+      4. A missing file, a `chmod 0000` file, and a path outside the base return three different states **and** three different rendered strings (the strings are asserted again at the panel level in TASK-11; here assert the state values)
+      5. A `.md` transcript containing `<script>alert(1)</script>` and a `javascript:` link renders **escaped** — the transcript path must be as hardened as the note path
+      6. A `.txt` transcript containing Markdown syntax is escaped, not converted
+      7. Skip the permission test when running as root (a CI or container caveat that would otherwise make it silently pass)
+      8. `php artisan test --filter=TranscriptReaderTest`
+      9. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Bound, truncation flag and UTF-8 validity all asserted
+      - [x] Three failure states asserted as distinct
+      - [x] Script/`javascript:` escaping asserted for a transcript, not only for notes
+      - [x] Tests pass; Pint + Larastan level 5 clean
+
+      ## Git Deliverables
+      - Commit: `test(US-007): TASK-06 cover bounded reading and read failure states`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-05
+    commit:
+      sha: 21af4abb749b9527c7cb48e2929717499a5cbfdb
+      short_sha: 21af4ab
+      subject: 'test(US-007): TASK-06 cover bounded reading and read failure states'
+      committed_at: '2026-09-09T21:48:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/21af4abb749b9527c7cb48e2929717499a5cbfdb'
+  -
+    id: TASK-07
+    title: 'Add MeetingTranscript with migration, factory and seeder'
+    body: |-
+      ## Description
+      The persisted association, plus the demo data that makes every panel state visible after a plain `migrate:fresh --seed`. Plan §4 and `## Test Data Strategy`.
+
+      **Do not add a foreign key to `calendar_events`,** and **do not add an Eloquent relation** between the two — identical reasoning to `meeting_notes`, recorded as decision `meeting note storage keying`: the only targetable column is the surrogate UUID a resync may change, and `hasOne(...)->where('event_recurrence_id', $this->recurrence_id)` cross-contaminates siblings under `with()`.
+
+      **`path` is nullable on purpose.** A row with `link_source = manual` and `path = NULL` is the manual-unlink tombstone (recorded decision `transcript clear link semantics`) — it is what stops the convention from re-linking a file the operator just rejected. Do not add a `NOT NULL` constraint.
+
+      ## Files Involved
+      - app/Models/MeetingTranscript.php
+      - database/migrations/xxxx_create_meeting_transcripts_table.php
+      - database/factories/MeetingTranscriptFactory.php
+      - database/seeders/MeetingTranscriptSeeder.php
+      - database/seeders/DatabaseSeeder.php
+
+      ## Steps
+      1. `php artisan make:model MeetingTranscript -mf --no-interaction`
+      2. Migration: `uuid('id')->primary()`, `string('event_uid')`, `string('event_recurrence_id')->default('')`, `string('path')->nullable()`, `string('link_source')`, `unsignedBigInteger('file_size')->nullable()`, `timestamp('file_mtime')->nullable()`, `timestamp('linked_at')->nullable()`, `timestamps()`, `unique(['event_uid','event_recurrence_id'])`. No foreign key
+      3. Model: `HasFactory`, `HasUuids`, `$guarded = []`, `@property` PHPDoc matching `MeetingNote`'s style, `link_source` cast to `TranscriptLinkSource`, `scopeForOccurrence(Builder, OccurrenceKey)`, `occurrenceKey()`, `isSuppressed(): bool` (`manual` + null path) and `isManual(): bool`
+      4. Factory: `forOccurrence(CalendarEvent)`, plus states `convention()`, `manual()`, `suppressed()`, `broken()`
+      5. `MeetingTranscriptSeeder` — writes real sample files into `storage/app/transcripts/` (gitignored; the **seeder** writes there, the application never does), rendering filenames through `TranscriptPattern::render()` so demo data cannot drift from the matcher. Produce: an exact match for today's `Client kickoff` (`.md`, realistic multi-speaker content); a −3 min drift match on **exactly one** occurrence of the `Weekly sync` series; **two** in-tolerance files for `Design review` so the chooser is on screen; a `.txt` for `Sprint planning`; a `manual` link on `Architecture discussion` to a file matching no pattern; a `broken()` row on `Retro` whose file is deliberately not created; `Budget review` (cancelled) and the empty day left alone. Resolve targets by querying `calendar_events` so the seeder cannot drift from `CalendarEventSeeder`
+      6. Register in `DatabaseSeeder` **after** `CalendarEventSeeder`
+      7. `php artisan migrate:fresh --seed`, then point `KBMS_TRANSCRIPTS_PATH` at `storage/app/transcripts` and confirm the agenda shows mixed `Notes` / `Transcript` / `Not annotated`
+      8. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] `meeting_transcripts` exists with the composite unique index, a nullable `path`, and **no** foreign key
+      - [x] No Eloquent relation added between `CalendarEvent` and `MeetingTranscript`
+      - [x] `migrate:fresh --seed` succeeds and the seeded series carries a transcript on exactly one occurrence
+      - [x] Sample files land in `storage/app/transcripts/` and are gitignored
+      - [x] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - [x] `database/factories/MeetingTranscriptFactory.php` with `forOccurrence()`, `convention()`, `manual()`, `suppressed()`, `broken()`
+      - [x] `MeetingTranscriptSeeder` registered in `DatabaseSeeder`, covering exact / drift / ambiguous / manual / broken / `.txt`
+      - [x] Factory and seeder land in **this** task, alongside the migration
+
+      ## Git Deliverables
+      - Commit: `feat(US-007): TASK-07 add MeetingTranscript with factory and seeder`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Mike
+    estimate_hours: 3
+    dependencies:
+      - TASK-03
+    commit:
+      sha: 6f213a8a51533741938951b2cc54f44f1c216e2d
+      short_sha: 6f213a8
+      subject: 'feat(US-007): TASK-07 add MeetingTranscript with factory and seeder'
+      committed_at: '2026-09-09T21:51:00+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/6f213a8a51533741938951b2cc54f44f1c216e2d'
+  -
+    id: TASK-08
+    title: 'Port the kb-scroll and candidate-chooser styles from the mockup'
+    body: |-
+      ## Description
+      `kb-scroll` and `kb-scroll--mono` are the last classes in `kbms.css` with no counterpart in `resources/css/app.css`; the chooser needs a small radio-row rule too. Shares no files with TASK-03/05/07, so it runs in parallel from TASK-00.
+
+      Per the US-006 rework finding, these go in as `kb-*` classes in `app.css` — **not** as inline `style` attributes in the Blade template.
+
+      ## Files Involved
+      - resources/css/app.css
+
+      ## Steps
+      1. Port `.kb-scroll` (`max-height: 22rem`, `overflow-y: auto`, `padding: 1.125rem`, bottom border, `overscroll-behavior: contain`) and its `:focus-visible` outline from `.larapilot/mockups/kbms-app/kbms.css:308-313`
+      2. Port `.kb-scroll--mono` (mono family, `0.8125rem`, `line-height: 1.6`, `white-space: pre-wrap`) for the `.txt` rendering
+      3. Add a `.kb-candidate` row rule for the chooser: radio, filename `code`, drift and size note, aligned and wrapping below 768 px
+      4. Add `.kb-truncation` for the "showing first 2 MB" notice, styled like the existing `.kb-note-inline`
+      5. Verify against `meeting.html` and `states.html` in light and dark; check the focus ring contrast in both themes
+      6. `npm run build`
+
+      ## Completion Criteria
+      - [x] `kb-scroll` bounded, keyboard-scrollable and with a visible focus ring in both themes
+      - [x] `.txt` monospace variant matches the mockup
+      - [x] Chooser rows legible and unclipped at 375 px
+      - [x] No inline `style` attributes introduced in Blade for any of this
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-007): TASK-08 port transcript scroll region and chooser styles`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Joe
+    estimate_hours: 1
+    dependencies:
+      - TASK-00
+    commit:
+      sha: e0def713b2e7cda34f5ee729ee68b87df44ee545
+      short_sha: e0def71
+      subject: 'feat(US-007): TASK-08 port transcript scroll region and chooser styles'
+      committed_at: '2026-09-09T21:51:25+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/e0def713b2e7cda34f5ee729ee68b87df44ee545'
+  -
+    id: TASK-09
+    title: 'Build the TranscriptPanel Livewire component with all eight states'
+    body: |-
+      ## Description
+      The meeting-detail surface: resolve, auto-link, preview, relink, clear, and every failure state as its own message. Plan §4, §6 and §7. This replaces the `Transcript linking arrives with US-007.` placeholder in `resources/views/pages/meeting.blade.php` — the seam US-005 left open.
+
+      Class-based Livewire per the recorded `livewire component style` decision (`--class`), tested with `php artisan make:test --phpunit`, and named `TranscriptPanel` so it does not collide with the `MeetingTranscript` model.
+
+      **Store the occurrence's natural key, never the model** — a Livewire-hydrated model reintroduces the surrogate id as identity (US-006 §3).
+
+      **The wording is the contract.** `states.html` says missing, unreadable and unconfigured must not collapse into one message. Each of the eight states carries its own string, and Anne asserts them in TASK-11.
+
+      **`<flux:tab.group>` is Flux Pro and unavailable** — irrelevant here, but `<flux:modal>` **is** in the free set and carries the picker, exactly as it carries the US-006 delete dialog.
+
+      ## Files Involved
+      - app/Livewire/TranscriptPanel.php
+      - resources/views/livewire/transcript-panel.blade.php
+      - resources/views/pages/meeting.blade.php
+
+      ## Steps
+      1. `php artisan make:livewire TranscriptPanel --class`
+      2. `mount(CalendarEvent $occurrence)`: store `eventUid` / `eventRecurrenceId` as `#[Locked]`; read any `meeting_transcripts` row; apply the §4 precedence — a `manual` row (path set **or** null) wins absolutely, a `convention` row is revalidated and kept even when broken, no row falls through to `TranscriptResolver`
+      3. **Auto-link only here, only on an unambiguous convention match**, persisting `path`, `link_source = convention`, `file_size`, `file_mtime`, `linked_at`. A second render must not write again
+      4. `Ambiguous`: render the candidate list with drift (`−2 min`) and size, `Link selected` and `Browse for another file…`; `link(string $filename)` re-validates the submitted name against `TranscriptsDirectory` server-side before persisting as `manual` — a Livewire action parameter is client input
+      5. Picker modal (`<flux:modal>`): newest-first list of the indexed files with a filter box, per the recorded `transcript manual override mechanism` decision. **No free-text path field** and no `<input type="file">` — the latter never yields an absolute host path
+      6. `clearLink()`: write the tombstone (`link_source = manual`, `path = NULL`) — **never** delete the file, and assert nothing on disk changes. `useConvention()`: delete the row and re-resolve
+      7. `Linked`: `Linked by convention` / `Linked manually` tag, the absolute path in `kb-path` with the copy button, the bounded preview in `kb-scroll` (`role="region"`, `tabindex="0"`, accessible name `Transcript preview, scrollable`), footer `{size} · modified {when} · .md rendered as Markdown` plus **Read on demand — never copied into the database**
+      8. Truncated reads render the `showing first 2 MB — open the file for the rest` notice
+      9. `Broken` / `Unreadable` / `Rejected` / `Suppressed` / `NotConfigured` each render their own `kb-banner` or `kb-empty` with the mockup's wording, including the `chmod`-not-relink hint and the `php artisan kbms:doctor` pointer
+      10. Mount into `pages/meeting.blade.php` as `<livewire:transcript-panel :occurrence="$row->event" />`, replacing the placeholder section
+      11. Verify manually at 1280 and 375 px in both themes
+      12. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] All eight states render, each with its own distinguishing wording
+      - [x] Unambiguous convention matches auto-link once; ambiguity links nothing until the operator chooses
+      - [x] Manual links and the tombstone both win over the convention
+      - [x] `Clear link` leaves the file on disk
+      - [x] The absolute path is displayed and copyable; the preview region is keyboard-scrollable with an accessible name
+      - [x] Placeholder removed from `pages/meeting.blade.php`
+      - [x] No inline `style` attributes; styling comes from TASK-08's `kb-*` classes
+      - [x] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-007): TASK-09 add transcript panel with link, preview and failure states`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 5
+    dependencies:
+      - TASK-05
+      - TASK-07
+      - TASK-08
+    commit:
+      sha: 7180cc34219b4f660f51a2925be50ea3b1ead47b
+      short_sha: 7180cc3
+      subject: 'feat(US-007): TASK-09 add transcript panel with link, preview and failure states'
+      committed_at: '2026-09-09T21:59:49+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7180cc34219b4f660f51a2925be50ea3b1ead47b'
+  -
+    id: TASK-10
+    title: 'Fill the transcript coverage seam without an N+1'
+    body: |-
+      ## Description
+      `MeetingCoverage::$hasTranscript` is the hard `false` US-005 marked for this spec, and `resources/views/livewire/agenda.blade.php` already renders the `Transcript` badge behind it — so this is a lookup change with no view restructuring. Plan §8.
+
+      **Define coverage narrowly: a transcript is linked and currently readable.** `Broken`, `Unreadable`, `Ambiguous` and `Suppressed` all badge `false`. The agenda's vocabulary is `Notes` / `Transcript` / `Not annotated` with no room for "probably, pending a choice", and claiming coverage the meeting page then contradicts is worse than under-claiming. State this in the docblock.
+
+      **Do not write from the agenda.** Auto-linking stays in `TranscriptPanel::mount()`; a list render must not mutate thirty rows as a side effect of being looked at.
+
+      ## Files Involved
+      - app/Meetings/MeetingCoverage.php
+      - app/Meetings/MeetingCoverageLookup.php
+      - app/Meetings/AgendaQuery.php
+      - tests/Unit/Meetings/MeetingCoverageLookupTest.php
+
+      ## Steps
+      1. `MeetingCoverageLookup::for()`: add one batched `meeting_transcripts` query (`whereIn('event_uid', …)`, served by the composite unique index on its leftmost prefix) and consult the **already-built** `TranscriptsDirectory` index — injected, not constructed, so the `scoped` binding from TASK-02 does its job
+      2. `forOccurrence()`: same rules for the single-occurrence path used by `MeetingController`
+      3. Update the `MeetingCoverage` docblock — it currently says `hasTranscript` is a hard `false` marked for US-007 — and the `MeetingCoverageLookup` docblock's "one query" claim
+      4. Update the `AgendaQuery` comment that states "two queries per agenda page"; it is three plus one directory listing now
+      5. Update the existing `DB::listen` count assertion in `MeetingCoverageLookupTest` to the new number **deliberately** — the US-006 rework already caught one stale-and-inert version of it. Add an assertion that the directory is listed exactly once for N events
+      6. `php artisan test --filter=MeetingCoverage`
+      7. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] A readable linked transcript badges its occurrence and only its occurrence
+      - [x] Broken, unreadable, ambiguous and suppressed all badge `Not annotated`
+      - [x] Query count is fixed for N events and the directory is listed once
+      - [x] No writes occur on an agenda render
+      - [x] Stale docblocks corrected in all three classes
+      - [x] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-007): TASK-10 surface transcript coverage on the agenda`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Mike
+    estimate_hours: 2
+    dependencies:
+      - TASK-07
+    commit:
+      sha: 988a8a5e33a6ce263a92206fee4d82a689330092
+      short_sha: 988a8a5
+      subject: 'feat(US-007): TASK-10 surface transcript coverage on the agenda'
+      committed_at: '2026-09-09T21:59:35+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/988a8a5e33a6ce263a92206fee4d82a689330092'
+  -
+    id: TASK-11
+    title: 'Feature-test the panel, coverage and resync durability'
+    body: |-
+      ## Description
+      The end-to-end bar: every state's wording, the write-once auto-link, manual precedence including the tombstone, traversal refusal at the action boundary, coverage badges, and durability across a resync.
+
+      ## Files Involved
+      - tests/Feature/TranscriptPanelTest.php
+      - tests/Feature/TranscriptDurabilityTest.php
+      - tests/Feature/AgendaPageTest.php
+      - tests/Feature/MeetingDetailTest.php
+      - tests/Unit/Models/MeetingTranscriptTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit TranscriptPanelTest` and `TranscriptDurabilityTest`; `--unit` for `MeetingTranscriptTest`
+      2. `MeetingTranscriptTest`: `forOccurrence()` hits the composite key and not a sibling; the unique constraint rejects a second row per occurrence; `link_source` casts to the enum; a null-path manual row is valid and reads as suppressed
+      3. `TranscriptPanelTest`: assert the **distinguishing string** for each of the eight states, not just a status code; an unambiguous match auto-links and persists `link_source = convention`; a second render does not write again (assert `updated_at` / a write count); the chooser links the selected candidate as `manual`; the picker lists only files inside the base and a submitted filename outside it is refused at the action boundary; `Clear link` writes the tombstone, **leaves the file on disk** (`assertFileExists` after) and the next render does not re-link; `Use the convention again` deletes the row and re-resolves; the path renders and is copyable; the preview region carries `role="region"`, `tabindex="0"` and its accessible name; the panel behaves identically on a cancelled occurrence
+      4. `TranscriptDurabilityTest`: a link survives an `EventSynchronizer` run that retitles, reschedules and relocates the occurrence and stays reachable at the same route; **a retitle does not invalidate a convention link even though the slug no longer matches** — the persisted path wins over re-derivation; survives upstream `STATUS:CANCELLED`; survives deletion of the `calendar_events` row and re-attaches when the same (`source_uid`, `recurrence_id`) reappears; **changing `KBMS_TRANSCRIPT_PATTERN` does not break an existing persisted link** — the criterion the `link_source` column exists for
+      5. Extend `AgendaPageTest`: linked meeting badges `Transcript`; a broken link badges `Not annotated`; notes + transcript badges both; a transcript on one occurrence of the series does not badge its siblings
+      6. Extend `MeetingDetailTest` for the panel's presence on the detail route
+      7. `php artisan test`
+      8. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Eight states asserted by wording, not by status code
+      - [x] Auto-link writes once; ambiguity writes nothing
+      - [x] Tombstone precedence and file preservation both asserted
+      - [x] Traversal refused at the Livewire action boundary, not only in the unit layer
+      - [x] Pattern change does not break an existing link
+      - [x] Full suite green; Pint + Larastan level 5 clean
+
+      ## Git Deliverables
+      - Commit: `test(US-007): TASK-11 cover transcript panel, coverage and durability`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 5
+    dependencies:
+      - TASK-09
+      - TASK-10
+    commit:
+      sha: 0100dd9855eb510ca906c438f5cd1758bc5ce4d9
+      short_sha: 0100dd9
+      subject: 'test(US-007): TASK-11 cover transcript panel, coverage and durability'
+      committed_at: '2026-09-09T22:03:18+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0100dd9855eb510ca906c438f5cd1758bc5ce4d9'
+  -
+    id: TASK-12
+    title: 'Document the transcript surface and update the PRD'
+    body: |-
+      ## Description
+      Baseline documentation only, per the recorded `documentation scope` decision — README, `.env.example` comments (landed in TASK-01), `CHANGELOG.md`, and the PRD as a living document. No OpenAPI (no public API), no diagrams, no manuals.
+
+      ## Files Involved
+      - README.md
+      - CHANGELOG.md
+      - .larapilot/docs/PRD.md
+
+      ## Steps
+      1. README: a transcript section covering the filename convention and its placeholder grammar (`{date}` = `Y-m-d`, `{time}` = **`Hi`**, `{slug}`; the pattern must end with `{slug}`), the **explicit contrast** with `KBMS_OUTLOOK_URL_TEMPLATE`'s `{time}` = `H:i`, the drift tolerance and its default, the preview byte cap, that resolution is **single-level and non-recursive** (a nested pipeline layout is a pattern change, not a code change), that the application only ever **reads** the directory, and the local-dev pointer `KBMS_TRANSCRIPTS_PATH=/absolute/path/to/repo/storage/app/transcripts` for the seeded sample files
+      2. README troubleshooting: the four distinct states and their fixes — not configured (`KBMS_TRANSCRIPTS_PATH` + `php artisan kbms:doctor`), missing, unreadable (`chmod`), rejected (path outside the base)
+      3. `CHANGELOG.md` `[Unreleased]` → `Added`: transcript linking with drift tolerance, ambiguity resolution, manual override and in-place preview
+      4. PRD `### Configuration surface`: add `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`) and `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`), and note the `{time}` = `Hi` grammar on `KBMS_TRANSCRIPT_PATTERN`
+      5. PRD `### Core Components`: mark `meeting_transcripts.path` as **nullable**, carrying the manual-unlink tombstone
+      6. PRD `## PRD Revision History`: add a `2026-09-09 | larapilot-plan US-007` row summarising the two new keys, the `{time}` divergence and the nullable `path`
+      7. `php artisan larapilot:validate-prd`
+      8. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] README documents the grammar, the `{time}` divergence, the tolerance, the byte cap, non-recursion and the read-only guarantee
+      - [x] All four failure states documented with their fixes
+      - [x] `CHANGELOG.md` `[Unreleased]` updated
+      - [x] PRD configuration surface, component list and revision history updated; `validate-prd` passes
+      - [x] Pint + Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `docs(US-007): TASK-12 document the transcript surface and update the PRD`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Albert
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-11
+    commit:
+      sha: 9838e648acfb22941ce0ddfcdf3305bbc08374b6
+      short_sha: '9838e64'
+      subject: 'docs(US-007): TASK-12 document the transcript surface and update the PRD'
+      committed_at: '2026-09-09T22:04:54+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/9838e648acfb22941ce0ddfcdf3305bbc08374b6'
+updated_at: '2026-09-09T22:04:55+02:00'

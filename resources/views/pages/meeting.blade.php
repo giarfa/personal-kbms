@@ -44,17 +44,7 @@
         <div class="kb-owned">
             <livewire:meeting-notes :occurrence="$row->event" />
 
-            <section class="kb-panel" aria-labelledby="transcript-h">
-                <div class="kb-panel__head">
-                    <div>
-                        <p class="kb-owned-flag">{{ __('Yours') }}</p>
-                        <h2 id="transcript-h">{{ __('Transcript') }}</h2>
-                    </div>
-                </div>
-                <div class="kb-panel__body">
-                    <p class="kb-note-inline">{{ __('Transcript linking arrives with US-007.') }}</p>
-                </div>
-            </section>
+            <livewire:transcript-panel :occurrence="$row->event" />
 
             <section class="kb-panel" aria-labelledby="ask-h">
                 <div class="kb-panel__head">

@@ -14,6 +14,9 @@ class ConfigurationSurfaceTest extends TestCase
         $this->assertSame(180, config('kbms.window_future_days'));
         $this->assertNull(config('kbms.transcripts_path'));
         $this->assertSame('{date}-{time}-{slug}', config('kbms.transcript_pattern'));
+        $this->assertSame(10, config('kbms.transcript_tolerance_minutes'));
+        $this->assertSame(2097152, config('kbms.transcript_preview_bytes'));
+        $this->assertSame(['md', 'txt'], config('kbms.transcript_extensions'));
         $this->assertNull(config('kbms.claude_launcher'));
         $this->assertNull(config('kbms.outlook_url_template'));
         $this->assertSame('Europe/Rome', config('kbms.timezone'));
@@ -37,6 +40,8 @@ class ConfigurationSurfaceTest extends TestCase
             'KBMS_ICS_WINDOW_FUTURE_DAYS',
             'KBMS_TRANSCRIPTS_PATH',
             'KBMS_TRANSCRIPT_PATTERN',
+            'KBMS_TRANSCRIPT_TOLERANCE_MINUTES',
+            'KBMS_TRANSCRIPT_PREVIEW_BYTES',
             'KBMS_CLAUDE_LAUNCHER',
             'KBMS_OUTLOOK_URL_TEMPLATE',
             'KBMS_TIMEZONE',

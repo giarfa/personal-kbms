@@ -11,6 +11,7 @@ use App\Doctor\Checks\TranscriptsDirectoryCheck;
 use App\Doctor\CheckSuite;
 use App\Meetings\OccurrenceKey;
 use App\Models\CalendarEvent;
+use App\Transcripts\TranscriptsDirectory;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -30,6 +31,11 @@ class AppServiceProvider extends ServiceProvider
             new SchedulerRegistrationCheck($this->app->make(Schedule::class)),
             new TimezoneCheck,
         ]));
+
+        // Scoped, not singleton: an agenda render must list the directory
+        // once per request, not once per row, but a queue worker or test
+        // run processing multiple "requests" must not share a stale index.
+        $this->app->scoped(TranscriptsDirectory::class);
     }
 
     /**

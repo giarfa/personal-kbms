@@ -1,0 +1,197 @@
+<?php
+
+namespace Tests\Unit\Transcripts;
+
+use App\Models\CalendarEvent;
+use App\Transcripts\TranscriptPattern;
+use App\Transcripts\TranscriptResolver;
+use App\Transcripts\TranscriptsDirectory;
+use App\Transcripts\TranscriptState;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+class TranscriptResolverTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private ?string $tempDir = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->tempDir = realpath(sys_get_temp_dir()).'/kbms-resolver-test-'.uniqid();
+        mkdir($this->tempDir, 0755, true);
+
+        config([
+            'kbms.transcripts_path' => $this->tempDir,
+            'kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN,
+            'kbms.transcript_tolerance_minutes' => 10,
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->tempDir !== null && is_dir($this->tempDir)) {
+            foreach (glob($this->tempDir.'/*') ?: [] as $file) {
+                unlink($file);
+            }
+
+            rmdir($this->tempDir);
+        }
+
+        parent::tearDown();
+    }
+
+    private function file(string $stem, string $extension = 'md'): void
+    {
+        file_put_contents($this->tempDir."/{$stem}.{$extension}", 'content');
+    }
+
+    private function resolver(): TranscriptResolver
+    {
+        return new TranscriptResolver(new TranscriptsDirectory, TranscriptPattern::compile());
+    }
+
+    private function eventAt(string $startsAt, string $summary = 'Q4 roadmap review', bool $allDay = false): CalendarEvent
+    {
+        return CalendarEvent::factory()->create([
+            'summary' => $summary,
+            'starts_at' => $startsAt,
+            'ends_at' => $startsAt,
+            'is_all_day' => $allDay,
+        ]);
+    }
+
+    public function test_an_exact_minute_single_file_links_by_convention(): void
+    {
+        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertCount(1, $candidates);
+        $this->assertSame(0, $candidates[0]->driftMinutes);
+    }
+
+    public function test_a_file_two_minutes_early_is_inside_a_ten_minute_tolerance(): void
+    {
+        $this->file('2026-09-07-0928-q4-roadmap-review');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertCount(1, $candidates);
+        $this->assertSame(-2, $candidates[0]->driftMinutes);
+    }
+
+    public function test_a_file_eleven_minutes_late_is_outside_a_ten_minute_tolerance(): void
+    {
+        $this->file('2026-09-07-0941-q4-roadmap-review');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $this->assertCount(0, $this->resolver()->candidatesFor($event));
+    }
+
+    public function test_three_in_window_files_return_three_ordered_candidates_and_link_nothing(): void
+    {
+        // Exact datetime AND slug match — still must not short-circuit to a link.
+        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $this->file('2026-09-07-0928-roadmap');
+        $this->file('2026-09-07-0933-untitled-call', 'txt');
+
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertCount(3, $candidates);
+        $this->assertSame('2026-09-07-0930-q4-roadmap-review.md', $candidates[0]->filename);
+        $this->assertTrue($candidates[0]->slugMatches);
+        $this->assertSame('2026-09-07-0928-roadmap.md', $candidates[1]->filename);
+        $this->assertSame('2026-09-07-0933-untitled-call.txt', $candidates[2]->filename);
+    }
+
+    public function test_ordering_is_drift_then_slug_match_then_name(): void
+    {
+        $this->file('2026-09-07-0932-not-a-match');
+        $this->file('2026-09-07-0932-q4-roadmap-review');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertSame('2026-09-07-0932-q4-roadmap-review.md', $candidates[0]->filename);
+        $this->assertSame('2026-09-07-0932-not-a-match.md', $candidates[1]->filename);
+    }
+
+    public function test_an_all_day_occurrence_matches_every_file_on_its_date(): void
+    {
+        $this->file('2026-09-07-0800-morning-file');
+        $this->file('2026-09-07-1800-evening-file');
+        $this->file('2026-09-08-0800-different-day');
+
+        $event = $this->eventAt('2026-09-07 00:00:00', allDay: true);
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertCount(2, $candidates);
+    }
+
+    public function test_state_for_reports_missing_ambiguous_and_linked(): void
+    {
+        // A fresh resolver per assertion: the file index is memoized per
+        // instance by design (TASK-02/03), so reusing one across a
+        // changing directory would read stale state — that is the point
+        // of the memoization, not a bug to work around.
+        $missing = $this->eventAt('2026-09-07 09:30:00', 'Nothing here');
+        $this->assertSame(TranscriptState::Missing, $this->resolver()->stateFor($missing));
+
+        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $linked = $this->eventAt('2026-09-07 09:30:00');
+        $this->assertSame(TranscriptState::Linked, $this->resolver()->stateFor($linked));
+
+        $this->file('2026-09-07-0928-roadmap');
+        $ambiguous = $this->eventAt('2026-09-07 09:30:00');
+        $this->assertSame(TranscriptState::Ambiguous, $this->resolver()->stateFor($ambiguous));
+    }
+
+    public function test_the_resolver_performs_no_database_writes(): void
+    {
+        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        DB::enableQueryLog();
+        $this->resolver()->candidatesFor($event);
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $writeQueries = array_filter(
+            $queries,
+            fn (array $query): bool => (bool) preg_match('/^(insert|update|delete)/i', $query['query'])
+        );
+
+        $this->assertSame([], $writeQueries);
+    }
+
+    public function test_a_single_compiled_pattern_and_directory_index_resolves_n_events_consistently(): void
+    {
+        $this->file('2026-09-07-0930-q4-roadmap-review');
+
+        // One TranscriptPattern and one TranscriptsDirectory constructed
+        // outside the loop — candidatesFor() must never recompile the
+        // pattern or re-list the directory per event.
+        $resolver = new TranscriptResolver(new TranscriptsDirectory, TranscriptPattern::compile());
+
+        $events = CalendarEvent::factory()->count(5)->create([
+            'starts_at' => '2026-09-07 09:30:00',
+            'ends_at' => '2026-09-07 09:30:00',
+        ]);
+
+        foreach ($events as $event) {
+            $candidates = $resolver->candidatesFor($event);
+
+            $this->assertCount(1, $candidates);
+            $this->assertSame('2026-09-07-0930-q4-roadmap-review.md', $candidates[0]->filename);
+        }
+    }
+}

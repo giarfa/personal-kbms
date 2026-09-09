@@ -454,4 +454,56 @@ decisions:
     source: askquestion
     spec: US-006
     supersedes: null
-updated_at: '2026-09-09T19:25:54+02:00'
+  -
+    id: 86239009f22c2411
+    ts: '2026-09-09T20:48:48+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'transcript manual override mechanism'
+    label: 'transcript manual override mechanism'
+    value: 'Manual linking is an in-app file picker: a Flux modal listing the .md/.txt files under KBMS_TRANSCRIPTS_PATH, newest-first, with a filter box. Traversal-safe by construction — the operator can only choose an entry the server itself indexed inside the base directory, and the choice is re-validated server-side against the canonical base before persisting. A browser <input type=file> is explicitly rejected: it never yields an absolute host path. No free-text path field in US-007.'
+    question: null
+    rationale: 'Removes a whole class of traversal input at the UI layer instead of validating it after the fact, and keeps one validation path to test.'
+    source: askquestion
+    spec: US-007
+    supersedes: null
+  -
+    id: 319f08f3870861bf
+    ts: '2026-09-09T20:49:02+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'transcript clear link semantics'
+    label: 'transcript clear link semantics'
+    value: "Clearing a transcript link writes an explicit manual-unlink tombstone (meeting_transcripts row kept with link_source=manual and path=NULL) rather than deleting the row. The convention resolver treats any manual row — including the tombstone — as authoritative, so it cannot silently re-link the file the operator just rejected. The panel states 'the convention will not re-link this meeting' and offers 'Use the convention again', which deletes the row and re-opens the meeting to convention resolution. The transcript FILE is never touched (PRD privacy obligation 2)."
+    question: null
+    rationale: "Without the tombstone, 'Clear link' on a convention-resolved file appears to do nothing: the next render re-resolves the identical single candidate and re-links it."
+    source: askquestion
+    spec: US-007
+    supersedes: null
+  -
+    id: 5dcce1e81425e168
+    ts: '2026-09-09T20:49:02+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'transcript pattern placeholder grammar'
+    label: 'transcript pattern placeholder grammar'
+    value: 'KBMS_TRANSCRIPT_PATTERN placeholders render as {date}=Y-m-d, {time}=Hi (no colon — a filename cannot carry '':'' portably, and the recorded convention example is 2026-09-07-1430-standup.md), {slug}=Str::slug(summary). NOTE the deliberate divergence: {time} in KBMS_OUTLOOK_URL_TEMPLATE is H:i. The pattern is compiled ONCE into a regex ({date}->(\\d{4}-\\d{2}-\\d{2}), {time}->(\\d{4}), {slug}->(.*), literals escaped) used to parse every indexed filename into (datetime, slug-part); matching is then a minute-keyed map lookup over the tolerance window, not a per-meeting scan. Pattern must end with {slug} — the trailing portion varies freely and the prefix carries identity. Tolerance defaults to 10 minutes via KBMS_TRANSCRIPT_TOLERANCE_MINUTES; all-day occurrences match on {date} alone.'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-007
+    supersedes: null
+  -
+    id: 9390a72ed79babd1
+    ts: '2026-09-09T22:40:24+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-007 review verdict'
+    label: 'US-007 review verdict'
+    value: 'Approved US-007 (Transcript linking and in-place preview) at the human gate: 318/318 tests green, Pint + Larastan L5 clean, Robert/Lars Critical+High JS-context injection fixed and regression-tested. Four Low/Informational findings accepted as non-blocking rather than folded into rework: stale KBMS_CLAUDE_LAUNCHER trace in the README config table (says US-007, belongs to US-009), spec meta-commentary in three operator-facing panel strings, the US-007 plan file left untracked, and no test named for the manual-link-beats-an-available-convention-match case. Merge the feature branch into develop locally, no push (git_mode GITFLOW).'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-007
+    supersedes: null
+updated_at: '2026-09-09T22:40:24+02:00'

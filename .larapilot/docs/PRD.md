@@ -270,7 +270,9 @@ Every machine-specific assumption is a `.env` value, never a code constant:
 
 - `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES` (default `15`)
 - `KBMS_ICS_WINDOW_PAST_DAYS` (default `90`), `KBMS_ICS_WINDOW_FUTURE_DAYS` (default `180`)
-- `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN`
+- `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN` — placeholders `{date}` (`Y-m-d`), `{time}` (`Hi`, **no colon** — deliberately unlike `KBMS_OUTLOOK_URL_TEMPLATE` below, since a filename cannot portably carry `:`), `{slug}` (slugified title); the pattern must end with `{slug}`
+- `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`) — minutes of start-time drift the transcript resolver tolerates either side of a meeting's start
+- `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`, 2 MiB) — bytes read from a transcript before the preview is truncated
 - `KBMS_CLAUDE_LAUNCHER`
 - `KBMS_OUTLOOK_URL_TEMPLATE` — placeholders `{date}` (`Y-m-d`), `{time}` (`H:i`), `{datetime}` (ISO 8601), substituted in `KBMS_TIMEZONE`; a feed-carried `event_url` always takes precedence
 - `KBMS_TIMEZONE`
@@ -301,7 +303,7 @@ Concrete obligations for this release:
 
 - `calendar_events` — `source_uid`, `recurrence_id`, `summary`, `description`, `location`, `organizer`, `attendees` (JSON), `starts_at`, `ends_at`, `is_all_day`, `timezone`, `join_url`, `event_url`, `content_hash`, `last_seen_at`, `cancelled_at`. Unique index on (`source_uid`, `recurrence_id`); index on `starts_at`.
 - `meeting_notes` — `event_uid`, `event_recurrence_id`, `body` (Markdown), timestamps. Keyed to the occurrence, not to the event row's surrogate id, so a resync cannot orphan a note.
-- `meeting_transcripts` — `event_uid`, `event_recurrence_id`, `path`, `link_source` (`convention` \| `manual`), `file_size`, `file_mtime`, `linked_at`.
+- `meeting_transcripts` — `event_uid`, `event_recurrence_id`, `path` (**nullable** — a `NULL` path with `link_source = manual` is the manual-unlink tombstone that stops the convention from re-linking a file the operator just rejected), `link_source` (`convention` \| `manual`), `file_size`, `file_mtime`, `linked_at`.
 - `prompt_launches` — `event_uid`, `event_recurrence_id`, `context_path`, `question`, `command` (JSON argument array), `launched_at`, `status`, `error`.
 - `calendar_sync_runs` — `started_at`, `finished_at`, `status`, `http_status`, `etag`, `last_modified`, `events_upserted`, `events_cancelled`, `error`.
 
@@ -350,3 +352,4 @@ Baseline set only, matching a personal project: a `README.md` covering Herd setu
 | 2026-09-07 | larapilot-inception | Initial PRD — Personal / MVP: ICS mirror, agenda + calendar, meeting notes, transcript linking, local Claude Code launch bridge, Outlook CTA |
 | 2026-09-07 | larapilot-plan US-003 | Added `KBMS_SYNC_RUN_RETENTION_DAYS` to the configuration surface; added `last_modified` to the `calendar_sync_runs` column list (required to serve `If-Modified-Since` on the next conditional GET) |
 | 2026-09-08 | larapilot-plan US-005 | Recorded the `KBMS_OUTLOOK_URL_TEMPLATE` placeholder vocabulary |
+| 2026-09-09 | larapilot-plan US-007 | Added `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`) and `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`) to the configuration surface; documented the `KBMS_TRANSCRIPT_PATTERN` `{time}` = `Hi` grammar (deliberately unlike `KBMS_OUTLOOK_URL_TEMPLATE`'s `H:i`); marked `meeting_transcripts.path` nullable, carrying the manual-unlink tombstone |
