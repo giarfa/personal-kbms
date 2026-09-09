@@ -8,6 +8,9 @@
  *     window_future_days: int,
  *     transcripts_path: string|null,
  *     transcript_pattern: string,
+ *     transcript_tolerance_minutes: int,
+ *     transcript_preview_bytes: int,
+ *     transcript_extensions: list<string>,
  *     claude_launcher: string|null,
  *     outlook_url_template: string|null,
  *     timezone: string,
@@ -30,6 +33,15 @@ return [
 
     // Date + time prefix; the resolver keys off the meeting start datetime (decision journal: "transcript filename convention").
     'transcript_pattern' => env('KBMS_TRANSCRIPT_PATTERN', '{date}-{time}-{slug}'),
+
+    // Minutes of start-time drift the resolver tolerates either side of the occurrence's start (US-007).
+    'transcript_tolerance_minutes' => (int) env('KBMS_TRANSCRIPT_TOLERANCE_MINUTES', 10),
+
+    // Bytes read from a transcript before truncating the preview (US-007). Default: 2 MiB.
+    'transcript_preview_bytes' => (int) env('KBMS_TRANSCRIPT_PREVIEW_BYTES', 2097152),
+
+    // Fixed extension allow-list for the transcripts directory index — one place, not an env var (US-007).
+    'transcript_extensions' => ['md', 'txt'],
 
     'claude_launcher' => env('KBMS_CLAUDE_LAUNCHER') ?: null,
 
