@@ -38,7 +38,7 @@
             <label class="kb-sronly" for="note">{{ __('Meeting notes, Markdown') }}</label>
             <textarea class="kb-textarea" id="note" spellcheck="false" wire:model.live.debounce.750ms="body"></textarea>
             @if ($saveState === 'error')
-                <p class="kb-note-inline" style="margin-top:0.5rem">{{ __('Typed content stays in the editor. Nothing is discarded silently.') }}</p>
+                <p class="kb-note-inline kb-note-inline--spaced">{{ __('Typed content stays in the editor. Nothing is discarded silently.') }}</p>
             @endif
         @endif
     </div>
@@ -46,9 +46,9 @@
     <div class="kb-panel__foot">
         <span>{{ __('Autosaves as you type · Markdown supported · stored as plain text, rendered without HTML') }}</span>
         @if ($hasNote)
-            <span style="margin-left:auto">
+            <span class="kb-panel__foot__end">
                 <flux:modal.trigger name="delete-notes">
-                    <flux:button variant="ghost" size="sm" style="color:var(--kb-danger)">{{ __('Delete notes…') }}</flux:button>
+                    <flux:button variant="ghost" size="sm" class="kb-btn--danger-ghost">{{ __('Delete notes…') }}</flux:button>
                 </flux:modal.trigger>
             </span>
         @endif
@@ -57,11 +57,11 @@
     @if ($hasNote)
         <flux:modal name="delete-notes" class="max-w-lg">
             <div class="kb-stack">
-                <h3 style="margin:0;font-size:0.9375rem">{{ __('Delete these notes?') }}</h3>
-                <p style="margin:0;font-size:0.8125rem">
+                <h3 class="kb-modal__title">{{ __('Delete these notes?') }}</h3>
+                <p class="kb-modal__body">
                     {{ __('The note on :summary, :when will be permanently removed. Only this occurrence is affected — other meetings in the series keep theirs.', ['summary' => $eventSummary, 'when' => $eventWhen]) }}
                 </p>
-                <p class="kb-note-inline" style="margin:0">{{ __('The linked transcript file is not touched. The pipeline owns it.') }}</p>
+                <p class="kb-note-inline kb-note-inline--flush">{{ __('The linked transcript file is not touched. The pipeline owns it.') }}</p>
                 <div class="kb-inline">
                     <flux:modal.close>
                         <flux:button variant="danger" wire:click="deleteNote">{{ __('Delete notes') }}</flux:button>

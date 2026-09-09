@@ -942,6 +942,32 @@
     margin-right: 0.375rem;
 }
 
+.kb-note-inline--spaced {
+    margin-top: 0.5rem;
+}
+
+.kb-note-inline--flush {
+    margin: 0;
+}
+
+.kb-panel__foot__end {
+    margin-left: auto;
+}
+
+.kb-modal__title {
+    margin: 0;
+    font-size: 0.9375rem;
+}
+
+.kb-modal__body {
+    margin: 0;
+    font-size: 0.8125rem;
+}
+
+.kb-btn--danger-ghost {
+    color: var(--kb-danger);
+}
+
 @media (max-width: 767px) {
     .kb-row {
         grid-template-columns: 1fr;
