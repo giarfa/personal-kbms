@@ -118,7 +118,7 @@ tasks:
     id: TASK-00
     title: 'Bootstrap feature branch from develop'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
@@ -138,8 +138,8 @@ tasks:
       4. Anchor commit: `chore(US-006): TASK-00 bootstrap feature branch` (empty commit allowed)
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-006-meeting-notes` exists locally, branched from `develop` at `5bc10b2` or later
-      - [ ] PR title/body drafted toward `develop` (nothing pushed)
+      - [x] Branch `feature/US-006-meeting-notes` exists locally, branched from `develop` at `5bc10b2` or later
+      - [x] PR title/body drafted toward `develop` (nothing pushed)
 
       ## Test Data
       - N/A — git only
@@ -148,11 +148,17 @@ tasks:
       - Commit: `chore(US-006): TASK-00 bootstrap feature branch` (empty commit allowed)
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepared locally — open/update remote only if the operator asks
+    commit:
+      sha: 6f1e0451a8b6d9a1d0526ad3f9bb32a942df925a
+      short_sha: 6f1e045
+      subject: 'chore(US-006): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-09T09:04:17+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/6f1e0451a8b6d9a1d0526ad3f9bb32a942df925a'
   -
     id: TASK-01
     title: 'Add MeetingNote with migration, factory and seeder'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 3
     dependencies:
@@ -182,21 +188,27 @@ tasks:
       7. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `meeting_notes` exists with the composite unique index and **no** foreign key
-      - [ ] `MeetingNote::forOccurrence()` returns the single row for a natural key and nothing for a sibling
-      - [ ] No Eloquent relation was added between `CalendarEvent` and `MeetingNote`
-      - [ ] `migrate:fresh --seed` succeeds and the seeded series carries a note on exactly one occurrence
-      - [ ] Pint + Larastan level 5 clean
+      - [x] `meeting_notes` exists with the composite unique index and **no** foreign key
+      - [x] `MeetingNote::forOccurrence()` returns the single row for a natural key and nothing for a sibling
+      - [x] No Eloquent relation was added between `CalendarEvent` and `MeetingNote`
+      - [x] `migrate:fresh --seed` succeeds and the seeded series carries a note on exactly one occurrence
+      - [x] Pint + Larastan level 5 clean
 
       ## Test Data
-      - [ ] `database/factories/MeetingNoteFactory.php` created with `forOccurrence()` and `blank()` states
-      - [ ] `MeetingNoteSeeder` registered in `DatabaseSeeder`, producing mixed annotated / blank / un-annotated meetings
-      - [ ] Factory and seeder land in **this** task, alongside the migration
+      - [x] `database/factories/MeetingNoteFactory.php` created with `forOccurrence()` and `blank()` states
+      - [x] `MeetingNoteSeeder` registered in `DatabaseSeeder`, producing mixed annotated / blank / un-annotated meetings
+      - [x] Factory and seeder land in **this** task, alongside the migration
 
       ## Git Deliverables
       - Commit: `feat(US-006): TASK-01 add MeetingNote with factory and seeder`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: 2126a116e5d4204371ed39f6a2a91737c1a232f0
+      short_sha: 2126a11
+      subject: 'feat(US-006): TASK-01 add MeetingNote with factory and seeder'
+      committed_at: '2026-09-09T09:05:57+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/2126a116e5d4204371ed39f6a2a91737c1a232f0'
   -
     id: TASK-02
     title: 'Port the note editor styles from the mockup (parallel with TASK-01)'
@@ -573,4 +585,4 @@ tasks:
       - Commit: `docs(US-006): TASK-10 document the note surface and correct the Flux tabs mapping`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`
-updated_at: '2026-09-09T08:47:36+02:00'
+updated_at: '2026-09-09T09:05:57+02:00'
