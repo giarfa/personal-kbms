@@ -35,9 +35,11 @@ class AgendaQuery
             ->orderBy('starts_at')
             ->get();
 
-        // Two queries per agenda page, regardless of week density: this batched
-        // lookup, plus the events query above.
-        $coverageByOccurrence = (new MeetingCoverageLookup)->for($events);
+        // Three queries per agenda page, regardless of week density: this
+        // batched notes+transcripts lookup, plus the events query above —
+        // plus exactly one directory listing (app() so the TranscriptsDirectory
+        // scoped binding is shared for the whole request, not constructed fresh).
+        $coverageByOccurrence = app(MeetingCoverageLookup::class)->for($events);
 
         $rows = $events->map(function (CalendarEvent $event) use ($coverageByOccurrence): AgendaRow {
             $coverage = $coverageByOccurrence[$event->source_uid."\0".$event->recurrence_id] ?? new MeetingCoverage;
