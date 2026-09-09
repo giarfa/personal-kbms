@@ -34,6 +34,19 @@ class MeetingNotes extends Component
     public string $mode = 'write';
 
     /**
+     * Whether a `meeting_notes` row currently exists — display-only, drives
+     * whether the delete control renders. Kept separate from `hasContent()`:
+     * a blank-bodied row still has something to delete.
+     */
+    public bool $hasNote = false;
+
+    #[Locked]
+    public string $eventSummary = '';
+
+    #[Locked]
+    public string $eventWhen = '';
+
+    /**
      * Store only the occurrence's natural key, never the model — a
      * Livewire-hydrated model would reintroduce the surrogate id as the
      * identity. There is deliberately no starts_at/isPast() branch anywhere
@@ -44,6 +57,10 @@ class MeetingNotes extends Component
     {
         $this->eventUid = $occurrence->source_uid;
         $this->eventRecurrenceId = $occurrence->recurrence_id;
+        $this->eventSummary = (string) $occurrence->summary;
+        $this->eventWhen = $occurrence->is_all_day
+            ? $occurrence->starts_at->format('D j M')
+            : $occurrence->starts_at->format('D j M H:i');
 
         $note = MeetingNote::query()->forOccurrence($this->occurrenceKey())->first();
 
@@ -51,6 +68,7 @@ class MeetingNotes extends Component
             $this->body = $note->body;
             $this->saveState = 'saved';
             $this->savedAt = $note->updated_at->format('H:i');
+            $this->hasNote = true;
         }
     }
 
@@ -74,6 +92,22 @@ class MeetingNotes extends Component
     }
 
     /**
+     * The only path that removes the row — autosave never deletes (clearing
+     * the editor persists a blank body and keeps the row). Resets the
+     * properties directly rather than going through `save()`/`updatedBody()`,
+     * so deleting cannot turn around and recreate the row.
+     */
+    public function deleteNote(): void
+    {
+        MeetingNote::query()->forOccurrence($this->occurrenceKey())->delete();
+
+        $this->body = '';
+        $this->saveState = 'idle';
+        $this->savedAt = null;
+        $this->hasNote = false;
+    }
+
+    /**
      * A failure sets `error` and leaves `$body` untouched — it is never
      * reassigned from the database on this path, or typed content would be
      * silently discarded.
@@ -90,6 +124,7 @@ class MeetingNotes extends Component
 
             $this->saveState = 'saved';
             $this->savedAt = now()->format('H:i');
+            $this->hasNote = true;
         } catch (Throwable $e) {
             report($e);
 

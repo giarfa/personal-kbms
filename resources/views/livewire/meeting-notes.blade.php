@@ -45,5 +45,32 @@
 
     <div class="kb-panel__foot">
         <span>{{ __('Autosaves as you type · Markdown supported · stored as plain text, rendered without HTML') }}</span>
+        @if ($hasNote)
+            <span style="margin-left:auto">
+                <flux:modal.trigger name="delete-notes">
+                    <flux:button variant="ghost" size="sm" style="color:var(--kb-danger)">{{ __('Delete notes…') }}</flux:button>
+                </flux:modal.trigger>
+            </span>
+        @endif
     </div>
+
+    @if ($hasNote)
+        <flux:modal name="delete-notes" class="max-w-lg">
+            <div class="kb-stack">
+                <h3 style="margin:0;font-size:0.9375rem">{{ __('Delete these notes?') }}</h3>
+                <p style="margin:0;font-size:0.8125rem">
+                    {{ __('The note on :summary, :when will be permanently removed. Only this occurrence is affected — other meetings in the series keep theirs.', ['summary' => $eventSummary, 'when' => $eventWhen]) }}
+                </p>
+                <p class="kb-note-inline" style="margin:0">{{ __('The linked transcript file is not touched. The pipeline owns it.') }}</p>
+                <div class="kb-inline">
+                    <flux:modal.close>
+                        <flux:button variant="danger" wire:click="deleteNote">{{ __('Delete notes') }}</flux:button>
+                    </flux:modal.close>
+                    <flux:modal.close>
+                        <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                    </flux:modal.close>
+                </div>
+            </div>
+        </flux:modal>
+    @endif
 </section>
