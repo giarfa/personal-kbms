@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Agenda;
 use App\Models\CalendarEvent;
 use App\Models\MeetingNote;
+use App\Models\MeetingTranscript;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -303,5 +304,90 @@ class AgendaPageTest extends TestCase
         $end = strpos($html, '</a>', $start);
 
         return substr($html, $start, $end - $start);
+    }
+
+    private function transcriptsDir(): string
+    {
+        $dir = realpath(sys_get_temp_dir()).'/kbms-agenda-transcripts-'.uniqid();
+        mkdir($dir, 0755, true);
+        config(['kbms.transcripts_path' => $dir]);
+
+        return $dir;
+    }
+
+    public function test_a_linked_meeting_renders_the_transcript_badge(): void
+    {
+        $dir = $this->transcriptsDir();
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Transcribed meeting',
+        ]);
+        $path = "{$dir}/transcript.md";
+        file_put_contents($path, 'content');
+        MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $path]);
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $badges = $this->badgesFor($html, 'Transcribed meeting');
+        $this->assertStringContainsString('Transcript', $badges);
+        $this->assertStringNotContainsString('Not annotated', $badges);
+    }
+
+    public function test_a_broken_link_renders_not_annotated_not_transcript(): void
+    {
+        $this->transcriptsDir();
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Broken transcript meeting',
+        ]);
+        MeetingTranscript::factory()->forOccurrence($event)->broken()->create();
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $badges = $this->badgesFor($html, 'Broken transcript meeting');
+        $this->assertStringContainsString('Not annotated', $badges);
+        $this->assertStringNotContainsString('Transcript', $badges);
+    }
+
+    public function test_notes_and_transcript_badges_both_render_when_both_present(): void
+    {
+        $dir = $this->transcriptsDir();
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Fully annotated meeting',
+        ]);
+        MeetingNote::factory()->forOccurrence($event)->create(['body' => 'notes']);
+        $path = "{$dir}/transcript.md";
+        file_put_contents($path, 'content');
+        MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $path]);
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $badges = $this->badgesFor($html, 'Fully annotated meeting');
+        $this->assertStringContainsString('Notes', $badges);
+        $this->assertStringContainsString('Transcript', $badges);
+    }
+
+    public function test_a_transcript_on_one_occurrence_of_a_series_does_not_badge_its_siblings(): void
+    {
+        $dir = $this->transcriptsDir();
+        $linked = CalendarEvent::factory()->occurrenceOf('series-uid', 'r1')->at(
+            now('Europe/Rome')->setTime(9, 30),
+            30
+        )->create(['summary' => 'Weekly sync transcribed']);
+        $path = "{$dir}/transcript.md";
+        file_put_contents($path, 'content');
+        MeetingTranscript::factory()->forOccurrence($linked)->convention()->create(['path' => $path]);
+
+        CalendarEvent::factory()->occurrenceOf('series-uid', 'r2')->at(
+            now('Europe/Rome')->setTime(11, 0),
+            30
+        )->create(['summary' => 'Weekly sync sibling untouched']);
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $linkedBadges = $this->badgesFor($html, 'Weekly sync transcribed');
+        $this->assertStringContainsString('Transcript', $linkedBadges);
+
+        $siblingBadges = $this->badgesFor($html, 'Weekly sync sibling untouched');
+        $this->assertStringNotContainsString('Transcript', $siblingBadges);
+        $this->assertStringContainsString('Not annotated', $siblingBadges);
     }
 }

@@ -161,6 +161,15 @@ class MeetingDetailTest extends TestCase
             ->assertSee('Cancelled upstream');
     }
 
+    public function test_the_transcript_panel_is_present_on_the_detail_route(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+
+        $this->get(route('meetings.show', $event->occurrenceKey()->toRouteKey()))
+            ->assertOk()
+            ->assertSeeText('Transcript');
+    }
+
     public function test_an_unknown_route_key_returns_404(): void
     {
         $unknownKey = (new OccurrenceKey('does-not-exist'))->toRouteKey();
