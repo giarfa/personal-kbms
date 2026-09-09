@@ -29,12 +29,21 @@ class AgendaQuery
         // value. Do not "fix" this by converting to UTC, and do not split all-day back
         // into a separate whereDate() branch — both would break under the real storage
         // convention.
-        $rows = CalendarEvent::query()
+        $events = CalendarEvent::query()
             ->where('starts_at', '<', $to)
             ->where('ends_at', '>', $from)
             ->orderBy('starts_at')
-            ->get()
-            ->map(fn (CalendarEvent $event): AgendaRow => new AgendaRow($event));
+            ->get();
+
+        // Two queries per agenda page, regardless of week density: this batched
+        // lookup, plus the events query above.
+        $coverageByOccurrence = (new MeetingCoverageLookup)->for($events);
+
+        $rows = $events->map(function (CalendarEvent $event) use ($coverageByOccurrence): AgendaRow {
+            $coverage = $coverageByOccurrence[$event->source_uid."\0".$event->recurrence_id] ?? new MeetingCoverage;
+
+            return new AgendaRow($event, $coverage);
+        });
 
         $byDate = $rows->groupBy(function (AgendaRow $row) use ($fromDate): string {
             $day = $row->start->toDateString();

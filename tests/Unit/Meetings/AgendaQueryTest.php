@@ -6,6 +6,7 @@ use App\Meetings\AgendaDay;
 use App\Meetings\AgendaQuery;
 use App\Meetings\AgendaRange;
 use App\Models\CalendarEvent;
+use App\Models\MeetingNote;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -273,10 +274,26 @@ class AgendaQueryTest extends TestCase
         $this->assertTrue($today->rows[0]->isCancelled);
     }
 
-    public function test_the_agenda_is_built_with_a_single_query(): void
+    public function test_the_agenda_costs_a_fixed_two_queries_regardless_of_event_count(): void
     {
-        CalendarEvent::factory()->count(3)->create();
+        $noted = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(8, 0), 15)->create();
+        MeetingNote::factory()->forOccurrence($noted)->create();
 
+        for ($i = 0; $i < 2; $i++) {
+            CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 0)->addMinutes(20 * $i), 15)->create();
+        }
+
+        $this->assertSame(2, $this->countQueriesForAgenda());
+
+        for ($i = 0; $i < 9; $i++) {
+            CalendarEvent::factory()->at(now('Europe/Rome')->setTime(12, 0)->addMinutes(20 * $i), 15)->create();
+        }
+
+        $this->assertSame(2, $this->countQueriesForAgenda());
+    }
+
+    private function countQueriesForAgenda(): int
+    {
         $queries = 0;
         DB::listen(function () use (&$queries): void {
             $queries++;
@@ -284,6 +301,6 @@ class AgendaQueryTest extends TestCase
 
         AgendaQuery::for(AgendaRange::today());
 
-        $this->assertSame(1, $queries);
+        return $queries;
     }
 }

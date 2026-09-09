@@ -82,6 +82,12 @@ The detail page shows every mirrored feed field read-only — title, start, end,
 
 The "Open in Outlook" action prefers a feed-carried `event_url` and otherwise falls back to `KBMS_OUTLOOK_URL_TEMPLATE`, substituting `{date}` (`Y-m-d`), `{time}` (`H:i`) and `{datetime}` (ISO 8601) in `KBMS_TIMEZONE` — for example `https://outlook.office.com/calendar/view/day/{date}` against Outlook Web Access. Without Graph API access the template fallback can only open the correct calendar **date**, not the exact item; when neither a feed link nor a template is configured, the control is disabled with the reason shown in place. A Teams join link, when the feed carries one, is offered as a separate action from the Outlook CTA.
 
+## Notes
+
+Every meeting can carry a Markdown note, written straight into a Write/Preview panel on the detail page — no save button, just an autosave indicator (`Saving…` / `Saved H:i` / `Not saved` with a retry). A note belongs to the **occurrence**, keyed on (`event_uid`, `event_recurrence_id`), never to the `calendar_events` row — so nothing the feed does (retitle, reschedule, cancel, or even a resync that drops and re-creates the mirrored row) can move or destroy one, and a note on one occurrence of a recurring series never leaks onto its siblings.
+
+Clearing the editor is an **edit**, not a deletion: the blank body is saved and the row is kept (the agenda badge just drops to "Not annotated"). The only thing that removes a note is the explicit **Delete notes…** confirmation dialog in the panel footer. Note bodies are stored as plain text and rendered through a hardened Markdown converter that escapes embedded HTML and neutralises unsafe links instead of executing them.
+
 ## The launcher script contract
 
 `KBMS_CLAUDE_LAUNCHER` points at an operator-owned shell script, invoked with **exactly two positional arguments, in order**:

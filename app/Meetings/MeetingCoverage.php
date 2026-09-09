@@ -4,7 +4,8 @@ namespace App\Meetings;
 
 /**
  * Whether a meeting carries operator notes or a linked transcript.
- * Both are hard `false` in US-005 — US-006 fills `hasNotes`, US-007 fills `hasTranscript`.
+ * `hasNotes` reflects a non-blank `meeting_notes.body` (US-006) — a blank-bodied
+ * note reads as not annotated. `hasTranscript` stays a hard `false`, marked for US-007.
  */
 final readonly class MeetingCoverage
 {

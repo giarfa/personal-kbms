@@ -441,4 +441,17 @@ decisions:
     source: chat
     spec: US-006
     supersedes: null
-updated_at: '2026-09-09T08:47:50+02:00'
+  -
+    id: ca998baf3608f9b8
+    ts: '2026-09-09T19:25:54+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-006 review verdict'
+    label: 'US-006 review verdict'
+    value: "Request changes — flaky AgendaQueryTest query-count assertion (1 vs 2) plus two vacuous 'Not annotated' agenda assertions; no production defect, Lars GO"
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-006
+    supersedes: null
+updated_at: '2026-09-09T19:25:54+02:00'

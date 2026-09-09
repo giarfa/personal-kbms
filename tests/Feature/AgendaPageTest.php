@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Livewire\Agenda;
 use App\Models\CalendarEvent;
+use App\Models\MeetingNote;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -216,8 +217,91 @@ class AgendaPageTest extends TestCase
 
     public function test_the_not_annotated_badge_appears_for_every_row(): void
     {
-        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Bare row meeting',
+        ]);
 
-        $this->get('/')->assertOk()->assertSee('Not annotated');
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $this->assertStringContainsString('Not annotated', $this->badgesFor($html, 'Bare row meeting'));
+    }
+
+    public function test_an_annotated_meeting_renders_the_notes_badge(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Annotated meeting',
+        ]);
+        MeetingNote::factory()->forOccurrence($event)->create(['body' => 'notes']);
+
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(11, 0), 30)->create([
+            'summary' => 'Bare meeting',
+        ]);
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $annotatedBadges = $this->badgesFor($html, 'Annotated meeting');
+        $this->assertStringContainsString('Notes', $annotatedBadges);
+        $this->assertStringNotContainsString('Not annotated', $annotatedBadges);
+
+        $bareBadges = $this->badgesFor($html, 'Bare meeting');
+        $this->assertStringContainsString('Not annotated', $bareBadges);
+        $this->assertStringNotContainsString('Notes', $bareBadges);
+    }
+
+    public function test_a_blank_bodied_note_reads_not_annotated(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Blank note meeting',
+        ]);
+        MeetingNote::factory()->forOccurrence($event)->blank()->create();
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $badges = $this->badgesFor($html, 'Blank note meeting');
+        $this->assertStringContainsString('Not annotated', $badges);
+        $this->assertStringNotContainsString('Notes', $badges);
+    }
+
+    public function test_the_day_headers_annotated_count_reflects_reality(): void
+    {
+        $annotated = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+        MeetingNote::factory()->forOccurrence($annotated)->create(['body' => 'notes']);
+
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(11, 0), 30)->create();
+
+        $this->get('/')->assertOk()->assertSee('1 annotated');
+    }
+
+    public function test_one_occurrence_of_a_series_is_badged_without_its_siblings(): void
+    {
+        $annotated = CalendarEvent::factory()->occurrenceOf('series-uid', 'r1')->at(
+            now('Europe/Rome')->setTime(9, 30),
+            30
+        )->create(['summary' => 'Weekly sync annotated']);
+        MeetingNote::factory()->forOccurrence($annotated)->create(['body' => 'notes']);
+
+        CalendarEvent::factory()->occurrenceOf('series-uid', 'r2')->at(
+            now('Europe/Rome')->setTime(11, 0),
+            30
+        )->create(['summary' => 'Weekly sync sibling']);
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $annotatedBadges = $this->badgesFor($html, 'Weekly sync annotated');
+        $this->assertStringContainsString('Notes', $annotatedBadges);
+        $this->assertStringNotContainsString('Not annotated', $annotatedBadges);
+
+        $siblingBadges = $this->badgesFor($html, 'Weekly sync sibling');
+        $this->assertStringContainsString('Not annotated', $siblingBadges);
+        $this->assertStringNotContainsString('Notes', $siblingBadges);
+    }
+
+    private function badgesFor(string $html, string $summary): string
+    {
+        $start = strpos($html, 'kb-row__title">'.e($summary));
+        $this->assertNotFalse($start, "No agenda row found for [{$summary}].");
+        $end = strpos($html, '</a>', $start);
+
+        return substr($html, $start, $end - $start);
     }
 }
