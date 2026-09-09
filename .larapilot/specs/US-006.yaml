@@ -6,7 +6,7 @@ epic:
   objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
 priority: HIGH
 points: 5
-status: REVIEW
+status: DONE
 body: |-
   #### US-006: Personal notes on a meeting
 
@@ -24,19 +24,19 @@ body: |-
   After implementing this spec, a note written on a meeting persists across calendar resyncs — including after the meeting is retitled, rescheduled, or cancelled upstream — and never appears on a sibling occurrence of the same recurring series.
 
   **Acceptance Criteria**
-  - [ ] A Markdown note surface on the meeting detail page **autosaves** without an explicit save action, with a visible saved/saving indicator
-  - [ ] Notes are keyed on (`event_uid`, `event_recurrence_id`) — the occurrence identity, not the event row's surrogate id
-  - [ ] **A note written on one occurrence of a recurring series never appears on its siblings** — this is the highest-value test in the suite
-  - [ ] Notes are writable **before and after** the meeting; there is no state gate tied to whether it has happened
-  - [ ] A rendered Markdown preview is available alongside the raw editor
-  - [ ] Notes survive a resync that changes the meeting's title, time, or location
-  - [ ] Notes survive upstream **cancellation** and remain reachable on the cancelled occurrence
-  - [ ] An explicit **delete path** removes a meeting's notes, with confirmation (PRD privacy obligation 2)
-  - [ ] Note content is stored as plain text and rendered without executing embedded HTML or scripts
-  - [ ] Meetings carrying notes are flagged in the agenda so the list doubles as a coverage map
-  - [ ] **Error case:** an autosave failure surfaces a retry affordance and does not silently discard typed content
-  - [ ] **Edge case:** a note on an occurrence that later disappears from the feed window is retained, not orphaned or purged
-  - [ ] Feature test asserts recurrence isolation, resync durability across retitle/reschedule/cancel, and the delete path
+  - [x] A Markdown note surface on the meeting detail page **autosaves** without an explicit save action, with a visible saved/saving indicator
+  - [x] Notes are keyed on (`event_uid`, `event_recurrence_id`) — the occurrence identity, not the event row's surrogate id
+  - [x] **A note written on one occurrence of a recurring series never appears on its siblings** — this is the highest-value test in the suite
+  - [x] Notes are writable **before and after** the meeting; there is no state gate tied to whether it has happened
+  - [x] A rendered Markdown preview is available alongside the raw editor
+  - [x] Notes survive a resync that changes the meeting's title, time, or location
+  - [x] Notes survive upstream **cancellation** and remain reachable on the cancelled occurrence
+  - [x] An explicit **delete path** removes a meeting's notes, with confirmation (PRD privacy obligation 2)
+  - [x] Note content is stored as plain text and rendered without executing embedded HTML or scripts
+  - [x] Meetings carrying notes are flagged in the agenda so the list doubles as a coverage map
+  - [x] **Error case:** an autosave failure surfaces a retry affordance and does not silently discard typed content
+  - [x] **Edge case:** a note on an occurrence that later disappears from the feed window is retained, not orphaned or purged
+  - [x] Feature test asserts recurrence isolation, resync durability across retitle/reschedule/cancel, and the delete path
 
 
   ## Rework Feedback
@@ -93,4 +93,13 @@ status_history:
   -
     status: REVIEW
     at: '2026-09-09T19:40:58+02:00'
+  -
+    status: DONE
+    at: '2026-09-09T20:08:41+02:00'
 rework: false
+merge_commit:
+  sha: 08bb529d62a15a9d0311eb4f2106ce28e608cd8f
+  short_sha: 08bb529
+  subject: 'chore(US-006): log rework implementation usage ledger entry'
+  committed_at: '2026-09-09T19:41:31+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/08bb529d62a15a9d0311eb4f2106ce28e608cd8f'
