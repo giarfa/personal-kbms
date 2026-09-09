@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Livewire\Agenda;
 use App\Models\CalendarEvent;
+use App\Models\MeetingNote;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -219,5 +220,58 @@ class AgendaPageTest extends TestCase
         CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
 
         $this->get('/')->assertOk()->assertSee('Not annotated');
+    }
+
+    public function test_an_annotated_meeting_renders_the_notes_badge(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create([
+            'summary' => 'Annotated meeting',
+        ]);
+        MeetingNote::factory()->forOccurrence($event)->create(['body' => 'notes']);
+
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(11, 0), 30)->create([
+            'summary' => 'Bare meeting',
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSeeInOrder(['Annotated meeting', 'Notes'])
+            ->assertSeeInOrder(['Bare meeting', 'Not annotated']);
+    }
+
+    public function test_a_blank_bodied_note_reads_not_annotated(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+        MeetingNote::factory()->forOccurrence($event)->blank()->create();
+
+        $this->get('/')->assertOk()->assertSee('Not annotated');
+    }
+
+    public function test_the_day_headers_annotated_count_reflects_reality(): void
+    {
+        $annotated = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+        MeetingNote::factory()->forOccurrence($annotated)->create(['body' => 'notes']);
+
+        CalendarEvent::factory()->at(now('Europe/Rome')->setTime(11, 0), 30)->create();
+
+        $this->get('/')->assertOk()->assertSee('1 annotated');
+    }
+
+    public function test_one_occurrence_of_a_series_is_badged_without_its_siblings(): void
+    {
+        $annotated = CalendarEvent::factory()->occurrenceOf('series-uid', 'r1')->at(
+            now('Europe/Rome')->setTime(9, 30),
+            30
+        )->create(['summary' => 'Weekly sync']);
+        MeetingNote::factory()->forOccurrence($annotated)->create(['body' => 'notes']);
+
+        CalendarEvent::factory()->occurrenceOf('series-uid', 'r2')->at(
+            now('Europe/Rome')->addWeek()->setTime(9, 30),
+            30
+        )->create(['summary' => 'Weekly sync']);
+
+        Livewire::test(Agenda::class)
+            ->call('next')
+            ->assertSee('Not annotated');
     }
 }
