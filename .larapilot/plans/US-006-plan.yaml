@@ -849,7 +849,7 @@ tasks:
     id: TASK-14
     title: 'Multi-seed suite and quality gate before returning to REVIEW'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies:
@@ -875,11 +875,11 @@ tasks:
       5. Hand off the manual checks still owed from the original plan's Test Strategy — they were never run and are unaffected by this round: keyboard-only pass over the note panel (tablist, Write/Preview, `Delete notes…`, `Esc` dismiss, focus return to the trigger), save-indicator announcement without focus theft, 375 px pass against `mobile.html`, and a contrast spot-check of `kb-savestate` in all three states in both themes.
 
       ## Completion Criteria
-      - [ ] Full suite green on at least six distinct `--random-order-seed` values, including 6 and 9
-      - [ ] `larapilot:quality` clean (Pint + Larastan level 5, 0 errors)
-      - [ ] `migrate:fresh --seed` coherent
-      - [ ] Seeds, results and both mutation observations recorded in `.larapilot/docs/review/US-006.md`
-      - [ ] Manual keyboard/responsive handoff restated for the human at the gate
+      - [x] Full suite green on at least six distinct `--random-order-seed` values, including 6 and 9
+      - [x] `larapilot:quality` clean (Pint + Larastan level 5, 0 errors)
+      - [x] `migrate:fresh --seed` coherent
+      - [x] Seeds, results and both mutation observations recorded in `.larapilot/docs/review/US-006.md`
+      - [x] Manual keyboard/responsive handoff restated for the human at the gate
 
       ## Test Data
       - N/A — verification only
@@ -888,4 +888,10 @@ tasks:
       - Commit: `test(US-006): TASK-14 record multi-seed suite and quality verification`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: local PR notes only
-updated_at: '2026-09-09T19:37:47+02:00'
+    commit:
+      sha: 7668817aa886b011664c1ba22dd074b1f30530e3
+      short_sha: '7668817'
+      subject: 'test(US-006): TASK-14 record multi-seed suite and quality verification'
+      committed_at: '2026-09-09T19:39:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7668817aa886b011664c1ba22dd074b1f30530e3'
+updated_at: '2026-09-09T19:39:03+02:00'
