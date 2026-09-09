@@ -382,7 +382,7 @@ tasks:
     id: TASK-06
     title: 'Build the autosaving note editor with Write/Preview'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 5
     dependencies:
@@ -416,13 +416,13 @@ tasks:
       11. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Typing persists with no explicit save action; the indicator moves `saving` → `saved` with a timestamp
-      - [ ] A failed write renders `Not saved` with `Retry` and the typed text is still in the editor
-      - [ ] Preview renders through `MarkdownRenderer`; an HTML-bearing note shows as literal text
-      - [ ] No `isPast()`/state gate in the component or view; a cancelled occurrence is editable
-      - [ ] The component keys on (`event_uid`, `event_recurrence_id`) only — no `calendar_events.id` anywhere
-      - [ ] Panel usable at mobile/tablet/desktop (manual smoke at this bar)
-      - [ ] Pint + Larastan level 5 clean
+      - [x] Typing persists with no explicit save action; the indicator moves `saving` → `saved` with a timestamp
+      - [x] A failed write renders `Not saved` with `Retry` and the typed text is still in the editor
+      - [x] Preview renders through `MarkdownRenderer`; an HTML-bearing note shows as literal text
+      - [x] No `isPast()`/state gate in the component or view; a cancelled occurrence is editable
+      - [x] The component keys on (`event_uid`, `event_recurrence_id`) only — no `calendar_events.id` anywhere
+      - [x] Panel usable at mobile/tablet/desktop (manual smoke at this bar)
+      - [x] Pint + Larastan level 5 clean
 
       ## Test Data
       - N/A — no model or schema change in this task (TASK-01 owns them)
@@ -431,11 +431,17 @@ tasks:
       - Commit: `feat(US-006): TASK-06 add autosaving Markdown note editor`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: 46c356879b5c8a92e1b81c961bcbb3915945f2a0
+      short_sha: 46c3568
+      subject: 'feat(US-006): TASK-06 add autosaving Markdown note editor'
+      committed_at: '2026-09-09T09:14:40+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/46c356879b5c8a92e1b81c961bcbb3915945f2a0'
   -
     id: TASK-07
     title: "Add the confirmed delete path for a meeting's notes"
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2
     dependencies:
@@ -460,12 +466,12 @@ tasks:
       5. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Deletion requires confirmation; the dialog renders both required strings
-      - [ ] Confirming removes the row and empties the editor without recreating it
-      - [ ] Cancelling leaves the note untouched
-      - [ ] Autosave still never deletes — an emptied editor keeps the row with a blank body
-      - [ ] `Esc` closes the dialog and focus returns to the trigger
-      - [ ] Pint + Larastan level 5 clean
+      - [x] Deletion requires confirmation; the dialog renders both required strings
+      - [x] Confirming removes the row and empties the editor without recreating it
+      - [x] Cancelling leaves the note untouched
+      - [x] Autosave still never deletes — an emptied editor keeps the row with a blank body
+      - [x] `Esc` closes the dialog and focus returns to the trigger
+      - [x] Pint + Larastan level 5 clean
 
       ## Test Data
       - N/A — no model or schema change in this task
@@ -474,11 +480,17 @@ tasks:
       - Commit: `feat(US-006): TASK-07 add confirmed delete path for meeting notes`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: 81258d788335dbe5c1758d99f68f49beab1bf58d
+      short_sha: 81258d7
+      subject: 'feat(US-006): TASK-07 add confirmed delete path for meeting notes'
+      committed_at: '2026-09-09T09:15:59+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/81258d788335dbe5c1758d99f68f49beab1bf58d'
   -
     id: TASK-08
     title: 'Wire note coverage into the agenda without an N+1 (parallel with TASK-06)'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Mike
     estimate_hours: 2.5
     dependencies:
@@ -510,13 +522,13 @@ tasks:
       9. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] An annotated meeting renders the `Notes` badge; an un-annotated one renders `Not annotated`
-      - [ ] A blank-bodied note reads `Not annotated`
-      - [ ] A note on one occurrence of a series does not badge its siblings
-      - [ ] The agenda issues **two** queries regardless of how many rows the week holds
-      - [ ] `AgendaDay::$annotatedCount` and the existing legend are correct with no view restructuring
-      - [ ] No new index added; the composite unique index is documented as serving both reads
-      - [ ] Pint + Larastan level 5 clean
+      - [x] An annotated meeting renders the `Notes` badge; an un-annotated one renders `Not annotated`
+      - [x] A blank-bodied note reads `Not annotated`
+      - [x] A note on one occurrence of a series does not badge its siblings
+      - [x] The agenda issues **two** queries regardless of how many rows the week holds
+      - [x] `AgendaDay::$annotatedCount` and the existing legend are correct with no view restructuring
+      - [x] No new index added; the composite unique index is documented as serving both reads
+      - [x] Pint + Larastan level 5 clean
 
       ## Test Data
       - N/A — reads the rows TASK-01's seeder already creates
@@ -525,6 +537,12 @@ tasks:
       - Commit: `feat(US-006): TASK-08 flag meetings carrying notes in the agenda`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: 8e26384c6ef5dbac7add74614dc7dcbf829a5bee
+      short_sha: '8e26384'
+      subject: 'feat(US-006): TASK-08 flag meetings carrying notes in the agenda'
+      committed_at: '2026-09-09T09:17:11+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/8e26384c6ef5dbac7add74614dc7dcbf829a5bee'
   -
     id: TASK-09
     title: 'Feature-test recurrence isolation, resync durability, coverage and the delete path'
@@ -609,4 +627,4 @@ tasks:
       - Commit: `docs(US-006): TASK-10 document the note surface and correct the Flux tabs mapping`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`
-updated_at: '2026-09-09T09:11:29+02:00'
+updated_at: '2026-09-09T09:17:12+02:00'
