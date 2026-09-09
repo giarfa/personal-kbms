@@ -140,7 +140,10 @@ class MeetingNotes extends Component
     public function render(): View
     {
         return view('livewire.meeting-notes', [
-            'preview' => app(MarkdownRenderer::class)->render($this->body),
+            // Only rendered in Preview mode — every debounced keystroke would
+            // otherwise re-run the Markdown conversion for a view the operator
+            // is not looking at.
+            'preview' => $this->mode === 'preview' ? app(MarkdownRenderer::class)->render($this->body) : null,
         ]);
     }
 }
