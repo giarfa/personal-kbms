@@ -324,7 +324,7 @@ tasks:
     id: TASK-05
     title: 'Style the grid to the mockup contract in both themes'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 4
     dependencies:
@@ -350,14 +350,14 @@ tasks:
       11. `npm run build`, then `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Grid, chips, hour gutter, all-day lane and `+N more` match the mockup's visual result in both themes
-      - [ ] Coverage marks differ in shape and colour, and the legend states both in words
-      - [ ] Cancelled occurrences are visually distinct — dashed, muted, struck — and never hidden
-      - [ ] AA contrast verified for every event state in light and dark
-      - [ ] Month grid is the only surface that scrolls horizontally below 768 px; nothing is clipped at 375 px
-      - [ ] `prefers-reduced-motion` neutralises animation
-      - [ ] All overrides live in one commented block and prefer FullCalendar CSS variables over element selectors
-      - [ ] `npm run build` succeeds; `php artisan larapilot:quality` passes
+      - [x] Grid, chips, hour gutter, all-day lane and `+N more` match the mockup's visual result in both themes
+      - [x] Coverage marks differ in shape and colour, and the legend states both in words
+      - [x] Cancelled occurrences are visually distinct — dashed, muted, struck — and never hidden
+      - [x] AA contrast verified for every event state in light and dark
+      - [x] Month grid is the only surface that scrolls horizontally below 768 px; nothing is clipped at 375 px
+      - [x] `prefers-reduced-motion` neutralises animation
+      - [x] All overrides live in one commented block and prefer FullCalendar CSS variables over element selectors
+      - [x] `npm run build` succeeds; `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — stylesheet only; no model, migration, factory or seeder change
@@ -494,4 +494,4 @@ tasks:
       - Commit: `docs(US-008): TASK-08 document the calendar surface`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
-updated_at: '2026-09-09T23:27:22+02:00'
+updated_at: '2026-09-09T23:29:38+02:00'
