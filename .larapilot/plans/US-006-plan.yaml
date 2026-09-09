@@ -547,7 +547,7 @@ tasks:
     id: TASK-09
     title: 'Feature-test recurrence isolation, resync durability, coverage and the delete path'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 5
     dependencies:
@@ -576,24 +576,30 @@ tasks:
       7. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Recurrence isolation asserted at both the component and the rendered-page level
-      - [ ] Resync durability asserted across retitle, reschedule, relocate, cancel and disappearance — driven through `EventSynchronizer`
-      - [ ] The orphan edge case asserted: the note survives its occurrence row and re-attaches
-      - [ ] Autosave-failure path asserted to preserve typed content
-      - [ ] Delete path and both required dialog strings asserted
-      - [ ] Agenda coverage badges and the query-count bound asserted
-      - [ ] Full suite green; Pint + Larastan level 5 clean
-      - [ ] Coverage matches the `NORMAL` bar — no browser or viewport suites added
+      - [x] Recurrence isolation asserted at both the component and the rendered-page level
+      - [x] Resync durability asserted across retitle, reschedule, relocate, cancel and disappearance — driven through `EventSynchronizer`
+      - [x] The orphan edge case asserted: the note survives its occurrence row and re-attaches
+      - [x] Autosave-failure path asserted to preserve typed content
+      - [x] Delete path and both required dialog strings asserted
+      - [x] Agenda coverage badges and the query-count bound asserted
+      - [x] Full suite green; Pint + Larastan level 5 clean
+      - [x] Coverage matches the `NORMAL` bar — no browser or viewport suites added
 
       ## Git Deliverables
       - Commit: `test(US-006): TASK-09 cover recurrence isolation, resync durability and note coverage`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes
+    commit:
+      sha: ed4f64e7f3a57900788b82b698c160c9c7185e44
+      short_sha: ed4f64e
+      subject: 'test(US-006): TASK-09 cover recurrence isolation, resync durability and note coverage'
+      committed_at: '2026-09-09T09:19:29+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ed4f64e7f3a57900788b82b698c160c9c7185e44'
   -
     id: TASK-10
     title: 'Document the note surface and correct the mockup Flux mapping'
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 1
     dependencies:
@@ -615,10 +621,10 @@ tasks:
       5. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `[Unreleased]` entry present before review, not added during it
-      - [ ] README states the occurrence-keyed durability, the delete-vs-clear distinction and the plain-text/escaped-render guarantee
-      - [ ] Mockup README's Flux tabs mapping corrected, nothing else touched
-      - [ ] No PRD revision needed, and that is recorded rather than assumed
+      - [x] `[Unreleased]` entry present before review, not added during it
+      - [x] README states the occurrence-keyed durability, the delete-vs-clear distinction and the plain-text/escaped-render guarantee
+      - [x] Mockup README's Flux tabs mapping corrected, nothing else touched
+      - [x] No PRD revision needed, and that is recorded rather than assumed
 
       ## Test Data
       - N/A — documentation only
@@ -627,4 +633,10 @@ tasks:
       - Commit: `docs(US-006): TASK-10 document the note surface and correct the Flux tabs mapping`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: finalise the local PR body toward `develop`
-updated_at: '2026-09-09T09:17:12+02:00'
+    commit:
+      sha: 149a433f216145ed2be29eab25fd235603d40a08
+      short_sha: 149a433
+      subject: 'docs(US-006): TASK-10 document the note surface and correct the Flux tabs mapping'
+      committed_at: '2026-09-09T09:19:58+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/149a433f216145ed2be29eab25fd235603d40a08'
+updated_at: '2026-09-09T09:19:58+02:00'
