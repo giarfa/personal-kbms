@@ -46,6 +46,8 @@ Every machine-specific assumption is a `.env` value, never a code constant. All 
 | `KBMS_SYNC_STALE_MULTIPLIER` | `3` | No | US-004 (sync intervals without a success before "stale") |
 | `KBMS_SYNC_STUCK_AFTER_SECONDS` | `300` | No | US-004 (abandon a `Running` row whose worker died) |
 
+`KBMS_OUTLOOK_URL_TEMPLATE` supports three placeholders, substituted in `KBMS_TIMEZONE`: `{date}` (`Y-m-d`), `{time}` (`H:i`), `{datetime}` (ISO 8601). A feed-carried `event_url` always wins over the template. Worked example against Outlook Web Access: `https://outlook.office.com/calendar/view/day/{date}`.
+
 ## Running the background processes
 
 Two long-running processes besides the web server:
@@ -71,6 +73,14 @@ By default the command **dispatches to the queue**, so `php artisan queue:work` 
 The app shell shows a sync pill on every page: **Synced** (last success, relative and absolute time), **Stale** (no success for more than `KBMS_SYNC_STALE_MULTIPLIER` × `KBMS_ICS_SYNC_MINUTES`, even if nothing has explicitly failed), **Sync failed** (with the stored error and the `KBMS_ICS_URL` key named — no need to open `storage/logs`), or **Never synced** (no run recorded at all). These four states are distinct and never collapse into one another.
 
 A manual resync from the pill will not queue a duplicate or overlapping run while one is already in progress. A run whose worker died mid-flight (killed `queue:work`, crashed process) is recorded as failed after `KBMS_SYNC_STUCK_AFTER_SECONDS` rather than left spinning forever.
+
+## Agenda and meeting detail
+
+The agenda (`/`) lists mirrored meetings chronologically in a 7-day window defaulting to today, with keyboard-reachable rows, forward/back navigation, and a date jump — every date in the range renders, including empty ones. Each occurrence has a canonical detail route addressed by its feed natural key (`source_uid` + `recurrence_id`), never by a surrogate id a resync could change, so links stay valid across syncs.
+
+The detail page shows every mirrored feed field read-only — title, start, end, duration, location, organizer, attendees, description, plus the raw occurrence key — in a surface (`--kb-mirror-bg`, dashed rule, "Mirrored from the feed" flag) visually distinct from the operator-owned column, so it is obvious which side can change under you on the next sync. Cancelled occurrences are marked, never hidden, in both the agenda and the detail page.
+
+The "Open in Outlook" action prefers a feed-carried `event_url` and otherwise falls back to `KBMS_OUTLOOK_URL_TEMPLATE`, substituting `{date}` (`Y-m-d`), `{time}` (`H:i`) and `{datetime}` (ISO 8601) in `KBMS_TIMEZONE` — for example `https://outlook.office.com/calendar/view/day/{date}` against Outlook Web Access. Without Graph API access the template fallback can only open the correct calendar **date**, not the exact item; when neither a feed link nor a template is configured, the control is disabled with the reason shown in place. A Teams join link, when the feed carries one, is offered as a separate action from the Outlook CTA.
 
 ## The launcher script contract
 

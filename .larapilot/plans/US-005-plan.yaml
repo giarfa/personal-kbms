@@ -1,0 +1,822 @@
+code: US-005
+plan_body: |-
+  ## Technical Solution
+
+  US-005 is the first **reading surface** over the mirror US-003 built. No schema change, no new model: everything is a read model over `calendar_events` plus two new pure-logic collaborators, so a resync can never invalidate what this spec ships.
+
+  ### 1. Occurrence addressing (John)
+
+  The detail route must be keyed on (`source_uid`, `recurrence_id`) — the natural key the feed owns — never on the UUID surrogate `calendar_events.id`, which a `migrate:fresh` or a re-ingest can change.
+
+  Constraint that shapes the design: Laravel matches route parameters against `$request->decodedPath()`, so a `%2F` inside a segment is decoded to `/` before matching and breaks a `[^/]+` pattern. ICS `UID`s are arbitrary text per RFC 5545 and Outlook's are long hex strings, so raw interpolation is not safe.
+
+  **Decision:** one route segment carrying a URL-safe composite of the natural key.
+
+  - `app/Meetings/OccurrenceKey.php` — `final readonly` value object with `sourceUid` + `recurrenceId`.
+    - `toRouteKey(): string` — `base64url(source_uid)` and, when `recurrence_id !== ''`, `'.'.base64url(recurrence_id)` (`base64url` = `rtrim(strtr(base64_encode($v), '+/', '-_'), '=')`).
+    - `fromRouteKey(string): ?self` — strict decode; malformed input returns `null` so the caller 404s instead of throwing.
+  - `Route::bind('occurrence', …)` in `AppServiceProvider::boot()` resolves the segment to a `CalendarEvent` via `CalendarEvent::scopeForOccurrence()` and `abort(404)` on miss — the AC's "clear not-found state, not an exception" becomes a first-class, testable path.
+  - `CalendarEvent::occurrenceKey(): OccurrenceKey` and `scopeForOccurrence(Builder, OccurrenceKey)` — the scope hits the existing `unique(['source_uid','recurrence_id'])` index directly, so detail lookup is one indexed row read.
+  - The **human-readable** `UID` / `RECURRENCE-ID` stay visible and copyable on the detail page per the mockup; the route segment is the machine form of the same pair, not a second identity.
+
+  ### 2. Agenda read model (Mike + John)
+
+  Two storage conventions from US-003 that the agenda must respect, or day grouping silently drifts:
+
+  | Kind | Stored as | Grouped by |
+  | --- | --- | --- |
+  | Timed | `starts_at` / `ends_at` in **UTC** (`$document->expand()` normalizes to UTC) | `starts_at` converted to `config('kbms.timezone')`, then local date |
+  | All-day | naive date at `00:00` (`VALUE=DATE`, never timezone-converted; `timezone` is `null`) | the raw date — **no** conversion, or a positive UTC offset shifts the day |
+
+  - `app/Meetings/AgendaRange.php` — anchor date (default **today** in `config('kbms.timezone')`) + a 7-day window. `previous()` / `next()` step by the window length, `today()` resets, `jumpTo(CarbonInterface)` re-anchors. `label()` renders `Mon 7 – Sun 13 Sep 2026` per the mockup toolbar. Range navigation therefore reaches the recent past as well as forward (FR-003).
+  - `app/Meetings/AgendaQuery.php` — one query, overlap-based so a meeting that began before the window is not dropped:
+    - timed: `is_all_day = 0 AND starts_at < :toUtc AND ends_at > :fromUtc`
+    - all-day: `is_all_day = 1 AND date(starts_at) <= :toDate AND date(ends_at) >= :fromDate`
+    - ordered by day, all-day first within a day, then `starts_at` — matches the mockup, where the offsite sits above the 08:45 standup.
+    - `starts_at` is already indexed; no relations are loaded, so there is nothing to eager-load and no per-row query. A 7-day window over a ~270-day mirror is a bounded, single-digit-millisecond read.
+  - `AgendaDay` / `AgendaRow` value objects: the query returns **every** date in the range, empty ones included, so the per-day empty state in the mockup is structural rather than a Blade `@if`.
+  - **Multi-day and overlapping events** follow the mockup contract: a spanning event is rendered **once**, in the day group where it starts, clamped to the range's first visible day when it began earlier, with a `Sep 7 – Sep 8` span label. It is not repeated into each covered day (the mockup's Tue 8 group deliberately does not carry the offsite) and it is not dropped.
+
+  ### 3. Coverage badges — the US-006/US-007 seam
+
+  FR-003 wants note and transcript presence inline, but `meeting_notes` and `meeting_transcripts` do not exist until US-006 and US-007, which are both blocked by this spec. US-005 therefore renders the full badge vocabulary — `Cancelled`, `All-day`, `Not annotated` — from a `MeetingCoverage` DTO whose `hasNotes` / `hasTranscript` are hard `false` with an explicit `US-006` / `US-007` marker. Nothing is faked and no view has to be restructured later: those two specs fill the DTO and the badges light up.
+
+  ### 4. Outlook and Teams links (Matt)
+
+  `app/Meetings/OutlookLinkBuilder.php` returns an `OutlookLink` DTO carrying `url`, `source` (`feed` | `template` | `unavailable`) and, when unavailable, a `reason` string:
+
+  1. `event_url` from the feed wins whenever present (`feed`).
+  2. Otherwise `config('kbms.outlook_url_template')` with `{date}` (`Y-m-d`), `{time}` (`H:i`) and `{datetime}` (ISO 8601), all rendered in `config('kbms.timezone')` (`template`). The known constraint stands: without Graph there is no item id, so this targets the correct calendar **date/view**.
+  3. Neither available → `unavailable`, and the CTA renders as a **disabled** `<button>` with `aria-describedby` pointing at the reason (`No feed link and KBMS_OUTLOOK_URL_TEMPLATE is unset.`) — never a broken `href`.
+
+  The placeholder vocabulary is new public configuration surface, so `.env.example`, `README.md`, and the PRD `## Configuration surface` + revision history are updated in the same spec (PRD living document).
+
+  `join_url` is a **separate** CTA (`Join Teams meeting`), never merged into the Outlook one. Both anchors carry `target="_blank"` and `rel="noopener"`.
+
+  ### 5. UI (Elise + Joe)
+
+  Desktop-first per the recorded PRD decision; the obligation is only that nothing breaks below `768px`. `.larapilot/mockups/kbms-app/README.md` is the contract — `index.html` for the agenda, `meeting.html` for the detail, `states.html` for the wording of every empty/disabled state.
+
+  - Agenda is a **full-page Livewire component** (`App\Livewire\Agenda`, class-based per the recorded `livewire component style` decision), with `#[Url]` on the anchor date so ranges are bookmarkable and browser back/forward work. Rows are plain `<a>` elements in a `<ul>` — keyboard reachable with no JS, focus ring per the frozen `.is-focused` reference (3px `--ring` halo **plus** border change, never outline-only).
+  - Meeting detail is a **controller + Blade view**, not Livewire: US-005 adds no interactive state to it. US-006/US-007/US-009 mount their own Livewire components into the owned column, which ships in this spec as the two-column grid with placeholder panels — the same convention the repo already uses for the agenda/calendar stubs.
+  - The `kb-*` classes the mockup defines for these two screens are ported from `.larapilot/mockups/kbms-app/kbms.css` into `resources/css/app.css`, additive-only: the existing `--kb-*` `@theme` tokens are already in place from US-001/US-004 and must not be redefined.
+  - Copy is Marika's, verbatim in meaning: `Mirrored from the feed · read-only`, `These fields can change under you on the next sync.`, and the empty-day line that names the last successful sync (read from the existing `SyncHealthReporter`) so an empty day reads as trustworthy rather than broken.
+
+  ## Git & Branching
+
+  - **Mode:** `GITFLOW` (from `settings.git_mode`) — branch + atomic commits + PR body prepared **locally**; nothing is pushed.
+  - **Branch point:** `feature/US-005-agenda-meeting-detail` from `develop`. `develop` is currently at `652cd44` and does **not** contain the US-004 work, even though US-004 is `DONE` and approved (`20801a0`). TASK-00 therefore commits the outstanding `.larapilot` artifacts, merges `feature/US-004-sync-health-resync` into `develop`, and branches from there — rather than repeating the US-002 precedent of stacking on an unmerged feature branch.
+  - Per task: one Conventional Commit `type(US-005): TASK-NN summary`. No batched multi-task commits.
+  - `php artisan larapilot:quality` (Pint + Larastan level 5) green before every `task-done`.
+  - Merge to `develop` only after human `larapilot-review` approval.
+
+  ## Test Data Strategy
+
+  - No new model, so no new factory — `CalendarEventFactory` and `CalendarEventSeeder` are **extended** in TASK-02 so both the UI and the tests have the shapes this spec must prove:
+    - `withEventUrl()` — feed-carried Outlook link (the preferred branch).
+    - `spanning(int $days)` — multi-day all-day event, for the clamp and span-label path.
+    - `at(CarbonInterface $start, int $minutes)` — deterministic placement, so seeded and tested fixtures land inside the default 7-day window instead of a random one.
+  - `CalendarEventSeeder` gains a **fixture week anchored on today**: a multi-day all-day offsite crossing today/tomorrow, two overlapping timed meetings, a cancelled occurrence, one meeting with `join_url` only, one with `event_url`, one with neither, and one deliberately empty day inside the window — the exact matrix the acceptance criteria name.
+  - `php artisan migrate:fresh --seed` must produce a usable agenda before TASK-02 is done.
+
+  ## Test Strategy
+
+  **Bar: `NORMAL`** (from `settings.testing`) — PHPUnit feature and unit tests, no Playwright, Dusk, Pest browser, or viewport matrix. Test tasks are interleaved, not stacked at the end.
+
+  | Layer | Coverage |
+  | --- | --- |
+  | Unit — `OccurrenceKeyTest` | round-trip for a plain UID, a UID containing `/` and `+`, an empty vs a populated `recurrence_id`; malformed input returns `null` |
+  | Unit — `OutlookLinkBuilderTest` | feed link preferred over template; template substitution of `{date}`/`{time}`/`{datetime}` in the configured timezone; both absent → `unavailable` with reason; Teams link resolved independently |
+  | Unit — `AgendaRangeTest` / `AgendaQueryTest` | default anchor is today in `kbms.timezone`; prev/next/today/jump; timed events grouped by **local** day across a DST boundary; all-day never shifted; multi-day clamped to the first visible day and rendered once; overlapping events both present and correctly ordered; a range with no meetings yields days with zero rows |
+  | Feature — `AgendaPageTest` | default range renders today's meetings; navigation forward and back; cancelled rows marked, not hidden; empty day renders its state; whole-empty range renders the range-level state; rows link to the occurrence route |
+  | Feature — `MeetingDetailTest` | every mirrored field rendered (title, start, end, duration, location, organizer, attendees, description); occurrence key shown; cancelled banner; unknown occurrence → `404`; Outlook CTA shows the feed link when present, the template URL when not, and a **disabled** control with its reason when neither; Teams CTA distinct; both anchors carry `target="_blank"` and `rel="noopener"` |
+
+  **Manual test handoff** (Anne — required at this bar for UI, per the mockup test contract): keyboard-only pass agenda → row → detail → back; visible focus on every row and CTA; theme toggle in both directions on both screens; 375px pass against `mobile.html`; contrast spot-check of the badge set on `--card` in light and dark.
+
+  ## Rework — review gate 2026-09-08
+
+  The human review gate returned `request changes` on two reproduced defects. Both are read-model bugs in code this spec already owns; neither needs a schema, route, or dependency change, so the rework stays inside the existing branch as two atomic `Fix` commits.
+
+  - **TASK-12** — `AgendaQuery`'s first-visible-day clamp was gated on `isAllDay`, so a multi-day *timed* event overlapping the window start was fetched and then silently discarded during grouping. The all-day path was the only one the suite exercised, which is why 188 green tests missed it. The fix widens the clamp, orders the carried-over row as in-progress rather than late, and teaches `AgendaRow::spanLabel` (and the two views that read it) that a timed occurrence can span days.
+  - **TASK-13** — `#[Url] $date` reached `CarbonImmutable::parse()` unvalidated, so a hand-edited or truncated bookmark threw out of `render()` as a 500 on the index route. The fix makes anchor parsing total and normalizes it to the start of day.
+
+  Accepted without change, recorded for later: `ends_at` carries no dedicated index (fine at this table's bounded mirror size).
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch from an up-to-date develop'
+    type: Impl
+    status: DONE
+    assignee: Sarah
+    estimate_hours: 1
+    dependencies: {}
+    body: |
+      ## Description
+      Bootstrap Gitflow for US-005. `develop` is at `652cd44` and does not contain US-004, which is already `DONE` and approved at `20801a0`; the working tree also carries uncommitted `.larapilot` artifacts from that review. Land US-004 on `develop` first, then branch — rather than stacking US-005 on an unmerged feature branch as US-002 had to.
+
+      Under `git_mode: GITFLOW` nothing is pushed: the PR description is prepared locally.
+
+      ## Files Involved
+      - (git only — `.larapilot/backlog.yaml`, `.larapilot/decisions.yaml`, `.larapilot/specs/US-004.yaml`, `.larapilot/usage/ledger.jsonl` are committed as review artifacts, no application files)
+
+      ## Steps
+      1. On `feature/US-004-sync-health-resync`, commit the outstanding review artifacts: `chore(US-004): record review approval artifacts`
+      2. `git checkout develop && git merge --no-ff feature/US-004-sync-health-resync` (fast-forward is fine if history is linear)
+      3. Confirm `git branch --contains 20801a0` now lists `develop`
+      4. `git checkout -b feature/US-005-agenda-meeting-detail`
+      5. Draft the internal PR title/body toward `develop` — title `US-005: Agenda view, meeting detail and Open in Outlook`; body links this plan and lists the planned tasks. Keep it local.
+      6. Anchor commit: `chore(US-005): TASK-00 bootstrap feature branch`
+
+      ## Completion Criteria
+      - [x] US-004 review artifacts committed on its own branch, not carried into US-005
+      - [x] `develop` contains `20801a0`
+      - [x] Branch `feature/US-005-agenda-meeting-detail` exists locally off `develop`
+      - [x] PR title/body drafted for `develop` (not opened remotely)
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-005): TASK-00 bootstrap feature branch` (empty commit allowed)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepared locally — open remotely only if the operator asks
+    commit:
+      sha: 220a3c7cd3a2ef41612c77d38a2347be18f3607b
+      short_sha: 220a3c7
+      subject: 'chore(US-005): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-08T19:50:13+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/220a3c7cd3a2ef41612c77d38a2347be18f3607b'
+  -
+    id: TASK-01
+    title: 'Occurrence addressing: OccurrenceKey, route binding and canonical meeting route'
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 3
+    dependencies:
+      - TASK-00
+    body: |
+      ## Description
+      Give every occurrence a canonical route addressed by the feed's natural key (`source_uid`, `recurrence_id`), never by the UUID surrogate a resync can change. Laravel matches route parameters against `$request->decodedPath()`, so `%2F` inside a segment is decoded before matching — an arbitrary RFC 5545 `UID` cannot be interpolated raw. One URL-safe composite segment solves it without a schema change.
+
+      ## Files Involved
+      - app/Meetings/OccurrenceKey.php (new)
+      - app/Models/CalendarEvent.php
+      - app/Providers/AppServiceProvider.php
+      - routes/web.php
+
+      ## Steps
+      1. `php artisan make:class Meetings/OccurrenceKey` — `final readonly class` with `public function __construct(public string $sourceUid, public string $recurrenceId = '')`.
+         - `toRouteKey(): string` — `base64url(sourceUid)`, plus `'.'.base64url(recurrenceId)` when `recurrenceId !== ''`; `base64url` = `rtrim(strtr(base64_encode($v), '+/', '-_'), '=')`.
+         - `public static function fromRouteKey(string $key): ?self` — split on the first `.`, strict-decode each half, return `null` on anything malformed (never throw).
+         - Add PHPDoc; keep it dependency-free so it is unit-testable without the container.
+      2. `CalendarEvent::occurrenceKey(): OccurrenceKey` and `scopeForOccurrence(Builder $query, OccurrenceKey $key): Builder` (`where source_uid` + `where recurrence_id`) — the existing `unique(['source_uid','recurrence_id'])` index serves it as a single indexed row read.
+      3. `AppServiceProvider::boot()`: `Route::bind('occurrence', fn (string $value) => CalendarEvent::query()->forOccurrence(OccurrenceKey::fromRouteKey($value) ?? abort(404))->firstOrFail())` — keep the 404 explicit so the AC's not-found path is a real branch, not an uncaught exception.
+      4. `routes/web.php`: `Route::get('meetings/{occurrence}', MeetingController::class)->name('meetings.show');` with a stub invokable controller (`php artisan make:controller MeetingController --invokable`) returning the view added in TASK-09.
+      5. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] `route('meetings.show', $event->occurrenceKey()->toRouteKey())` resolves for a plain UID, a UID containing `/`, and an occurrence of a recurring series
+      - [x] An unknown or malformed key returns `404`, not a `500`
+      - [x] Detail lookup is a single query against the natural-key unique index
+      - [x] Pint + Larastan level 5 green
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-005): TASK-01 address meeting occurrences by their natural key`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 60086416183c7ca5b69e6e31d180769735dd69bb
+      short_sha: '6008641'
+      subject: 'feat(US-005): TASK-01 address meeting occurrences by their natural key'
+      committed_at: '2026-09-08T19:51:51+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/60086416183c7ca5b69e6e31d180769735dd69bb'
+  -
+    id: TASK-02
+    title: 'Extend the calendar factory and seeder with the agenda fixture matrix'
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-00
+    body: |
+      ## Description
+      The current seeder scatters events randomly across ±45 days, so the default 7-day agenda window can come up empty and none of the link-resolution branches are represented. Give both the UI and the test suite the exact shapes this spec must prove: multi-day, overlapping, cancelled, feed-link, Teams-link, no-link, and one genuinely empty day.
+
+      No new model — `CalendarEvent` is unchanged. This is a factory + seeder task.
+
+      ## Files Involved
+      - database/factories/CalendarEventFactory.php
+      - database/seeders/CalendarEventSeeder.php
+
+      ## Steps
+      1. Add factory states alongside the existing `allDay()` / `cancelled()` / `withTeamsLink()` / `occurrenceOf()` / `stale()`:
+         - `withEventUrl(): static` — a plausible OWA `event_url`, so the feed-link branch is reachable.
+         - `spanning(int $days): static` — all-day event whose `ends_at` is `$days` after `starts_at`, for the multi-day clamp path.
+         - `at(CarbonInterface $start, int $minutes = 30): static` — deterministic placement; random dates make agenda tests flaky.
+      2. Rework `CalendarEventSeeder` into a **fixture week anchored on today** in `config('kbms.timezone')`, keeping the existing weekly-series block so recurrence identity stays demonstrable:
+         - a `spanning(1)` all-day offsite starting today
+         - two timed meetings today that overlap (e.g. 09:30–10:30 and 10:00–11:00)
+         - a `cancelled()` occurrence today
+         - one meeting `withTeamsLink()` only, one `withEventUrl()` only, one with neither
+         - **no** events on one date inside the window, so the per-day empty state is visible without editing the database
+      3. Keep attendee/organizer values domain-realistic — the mirror panel renders them verbatim.
+      4. `php artisan migrate:fresh --seed` and open `/` — the fixture week must render once TASK-08 lands; until then verify by row counts.
+      5. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Every acceptance-criterion shape (multi-day, overlapping, cancelled, feed link, Teams link, no link, empty day) exists in the seeded default window
+      - [x] `migrate:fresh --seed` succeeds and produces no orphan or contradictory rows
+      - [x] Existing US-003/US-004 tests still pass
+      - [x] Pint + Larastan level 5 green
+
+      ## Test Data
+      - [x] `database/factories/CalendarEventFactory.php` extended with `withEventUrl()`, `spanning()`, `at()`
+      - [x] `database/seeders/CalendarEventSeeder.php` produces the anchored fixture week
+      - [x] Factory and seeder updated in **this same task**
+
+      ## Git Deliverables
+      - Commit: `feat(US-005): TASK-02 seed an agenda fixture week with every link and coverage shape`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 5f6d1c84fb27f3be7b765fdf8958fdbe039bfd41
+      short_sha: 5f6d1c8
+      subject: 'feat(US-005): TASK-02 seed an agenda fixture week with every link and coverage shape'
+      committed_at: '2026-09-08T19:55:22+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/5f6d1c84fb27f3be7b765fdf8958fdbe039bfd41'
+  -
+    id: TASK-03
+    title: 'OutlookLinkBuilder: feed link preference, template fallback and disabled reason'
+    type: Impl
+    status: DONE
+    assignee: Matt
+    estimate_hours: 3
+    dependencies:
+      - TASK-00
+    body: |
+      ## Description
+      Resolve the "Open in Outlook" call-to-action in one place, with an explicit three-way outcome, so the view never has to decide between a real URL and a broken one. The Teams join URL is resolved independently — it is a distinct action, never merged into the calendar CTA.
+
+      ## Files Involved
+      - app/Meetings/OutlookLink.php (new)
+      - app/Meetings/OutlookLinkSource.php (new — enum)
+      - app/Meetings/OutlookLinkBuilder.php (new)
+      - .env.example
+      - README.md
+      - .larapilot/docs/PRD.md
+
+      ## Steps
+      1. `OutlookLinkSource` enum (TitleCase keys): `Feed`, `Template`, `Unavailable`.
+      2. `OutlookLink` — `final readonly` DTO: `?string $url`, `OutlookLinkSource $source`, `?string $reason`.
+      3. `OutlookLinkBuilder::for(CalendarEvent $event): OutlookLink`, in strict order:
+         - `event->event_url` present → `Feed`.
+         - else `config('kbms.outlook_url_template')` filled → substitute `{date}` (`Y-m-d`), `{time}` (`H:i`) and `{datetime}` (ISO 8601), all rendered in `config('kbms.timezone')`; all-day events use the stored naive date and substitute `00:00` for `{time}` without a timezone conversion → `Template`.
+         - else → `Unavailable` with reason `No feed link and KBMS_OUTLOOK_URL_TEMPLATE is unset.` (Marika's wording from `states.html` — it names the configuration key that fixes it).
+      4. `OutlookLinkBuilder::teamsUrl(CalendarEvent $event): ?string` — returns `join_url` or `null`. Kept on the same collaborator, deliberately a separate method so the view cannot conflate the two CTAs.
+      5. Document the placeholder vocabulary — it is new public configuration surface:
+         - `.env.example`: comment above `KBMS_OUTLOOK_URL_TEMPLATE` listing `{date}`, `{time}`, `{datetime}` with a worked OWA example.
+         - `README.md`: same, in the configuration section.
+         - `.larapilot/docs/PRD.md`: extend `## Configuration surface` with the placeholder set and add a `## PRD Revision History` row (`2026-09-08 | larapilot-plan US-005 | Recorded the KBMS_OUTLOOK_URL_TEMPLATE placeholder vocabulary`). PRD is a living document.
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Feed-carried `event_url` always wins over the template
+      - [x] Template substitution is correct in `config('kbms.timezone')`, including for all-day events
+      - [x] Neither source available → `Unavailable` carrying a reason that names `KBMS_OUTLOOK_URL_TEMPLATE`; never a partial or broken URL
+      - [x] Teams join URL resolved separately from the calendar CTA
+      - [x] `.env.example`, `README.md` and the PRD configuration surface all document the placeholders
+      - [x] Pint + Larastan level 5 green
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-005): TASK-03 resolve Outlook and Teams links with an explicit unavailable state`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 702fc6e489a422ed76f387abb7c57d2ae529a91f
+      short_sha: 702fc6e
+      subject: 'feat(US-005): TASK-03 resolve Outlook and Teams links with an explicit unavailable state'
+      committed_at: '2026-09-08T19:57:17+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/702fc6e489a422ed76f387abb7c57d2ae529a91f'
+  -
+    id: TASK-04
+    title: 'Port the agenda and meeting-detail kb-* component layer'
+    type: Impl
+    status: DONE
+    assignee: Joe
+    estimate_hours: 3
+    dependencies:
+      - TASK-00
+    body: |
+      ## Description
+      Bring the mockup's agenda and detail components into the application stylesheet. The `--kb-*` tokens already landed with US-001/US-004; this task adds only the component rules those two screens need, so the mockup stays the visual contract rather than a thing to eyeball against.
+
+      ## Files Involved
+      - resources/css/app.css
+
+      ## Steps
+      1. Port from `.larapilot/mockups/kbms-app/kbms.css`, **additive only** — never redefine a Starter Kit token or an existing `--kb-*` value:
+         - agenda: `kb-page-head`, `kb-toolbar`, `kb-legend`, `kb-count`, `kb-daygroup` (+ `--today`, sticky `__head`), `kb-agenda`, `kb-row` (+ `__time`, `__title`, `__meta`, `__badges`, `--cancelled`, `--now`, `is-focused`), `kb-nowline`, `kb-empty`
+         - detail: `kb-detail` grid, `kb-mirror` (+ `__flag`), `kb-facts` (+ `__desc` with `white-space: pre-line`), `kb-chips`, `kb-path`, `kb-owned-flag`, `kb-panel`
+         - shared: `kb-tag` variants (`--note`, `--transcript`, `--bare`, `--cancelled`, `--muted`, `--ok`, `--warn`), `kb-sronly`, `kb-inline`, `kb-stack`, `kb-iconbtn`
+      2. Keep the mockup's deliberate choices: tabular numerals + `--kb-mono` for agenda times and paths, `--kb-frame-max: 88rem` content cap, no shadow beyond the kit's `shadow-xs` feel.
+      3. Focus contract: 3px `--ring` halo **plus** a border change on `:focus-visible` — never outline-only, never suppressed. `.is-focused` in the mockup is the reference rendering.
+      4. Respect `prefers-reduced-motion: reduce` (already global in the mockup layer — carry it over if not already present).
+      5. `npm run build` to confirm the layer compiles under Tailwind 4.
+
+      ## Completion Criteria
+      - [x] Every class the TASK-08/TASK-09 views need exists and renders in both themes
+      - [x] No Starter Kit token and no existing `--kb-*` value is redefined
+      - [x] `npm run build` succeeds
+      - [x] Badge set is legible on `--card` in light and dark (WCAG 2.2 AA spot-check)
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-005): TASK-04 port agenda and meeting detail component styles`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 7b40b1e55424879c0fd4f8ae071c9eb1aa0f3f02
+      short_sha: 7b40b1e
+      subject: 'feat(US-005): TASK-04 port agenda and meeting detail component styles'
+      committed_at: '2026-09-08T19:59:43+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7b40b1e55424879c0fd4f8ae071c9eb1aa0f3f02'
+  -
+    id: TASK-05
+    title: 'Unit tests: occurrence key round-trip and Outlook link resolution'
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 2
+    dependencies:
+      - TASK-01
+      - TASK-03
+    body: |
+      ## Description
+      Cover the two pure-logic collaborators before they get consumed by views, where a wrong branch would only show up as a rendering difference.
+
+      ## Files Involved
+      - tests/Unit/Meetings/OccurrenceKeyTest.php
+      - tests/Unit/Meetings/OutlookLinkBuilderTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit OccurrenceKeyTest` (move under `tests/Unit/Meetings/`, matching the existing `tests/Unit/Calendar/` layout).
+      2. `OccurrenceKeyTest`: round-trip a plain hex Outlook UID; a UID containing `/`, `+` and `=`; an empty `recurrence_id` vs `20260907T073000Z`; an all-day `recurrence_id` (`2026-09-07`). Malformed and empty route keys return `null` rather than throwing.
+      3. `OutlookLinkBuilderTest`: use `CalendarEventFactory` states from TASK-02 — never redefine fixtures here.
+         - `withEventUrl()` + a configured template → source is `Feed`.
+         - no `event_url` + configured template → `Template`, with `{date}`/`{time}`/`{datetime}` substituted in `config('kbms.timezone')` (assert an event stored in UTC renders its **local** time).
+         - `allDay()` + template → date substituted without a timezone shift.
+         - no `event_url`, template unset → `Unavailable`, reason mentions `KBMS_OUTLOOK_URL_TEMPLATE`.
+         - `withTeamsLink()` → `teamsUrl()` returns it; without → `null`. Teams presence never changes the Outlook outcome.
+      4. `php artisan test --filter=OccurrenceKey` and `--filter=OutlookLinkBuilder`
+      5. No Playwright, Dusk, Pest browser, or viewport suite — `settings.testing: NORMAL`.
+
+      ## Completion Criteria
+      - [x] Both suites pass
+      - [x] Link resolution order and the unavailable reason are asserted, not just the happy path
+      - [x] Pint + Larastan level 5 green
+
+      ## Git Deliverables
+      - Commit: `test(US-005): TASK-05 cover occurrence keys and Outlook link resolution`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 7d78c6ec9f4bf90be641185a5db4dd89d49742f4
+      short_sha: 7d78c6e
+      subject: 'test(US-005): TASK-05 cover occurrence keys and Outlook link resolution'
+      committed_at: '2026-09-08T20:00:53+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7d78c6ec9f4bf90be641185a5db4dd89d49742f4'
+  -
+    id: TASK-06
+    title: 'Agenda read model: range navigation, timezone-correct day grouping and overlap query'
+    type: Impl
+    status: DONE
+    assignee: Mike
+    estimate_hours: 5
+    dependencies:
+      - TASK-01
+      - TASK-02
+    body: |
+      ## Description
+      The agenda's correctness lives here, not in the Blade. US-003 stores timed events in **UTC** and all-day events as **naive dates**; grouping both by `starts_at` without distinguishing them shifts all-day events by the UTC offset and puts late-evening meetings on the wrong day. Build the read model that gets this right once, so the view is a pure renderer.
+
+      ## Files Involved
+      - app/Meetings/AgendaRange.php (new)
+      - app/Meetings/AgendaQuery.php (new)
+      - app/Meetings/AgendaDay.php (new)
+      - app/Meetings/AgendaRow.php (new)
+      - app/Meetings/MeetingCoverage.php (new)
+
+      ## Steps
+      1. `AgendaRange` — `final readonly`: anchor `CarbonImmutable` date + `int $days = 7`. `today()` (anchor = today in `config('kbms.timezone')`), `previous()`, `next()`, `jumpTo(CarbonInterface)`, `dates(): array<CarbonImmutable>`, `label(): string` rendering `Mon 7 – Sun 13 Sep 2026` per the mockup toolbar. Stepping backwards is what reaches the recent past (FR-003).
+      2. `AgendaQuery::for(AgendaRange $range): Collection<AgendaDay>` — **one** query, overlap-based so an event that began before the window is not dropped:
+         - timed: `is_all_day = 0 AND starts_at < :toUtc AND ends_at > :fromUtc` (window boundaries converted from local to UTC)
+         - all-day: `is_all_day = 1 AND date(starts_at) <= :toDate AND date(ends_at) >= :fromDate` (raw dates, no conversion)
+         - order by effective day, then all-day first, then `starts_at` — the mockup puts the offsite above the 08:45 standup.
+      3. Grouping: timed rows group by `starts_at->setTimezone(config('kbms.timezone'))->toDateString()`; all-day rows group by the stored date. A **multi-day event is emitted once**, in the day group where it starts, clamped to the range's first visible day when it began earlier, carrying a span label (`Sep 7 – Sep 8`) — matching the mockup, whose Tue 8 group deliberately does not repeat the offsite.
+      4. `AgendaQuery` returns an `AgendaDay` for **every** date in the range, empty ones included, each with `date`, `rows`, `isToday`, `meetingCount`, `annotatedCount` — so the per-day empty state is structural rather than a Blade conditional.
+      5. `AgendaRow` — `final readonly`: the `CalendarEvent`, its local start/end, duration in minutes, `isAllDay`, `spanLabel`, `isCancelled`, `routeKey`, and `MeetingCoverage`.
+      6. `MeetingCoverage` — `final readonly` with `hasNotes` and `hasTranscript`, both hard `false` in this spec with a PHPDoc note naming **US-006** and **US-007** as the specs that fill them. Do not fake presence and do not add a schema placeholder.
+      7. No relations are loaded, so there is no eager-load requirement and no per-row query; `starts_at` is already indexed. Assert the single-query shape in TASK-07.
+      8. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Default range anchors on today in `config('kbms.timezone')`
+      - [x] Timed events group by local day; all-day events are never timezone-shifted
+      - [x] Multi-day events appear exactly once, clamped to the first visible day, with a span label
+      - [x] Overlapping events both appear, correctly ordered
+      - [x] Every date in the range is represented, including empty ones
+      - [x] One query per agenda render — no N+1
+      - [x] Pint + Larastan level 5 green
+
+      ## Test Data
+      - N/A — no model/schema changes in this task (fixtures came with TASK-02)
+
+      ## Git Deliverables
+      - Commit: `feat(US-005): TASK-06 add the agenda read model with timezone-correct day grouping`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 5e7de7435cb2ef2aa5b1a51b7c3253618aa14d74
+      short_sha: 5e7de74
+      subject: 'feat(US-005): TASK-06 add the agenda read model with timezone-correct day grouping'
+      committed_at: '2026-09-08T20:06:21+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/5e7de7435cb2ef2aa5b1a51b7c3253618aa14d74'
+  -
+    id: TASK-07
+    title: 'Unit tests: agenda range navigation, DST grouping and multi-day handling'
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-06
+    body: |
+      ## Description
+      The PRD names timezone fidelity and recurrence identity as the correctness risks that matter more than throughput. This is where they get pinned down for the reading surface.
+
+      ## Files Involved
+      - tests/Unit/Meetings/AgendaRangeTest.php
+      - tests/Unit/Meetings/AgendaQueryTest.php
+
+      ## Steps
+      1. `AgendaRangeTest`: default anchor is today in `config('kbms.timezone')` (freeze with `Carbon::setTestNow()`); `previous()`/`next()` step by exactly the window length; `today()` resets; `jumpTo()` re-anchors; `label()` matches the mockup format across a month boundary.
+      2. `AgendaQueryTest`, using TASK-02 factory states only:
+         - a timed event at `23:30` local lands on the **local** day, not the UTC one
+         - an event spanning a DST transition keeps its local start time
+         - an `allDay()` event is not shifted by the UTC offset
+         - a `spanning(2)` event appears **once**, in its start day, and is clamped to the range start when it began before the window
+         - two overlapping timed events both appear, ordered by `starts_at`, with the all-day row above both
+         - a range with no events returns the full set of dates with zero rows each
+         - `cancelled()` occurrences are returned, not filtered out
+         - assert a single query for the whole range (`DB::listen` or `assertQueryCount`-style guard)
+      3. `php artisan test --filter=Agenda`
+      4. No browser or viewport suite — `settings.testing: NORMAL`.
+
+      ## Completion Criteria
+      - [x] Both suites pass
+      - [x] DST and all-day cases asserted explicitly, not implied
+      - [x] Single-query shape asserted
+      - [x] Pint + Larastan level 5 green
+
+      ## Git Deliverables
+      - Commit: `test(US-005): TASK-07 cover agenda ranges, DST grouping and multi-day events`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 3e64c3cbed22bbd1cdda53c90e110f0b10b03e3c
+      short_sha: 3e64c3c
+      subject: 'test(US-005): TASK-07 cover agenda ranges, DST grouping and multi-day events'
+      committed_at: '2026-09-08T20:07:40+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/3e64c3cbed22bbd1cdda53c90e110f0b10b03e3c'
+  -
+    id: TASK-08
+    title: 'Agenda page: Livewire component, range toolbar, day groups and coverage badges'
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 5
+    dependencies:
+      - TASK-04
+      - TASK-06
+    body: |
+      ## Description
+      Replace the `pages.agenda` placeholder with the real triage surface. `index.html` in the mockup folder is the contract, including its copy. Rows must be keyboard-reachable without JavaScript, so they are plain links in a list, not click-handled divs.
+
+      ## Files Involved
+      - app/Livewire/Agenda.php (new)
+      - resources/views/livewire/agenda.blade.php (new)
+      - resources/views/pages/agenda.blade.php (removed — replaced by the full-page component)
+      - routes/web.php
+
+      ## Steps
+      1. `php artisan make:livewire Agenda --class` — class-based per the recorded `livewire component style` decision (Livewire 4 SFCs escape the Larastan gate and this project runs PHPUnit).
+      2. Route the component full-page: `Route::get('/', Agenda::class)->name('agenda');`. `config/livewire.php` already sets `component_layout` to `layouts::app`; set the page title with `#[Title('Agenda')]`.
+      3. Public state: `#[Url] public ?string $date = null` (the range anchor), resolved into an `AgendaRange` — ranges become bookmarkable and browser back/forward work without extra wiring. Actions: `previous()`, `next()`, `today()`, and a `wire:model.live` `<input type="date">` jump.
+      4. `render()` calls `AgendaQuery::for($range)` and passes `days` plus the `SyncHealthReporter` snapshot (already present from US-004) — the empty-day copy names the last successful sync, which is what makes an empty day read as trustworthy.
+      5. View, following the mockup structure:
+         - `kb-page-head` with `<h1>Agenda</h1>` and the mirrored-vs-yours sentence; `Calendar view` link.
+         - `kb-toolbar` `role="group" aria-label="Date range"`: prev / next / `Today` / `aria-live="polite"` range label / labelled date jump.
+         - `kb-legend` showing the full badge vocabulary.
+         - One `kb-daygroup` per date with a sticky `<h2>` (`Today · Mon 7 Sep`, `Tomorrow · …`, else `Wed 9 Sep`) and a `kb-count` (`5 meetings · 3 annotated`, or `No meetings`).
+         - `<ul class="kb-agenda">` of `<a class="kb-row" href="{{ route('meetings.show', $row->routeKey) }}" wire:navigate>`: time column (start + duration, or `All day` + span label), title + meta (organizer, location, attendee count), badges.
+         - Cancelled rows get `kb-row--cancelled` plus a `Cancelled` badge and the `Cancelled upstream · notes kept` meta line — marked, never hidden.
+         - `Now` divider is `aria-hidden="true"` decoration; the following row carries `kb-row--now`.
+         - Empty day → the `kb-empty` block; a wholly empty range → one range-level empty state naming the last successful sync.
+      6. Accessibility: one `<h1>`; day groups are `<h2>`; badges carry **text**, never colour alone; visible focus per the `.is-focused` reference; the existing `.kb-skip` link still targets `#main`.
+      7. Smoke-check at 375, 768 and 1280px — three columns collapse to a stack below 768px; nothing clipped. Desktop-first per the recorded PRD decision, but nothing may break below 768px.
+      8. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Agenda defaults to today and navigates forward and back; `Today` resets; the date jump re-anchors
+      - [x] Rows are keyboard reachable with visible focus and open the occurrence route
+      - [x] Cancelled, all-day and multi-day rows render per the mockup
+      - [x] Empty day and empty range both render their explicit states
+      - [x] Usable at 375/768/1280px (manual smoke at this test bar)
+      - [x] Pint + Larastan level 5 green
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-005): TASK-08 build the agenda triage surface`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 5d5f51a685e6d9af2101fca35c04df7bd11430ab
+      short_sha: 5d5f51a
+      subject: 'feat(US-005): TASK-08 build the agenda triage surface'
+      committed_at: '2026-09-08T20:12:29+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/5d5f51a685e6d9af2101fca35c04df7bd11430ab'
+  -
+    id: TASK-09
+    title: 'Meeting detail page: mirrored feed panel, occurrence key and the Outlook/Teams CTAs'
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 5
+    dependencies:
+      - TASK-01
+      - TASK-03
+      - TASK-04
+    body: |
+      ## Description
+      The canonical page per occurrence. Its point is the separation of surfaces: the feed column is a mirror that changes under you on the next sync, the right column is yours. That separation is by **surface** — `--kb-mirror-bg` with a dashed rule and a text flag — not just a heading, so it survives both themes and does not depend on colour.
+
+      No Livewire here: US-005 adds no interactive state to this page. US-006/US-007/US-009 mount their components into the owned column, which ships now as the grid plus placeholder panels — the convention this repo already uses for its stub pages.
+
+      ## Files Involved
+      - app/Http/Controllers/MeetingController.php
+      - resources/views/pages/meeting.blade.php (new)
+      - resources/views/components/meeting/mirror-panel.blade.php (new)
+      - resources/views/components/meeting/external-links.blade.php (new)
+
+      ## Steps
+      1. `MeetingController::__invoke(CalendarEvent $occurrence)` — the route binding from TASK-01 already 404s on an unknown or malformed key. Resolve `OutlookLinkBuilder::for()` and `teamsUrl()` and pass both to the view; keep the controller thin.
+      2. Page head: breadcrumb `Agenda / {title}`, `<h1>` = the meeting summary, subtitle `Mon 7 Sep 2026 · 09:30–10:30 Europe/Rome`, and for a recurring occurrence the `one occurrence of a weekly series` note. `#[Title]`-equivalent: pass `:title="$event->summary.' — Personal KBMS'"` so the browser history is legible.
+      3. `external-links` component — the two CTAs, side by side, never merged:
+         - Outlook: `Feed` / `Template` → `<a target="_blank" rel="noopener">`; `Unavailable` → a **disabled `<button>`** with `aria-describedby` pointing at the rendered reason. Never a broken `href`.
+         - Teams: rendered only when `join_url` is present, `<a target="_blank" rel="noopener">`, labelled `Join Teams meeting`.
+      4. `mirror-panel` component — `kb-mirror` with the `Mirrored from the feed · read-only` flag, the `These fields can change under you on the next sync. Your notes and transcript link cannot.` line, and a `<dl class="kb-facts">`: When (with `TZID`), Duration, Location, Organiser, Attendees as `kb-chips` with an overflow count, Description with `white-space: pre-line`, **Occurrence key** (`UID` and `RECURRENCE-ID`, each copyable), Last seen in feed.
+         - All-day occurrences render a date range, never a midnight-to-midnight block.
+         - Cancelled occurrences render a clearly marked banner and a `Cancelled` tag on `Last seen in feed` — marked in the detail as well as the agenda.
+         - Missing optional fields (`location`, `organizer`, empty `attendees`, no `description`) render an explicit `—`, not a blank row.
+      5. Owned column: `kb-owned` with placeholder `kb-panel`s carrying the `Yours` flag — `Notes` (US-006), `Transcript` (US-007), `Ask Claude Code` (US-009) — each stating which spec brings it, matching how `pages/calendar.blade.php` already names US-008.
+      6. Layout: two columns at ≥1024px (mirror 21rem / owned fluid), one column below with the **mirror panel first**, so read-only context is read before the editors.
+      7. Smoke-check at 375, 768, 1280px; keyboard pass over both CTAs and the copy buttons.
+      8. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Every mirrored field renders read-only: title, start, end, duration, location, organizer, attendees, description
+      - [x] Feed data is visually distinct from operator-owned panels by surface and by text flag, in both themes
+      - [x] Occurrence key (`UID` + `RECURRENCE-ID`) is displayed and copyable
+      - [x] Cancelled occurrences are clearly marked
+      - [x] Outlook CTA prefers the feed link, falls back to the template, and is disabled with a visible reason when neither exists
+      - [x] Teams CTA is a distinct action; both external links carry `target="_blank"` and `rel="noopener"`
+      - [x] Unknown occurrence returns a clear 404, not an exception
+      - [x] Usable at 375/768/1280px
+      - [x] Pint + Larastan level 5 green
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-005): TASK-09 build the meeting detail page with mirrored feed data and external CTAs`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: d68d126b1951a62bbbfb4d277de93cd52d6b532a
+      short_sha: d68d126
+      subject: 'feat(US-005): TASK-09 build the meeting detail page with mirrored feed data and external CTAs'
+      committed_at: '2026-09-08T20:16:30+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/d68d126b1951a62bbbfb4d277de93cd52d6b532a'
+  -
+    id: TASK-10
+    title: 'Feature tests: agenda ranges, detail rendering and link preference order'
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 4
+    dependencies:
+      - TASK-08
+      - TASK-09
+    body: |
+      ## Description
+      Cover the two pages end to end at the `NORMAL` bar. Per the mockup's test contract, assert the **distinguishing strings** rather than only a status code — the whole point of the states work is that `unavailable` reads differently from `template fallback`.
+
+      ## Files Involved
+      - tests/Feature/AgendaPageTest.php
+      - tests/Feature/MeetingDetailTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit AgendaPageTest` and `MeetingDetailTest`. Use `CalendarEventFactory` states from TASK-02 — no inline fixture duplication.
+      2. `AgendaPageTest`:
+         - `/` renders and defaults to today's range; a meeting today is listed, one three weeks out is not
+         - `Livewire::test(Agenda::class)->call('next')` / `call('previous')` moves the window; `today()` resets; the date jump re-anchors
+         - a cancelled occurrence is **present** and marked (assert the `Cancelled` text), not filtered out
+         - an all-day multi-day event renders its span label once
+         - a day with no meetings renders its empty state; a wholly empty range renders the range-level one
+         - a row links to `route('meetings.show', $event->occurrenceKey()->toRouteKey())`
+         - the `Not annotated` badge appears while US-006/US-007 are outstanding
+      3. `MeetingDetailTest`:
+         - every mirrored field is rendered (title, start, end, duration, location, organizer, each attendee, description)
+         - the occurrence `UID` and `RECURRENCE-ID` are on the page
+         - two occurrences of the same series resolve to **different** pages — recurrence identity, the PRD's highest-value invariant, must hold on the reading surface too
+         - `withEventUrl()` → the feed URL is the CTA's `href`; template-only → the substituted template URL; neither → the control is disabled and the reason naming `KBMS_OUTLOOK_URL_TEMPLATE` is rendered
+         - `withTeamsLink()` → a distinct `Join Teams meeting` action; both external links assert `target="_blank"` and `rel="noopener"`
+         - a cancelled occurrence renders its marker
+         - an unknown and a malformed route key both return `404`
+      4. `php artisan test --filter=AgendaPage` and `--filter=MeetingDetail`, then the full suite once.
+      5. No Playwright, Dusk, Pest browser, or viewport matrix — `settings.testing: NORMAL`.
+      6. Write the **manual test handoff** into `.larapilot/docs/test-results/US-005-manual.md`: keyboard-only pass agenda → row → detail → back; visible focus on every row and CTA; theme toggle both directions on both screens; 375px pass against `mobile.html`; badge contrast spot-check on `--card` in light and dark.
+
+      ## Completion Criteria
+      - [x] Both feature suites pass and the full suite is green
+      - [x] Distinguishing strings asserted, not just status codes
+      - [x] Recurrence identity asserted on the detail route
+      - [x] Manual test handoff written for the operator
+      - [x] Pint + Larastan level 5 green
+
+      ## Git Deliverables
+      - Commit: `test(US-005): TASK-10 cover the agenda and meeting detail surfaces`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 7c6d040c561a262b5e8cb5ab9f3f73f59eed79e4
+      short_sha: 7c6d040
+      subject: 'test(US-005): TASK-10 cover the agenda and meeting detail surfaces'
+      committed_at: '2026-09-08T20:18:39+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7c6d040c561a262b5e8cb5ab9f3f73f59eed79e4'
+  -
+    id: TASK-11
+    title: 'Document the agenda, meeting detail and Outlook template in README and CHANGELOG'
+    type: Impl
+    status: DONE
+    assignee: Albert
+    estimate_hours: 2
+    dependencies:
+      - TASK-03
+      - TASK-08
+      - TASK-09
+    body: |
+      ## Description
+      Baseline documentation only, per the recorded `documentation scope` decision — no OpenAPI, no diagrams. What must land: the operator has to be able to configure the Outlook CTA without reading source, and US-004 established that a missing `[Unreleased]` entry is a review finding.
+
+      ## Files Involved
+      - README.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. `README.md` — add a short section covering the agenda (default range, navigation, keyboard reachability) and the meeting detail page (mirror vs. owned surfaces, the occurrence key, the two external CTAs). Fold in the `KBMS_OUTLOOK_URL_TEMPLATE` placeholder vocabulary from TASK-03 with a worked OWA example, and state the known constraint plainly: without Graph access the fallback opens the correct calendar **date**, not the exact item.
+      2. `CHANGELOG.md` — `## [Unreleased] / ### Added` entries for the agenda surface, the canonical occurrence route, and the Outlook/Teams CTAs including the disabled-with-reason behaviour. Match the existing entries' register: specific, operator-facing, naming the configuration keys.
+      3. Re-read the PRD edit from TASK-03 and confirm the revision-history row is present and accurate.
+      4. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] README documents both new surfaces and the full Outlook template placeholder set
+      - [x] CHANGELOG `[Unreleased]` covers the user-facing behaviour this spec adds
+      - [x] PRD configuration surface and revision history are consistent with the shipped placeholders
+      - [x] Pint + Larastan level 5 green
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `docs(US-005): TASK-11 document the agenda, meeting detail and Outlook template`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 1e03950f4a192bcba8bc0cd848546787c948e52d
+      short_sha: '1e03950'
+      subject: 'docs(US-005): TASK-11 document the agenda, meeting detail and Outlook template'
+      committed_at: '2026-09-08T20:19:12+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1e03950f4a192bcba8bc0cd848546787c948e52d'
+  -
+    id: TASK-12
+    title: 'Fix: multi-day timed events dropped from the agenda'
+    type: Fix
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-11
+    body: |-
+      ## Description
+      Fix: a multi-day **timed** event overlapping the window start is silently dropped from the agenda. `AgendaQuery` gates its first-visible-day clamp on `$row->isAllDay`, so a timed event beginning before the range is matched by the overlap predicate, grouped under a date outside `$range->dates()`, and never rendered. Reproduced at the review gate: `2026-09-09 22:00 → 2026-09-10 06:00` in a window anchored `2026-09-10` yields 0 rows. This contradicts acceptance criterion 14 ("overlapping and multi-day events render without collapsing into each other or being dropped").
+
+      The fix is the clamp gate itself, plus the two places that assumed a timed row never spans days: the ordering key inside a day group, and the span label that tells the operator the event carries over.
+
+      ## Files Involved
+      - app/Meetings/AgendaQuery.php
+      - app/Meetings/AgendaRow.php
+      - resources/views/livewire/agenda.blade.php
+      - resources/views/components/meeting/mirror-panel.blade.php
+      - resources/views/pages/meeting.blade.php
+      - tests/Unit/Meetings/AgendaQueryTest.php
+      - tests/Feature/MeetingDetailTest.php
+
+      ## Steps
+      1. `AgendaQuery::for()` — drop the `isAllDay` condition from the group-key clamp so **any** row whose start day precedes the window is emitted once on the range's first visible day.
+      2. `AgendaQuery::for()` — order a clamped timed row by `00:00:00` rather than its own start time: it is already in progress when the day opens, so it belongs directly after the all-day rows, not at the end of the day.
+      3. `AgendaRow` — compute `spanLabel` for timed rows too. Derive the last inclusive day from an exclusive end (`ends_at` at exactly midnight belongs to the previous day) so an all-day event's label is unchanged and a `22:00 → 06:00` bridge reads `Sep 9 – Sep 10`.
+      4. `resources/views/livewire/agenda.blade.php` — render `spanLabel` in the timed branch when present, so a carried-over row is not silently mistaken for one starting today.
+      5. `resources/views/components/meeting/mirror-panel.blade.php` and `resources/views/pages/meeting.blade.php` — include the end date in the "When" line whenever a timed event does not end on its start day; `D j M Y, H:i – H:i` is misleading for a spanning occurrence.
+      6. `tests/Unit/Meetings/AgendaQueryTest.php` — add the timed-span cases the suite was missing: clamped to the range start, rendered exactly once across the window, and ordered ahead of the day's own timed meetings.
+      7. `tests/Feature/MeetingDetailTest.php` — assert the detail page shows both dates for a spanning timed occurrence.
+      8. `php artisan test`
+      9. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] A timed event overlapping the window start renders on the range's first visible day instead of disappearing
+      - [x] It renders exactly once across the range, not repeated into every covered day
+      - [x] A clamped in-progress row sorts after all-day rows and before the day's own timed meetings
+      - [x] `spanLabel` is populated for multi-day timed events and unchanged for all-day ones
+      - [x] Agenda and meeting detail both make the carry-over visible rather than showing a single misleading date
+      - [x] Tests pass; Pint + Larastan level 5 green
+
+      ## Test Data
+      - N/A — no model, schema, or relationship changes; existing `at()` / `spanning()` factory states cover the new cases
+
+      ## Git Deliverables
+      - Commit: `fix(US-005): TASK-12 stop dropping multi-day timed events from the agenda`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 6e77db4fbfbcec64d57f79599bc670976779c7ed
+      short_sha: 6e77db4
+      subject: 'fix(US-005): TASK-12 stop dropping multi-day timed events from the agenda'
+      committed_at: '2026-09-08T23:35:35+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/6e77db4fbfbcec64d57f79599bc670976779c7ed'
+  -
+    id: TASK-13
+    title: 'Fix: HTTP 500 on an unparseable agenda anchor date'
+    type: Fix
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1
+    dependencies:
+      - TASK-11
+    body: |-
+      ## Description
+      Fix: a malformed `?date=` query string returns HTTP 500 on the application's index route. `App\Livewire\Agenda::$date` carries `#[Url]`, so it is a bookmarkable, hand-editable surface, and `CarbonImmutable::parse($this->date)` throws `DateMalformedStringException` straight out of `render()` on anything it cannot read. Reproduced at the review gate: `GET /?date=not-a-date` → 500. The spec's posture for the sibling detail route is "a clear not-found state, not an exception"; the agenda must degrade the same way.
+
+      ## Files Involved
+      - app/Livewire/Agenda.php
+      - tests/Feature/AgendaPageTest.php
+
+      ## Steps
+      1. Add a private `anchor(): CarbonImmutable` that parses `$this->date` inside a `try`/`catch` and falls back to today's anchor in `config('kbms.timezone')` when the value is unparseable. Normalize with `startOfDay()` so a datetime-valued anchor cannot shift the window bounds either.
+      2. Route both `mount()` and `range()` through it — `mount()` rewrites `$this->date` to the normalized date string so the URL self-corrects on first load, and `range()` stays total for every later Livewire round trip.
+      3. `tests/Feature/AgendaPageTest.php` — cover an unparseable `?date=`, an out-of-calendar value, and a datetime-valued anchor; assert 200 plus the expected range label.
+      4. `php artisan test`
+      5. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] `GET /?date=not-a-date` returns 200 and renders today's range
+      - [x] A datetime-valued anchor is normalized to the start of its day
+      - [x] `mount()` rewrites an invalid anchor so the bookmarked URL self-corrects
+      - [x] Tests pass; Pint + Larastan level 5 green
+
+      ## Test Data
+      - N/A — no model, schema, or relationship changes
+
+      ## Git Deliverables
+      - Commit: `fix(US-005): TASK-13 degrade gracefully on an unparseable agenda anchor date`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    commit:
+      sha: 530cf15367c8b3cc162a4851e6b5981b5a4c3028
+      short_sha: 530cf15
+      subject: 'fix(US-005): TASK-13 degrade gracefully on an unparseable agenda anchor date'
+      committed_at: '2026-09-08T23:36:22+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/530cf15367c8b3cc162a4851e6b5981b5a4c3028'
+updated_at: '2026-09-08T23:36:22+02:00'

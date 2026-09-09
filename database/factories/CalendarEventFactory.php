@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\CalendarEvent;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -57,9 +58,11 @@ class CalendarEventFactory extends Factory
 
     /**
      * An all-day occurrence stored as a naive date, never timezone-converted.
-     * `recurrence_id` stays whatever the base definition or `occurrenceOf()`
-     * set — only a recurring all-day occurrence uses the Y-m-d form; a
-     * standalone all-day event's recurrence_id is always ''.
+     * `ends_at` is exclusive per RFC 5545 `DTEND` — a single-day event's
+     * `ends_at` is one day after `starts_at` (see IcsParser). `recurrence_id`
+     * stays whatever the base definition or `occurrenceOf()` set — only a
+     * recurring all-day occurrence uses the Y-m-d form; a standalone all-day
+     * event's recurrence_id is always ''.
      */
     public function allDay(): static
     {
@@ -68,7 +71,7 @@ class CalendarEventFactory extends Factory
 
             return [
                 'starts_at' => $date.' 00:00:00',
-                'ends_at' => $date.' 00:00:00',
+                'ends_at' => date('Y-m-d', strtotime($date.' +1 day')).' 00:00:00',
                 'is_all_day' => true,
                 'timezone' => null,
             ];
@@ -113,6 +116,46 @@ class CalendarEventFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'last_seen_at' => now()->subDays(2),
+        ]);
+    }
+
+    /**
+     * A meeting carrying a feed-provided Outlook Web Access link.
+     */
+    public function withEventUrl(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'event_url' => 'https://outlook.office.com/calendar/item/'.Str::random(20),
+        ]);
+    }
+
+    /**
+     * An all-day event covering `$days` calendar days (exclusive `ends_at`,
+     * matching IcsParser). Use `$days >= 2` for the multi-day clamp path.
+     */
+    public function spanning(int $days): static
+    {
+        return $this->state(function (array $attributes) use ($days) {
+            $date = fake()->dateTimeBetween('-30 days', '+45 days')->format('Y-m-d');
+
+            return [
+                'starts_at' => $date.' 00:00:00',
+                'ends_at' => date('Y-m-d', strtotime($date.' +'.$days.' days')).' 00:00:00',
+                'is_all_day' => true,
+                'timezone' => null,
+            ];
+        });
+    }
+
+    /**
+     * A timed meeting placed at a deterministic start time — random dates make agenda tests flaky.
+     */
+    public function at(CarbonInterface $start, int $minutes = 30): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'starts_at' => $start,
+            'ends_at' => $start->clone()->addMinutes($minutes),
+            'is_all_day' => false,
         ]);
     }
 }
