@@ -202,12 +202,12 @@ tasks:
       7. `npm run build`, then check `/calendar` in month, week and day views.
 
       ## Completion Criteria
-      - [ ] All three views refetch on the shared cadence and render newly synced meetings and changed coverage marks in place
-      - [ ] Current view, anchor date, URL state and the keyboard-focused day cell survive a refetch
-      - [ ] A failed refetch for an already-rendered range leaves the last good events on screen; no blanking, no empty state, no visible error
-      - [ ] Scroll position is preserved (week/day time grid included)
-      - [ ] No new UI affordance and no new configuration key
-      - [ ] `npm run build` succeeds
+      - [x] All three views refetch on the shared cadence and render newly synced meetings and changed coverage marks in place
+      - [x] Current view, anchor date, URL state and the keyboard-focused day cell survive a refetch
+      - [x] A failed refetch for an already-rendered range leaves the last good events on screen; no blanking, no empty state, no visible error
+      - [x] Scroll position is preserved (week/day time grid included)
+      - [x] No new UI affordance and no new configuration key
+      - [x] `npm run build` succeeds
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -217,11 +217,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-01
+    commit:
+      sha: 045adc981557cd96eb4aabd4eb9e24787c7fa3f4
+      short_sha: 045adc9
+      subject: 'feat(US-011): TASK-03 self-refresh the calendar views'
+      committed_at: '2026-09-11T01:27:12+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/045adc981557cd96eb4aabd4eb9e24787c7fa3f4'
   -
     id: TASK-04
     title: 'Cover the agenda refresh and write the manual test handoff'
@@ -304,4 +310,4 @@ tasks:
     dependencies:
       - TASK-02
       - TASK-03
-updated_at: '2026-09-11T01:26:32+02:00'
+updated_at: '2026-09-11T01:27:13+02:00'
