@@ -175,9 +175,10 @@ class TranscriptDurabilityTest extends TestCase
         $dir = realpath(sys_get_temp_dir()).'/kbms-durability-'.uniqid();
         mkdir($dir, 0755, true);
         config(['kbms.transcripts_path' => $dir]);
-        // A filename matching the ORIGINAL pattern only — the point is that
-        // resolution never re-derives from the current pattern once a row
-        // exists (readerViewData() reads the persisted path directly).
+        // A filename matching the now-RETIRED hyphenated convention — no
+        // pattern parses it anymore, yet the point is that resolution never
+        // re-derives from the current pattern once a row exists
+        // (readerViewData() reads the persisted path directly).
         $path = "{$dir}/2026-06-02-1200-weekly-sync.md";
         file_put_contents($path, '# Persisted link content');
         MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $path]);
@@ -188,6 +189,69 @@ class TranscriptDurabilityTest extends TestCase
         Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
             ->assertSee('Linked by convention')
             ->assertSee('Persisted link content');
+
+        unlink($path);
+        rmdir($dir);
+    }
+
+    public function test_an_old_convention_persisted_link_still_resolves_as_linked_under_the_default_pattern(): void
+    {
+        $synchronizer = new EventSynchronizer;
+
+        $synchronizer->synchronize(
+            [$this->occurrence()],
+            $this->runStartedAt,
+            $this->windowStart,
+            $this->windowEnd
+        );
+
+        $event = CalendarEvent::query()->where('source_uid', 'durability-uid')->first();
+
+        $dir = realpath(sys_get_temp_dir()).'/kbms-durability-'.uniqid();
+        mkdir($dir, 0755, true);
+        config(['kbms.transcripts_path' => $dir]);
+
+        // A retired hyphenated filename, stored back when that was the
+        // active convention. The *current default* pattern (Ymd/underscore)
+        // cannot parse it either — the row's stored path is what carries it.
+        $path = "{$dir}/2026-06-02-1200-weekly-sync.md";
+        file_put_contents($path, '# Persisted link content');
+        MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $path]);
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertSee('Linked by convention')
+            ->assertSee('Persisted link content');
+
+        unlink($path);
+        rmdir($dir);
+    }
+
+    public function test_a_persisted_txt_link_still_resolves_as_linked_and_renders_as_plain_text_under_md_only_config(): void
+    {
+        $synchronizer = new EventSynchronizer;
+
+        $synchronizer->synchronize(
+            [$this->occurrence()],
+            $this->runStartedAt,
+            $this->windowStart,
+            $this->windowEnd
+        );
+
+        $event = CalendarEvent::query()->where('source_uid', 'durability-uid')->first();
+
+        $dir = realpath(sys_get_temp_dir()).'/kbms-durability-'.uniqid();
+        mkdir($dir, 0755, true);
+        config(['kbms.transcripts_path' => $dir]);
+
+        // Convention resolution is md-only, but an already-linked .txt row
+        // must keep working — the stored path is read directly, never
+        // re-derived from the (now-restricted) directory index.
+        $path = "{$dir}/2026-06-02-1200-weekly-sync.txt";
+        file_put_contents($path, 'plain text body');
+        MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertSee('.txt rendered as plain text');
 
         unlink($path);
         rmdir($dir);

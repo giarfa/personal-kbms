@@ -143,6 +143,8 @@ class MeetingTranscriptSeeder extends Seeder
     /**
      * Sprint planning gets a .txt file, so the plain-text rendering mode
      * (kb-scroll--mono, escaped rather than converted) is demonstrable too.
+     * Convention resolution is md-only, so the link is persisted manually —
+     * the same durability path an operator's own manual override takes.
      */
     private function seedTextTranscript(string $directory, TranscriptPattern $pattern): void
     {
@@ -153,14 +155,22 @@ class MeetingTranscriptSeeder extends Seeder
         }
 
         $stem = $pattern->render(Carbon::parse($event->starts_at), $event->summary);
+        $path = "{$directory}/{$stem}.txt";
 
-        file_put_contents("{$directory}/{$stem}.txt", <<<'TXT'
+        file_put_contents($path, <<<'TXT'
             Sprint planning -- raw transcript export
 
             [11:00] Chiara: Capacity this sprint is lighter, two people out.
             [11:04] Marco: Let's pull the transcript linking spec to the top.
             [11:11] Chiara: Agreed. Everything else slides one sprint.
             TXT);
+
+        MeetingTranscript::factory()->forOccurrence($event)->manual()->create([
+            'path' => $path,
+            'file_size' => filesize($path),
+            'file_mtime' => now(),
+            'linked_at' => now(),
+        ]);
     }
 
     /**

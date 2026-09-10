@@ -610,4 +610,69 @@ decisions:
     source: chat
     spec: US-009
     supersedes: null
-updated_at: '2026-09-10T09:00:52+02:00'
+  -
+    id: da55147854b4096f
+    ts: '2026-09-10T12:19:43+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'transcript filename convention'
+    label: 'transcript filename convention'
+    value: "Ymd date, underscore-separated slug, pattern {date}_{time}_{slug}.md; slug ordering match uses file-slug-starts-with-event-slug prefix comparison (LIKE 'slug%' semantics), ordering-only (not a hard filter); hard cutover, old hyphenated format no longer recognized"
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: d0418cd210a42d9c
+  -
+    id: a1fe16dc96f207a4
+    ts: '2026-09-10T13:13:51+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'transcript file extensions'
+    label: 'transcript file extensions'
+    value: 'Convention resolution indexes .md only; .txt stays readable via existing links and manual override'
+    question: null
+    rationale: 'Operator pipeline emits .md + .txt for the same stem (61 of 62 recordings), so indexing both made every meeting Ambiguous'
+    source: askquestion
+    spec: US-010
+    supersedes: null
+  -
+    id: 14f91842c55d2d7f
+    ts: '2026-09-10T13:37:04+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'transcript file extensions'
+    label: 'transcript file extensions'
+    value: "Single list: config kbms.transcript_extensions = ['md'] — .md only for the resolver index AND the manual picker; already-linked .txt rows keep rendering as plain text, but no new .txt link can be created"
+    question: null
+    rationale: 'TranscriptsDirectory::files() feeds resolver, picker, and mtime lookup alike; operator chose one knob over a second convention-only config key. TranscriptReader gates rendering on the path extension, not the configured list, so persisted .txt links are unaffected.'
+    source: askquestion
+    spec: US-010
+    supersedes: a1fe16dc96f207a4
+  -
+    id: 45cfeefbe42fb4c6
+    ts: '2026-09-10T13:59:16+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-implement
+    topic: 'us-010 test isolation: kbms_transcripts_path in phpunit.xml'
+    label: 'US-010 test isolation: KBMS_TRANSCRIPTS_PATH in phpunit.xml'
+    value: 'Added <env name="KBMS_TRANSCRIPTS_PATH" value=""/> to phpunit.xml because the operator''s real .env path (~/Recordings/protocols) was leaking into feature tests (e.g. AgendaPageTest) that don''t override kbms.transcripts_path. Narrowing transcript_extensions to md-only in TASK-05 stopped md/txt double-counting from masking the leak via Ambiguous, surfacing it as a Linked-state false positive. Fixed globally in phpunit.xml rather than per-test, matching the existing DB_URL="" isolation pattern; the analogous KBMS_ICS_URL leak was left untouched per the prior reviewer''s explicit instruction.'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-010
+    supersedes: null
+  -
+    id: 98125659923b987c
+    ts: '2026-09-10T14:36:17+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-010 review verdict'
+    label: 'us-010 review verdict'
+    value: "Approved US-010 (Ymd/underscore transcript convention + md-only resolution) at the human gate: all six ACs met including the md-only rework criterion, 453/454 tests green, Pint + Larastan L5 clean. Three notes accepted as non-blocking rather than folded into further rework: no server-side .md extension gate in TranscriptPanel::link() (Lars Low, unreachable via the picker UI), the pre-existing KBMS_ICS_URL env leak keeping ConfigurationSurfaceTest red, and the stale .md/.txt picker wording in the earlier 'transcript manual override mechanism' entry. Merge the feature branch into develop locally, no push (git_mode GITFLOW)."
+    question: null
+    rationale: 'Real pipeline directory now resolves cleanly: 63 of 63 .md files match Ymd_Hi_slug and the 64 .txt doubles that made every meeting Ambiguous are no longer indexed.'
+    source: askquestion
+    spec: US-010
+    supersedes: null
+updated_at: '2026-09-10T14:36:18+02:00'

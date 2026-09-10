@@ -66,7 +66,7 @@ class TranscriptResolverTest extends TestCase
 
     public function test_an_exact_minute_single_file_links_by_convention(): void
     {
-        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $this->file('20260907_0930_q4_roadmap_review');
         $event = $this->eventAt('2026-09-07 09:30:00');
 
         $candidates = $this->resolver()->candidatesFor($event);
@@ -77,7 +77,7 @@ class TranscriptResolverTest extends TestCase
 
     public function test_a_file_two_minutes_early_is_inside_a_ten_minute_tolerance(): void
     {
-        $this->file('2026-09-07-0928-q4-roadmap-review');
+        $this->file('20260907_0928_q4_roadmap_review');
         $event = $this->eventAt('2026-09-07 09:30:00');
 
         $candidates = $this->resolver()->candidatesFor($event);
@@ -88,7 +88,7 @@ class TranscriptResolverTest extends TestCase
 
     public function test_a_file_eleven_minutes_late_is_outside_a_ten_minute_tolerance(): void
     {
-        $this->file('2026-09-07-0941-q4-roadmap-review');
+        $this->file('20260907_0941_q4_roadmap_review');
         $event = $this->eventAt('2026-09-07 09:30:00');
 
         $this->assertCount(0, $this->resolver()->candidatesFor($event));
@@ -97,38 +97,104 @@ class TranscriptResolverTest extends TestCase
     public function test_three_in_window_files_return_three_ordered_candidates_and_link_nothing(): void
     {
         // Exact datetime AND slug match — still must not short-circuit to a link.
-        $this->file('2026-09-07-0930-q4-roadmap-review');
-        $this->file('2026-09-07-0928-roadmap');
-        $this->file('2026-09-07-0933-untitled-call', 'txt');
+        $this->file('20260907_0930_q4_roadmap_review');
+        $this->file('20260907_0928_roadmap');
+        $this->file('20260907_0933_untitled_call');
 
         $event = $this->eventAt('2026-09-07 09:30:00');
 
         $candidates = $this->resolver()->candidatesFor($event);
 
         $this->assertCount(3, $candidates);
-        $this->assertSame('2026-09-07-0930-q4-roadmap-review.md', $candidates[0]->filename);
+        $this->assertSame('20260907_0930_q4_roadmap_review.md', $candidates[0]->filename);
         $this->assertTrue($candidates[0]->slugMatches);
-        $this->assertSame('2026-09-07-0928-roadmap.md', $candidates[1]->filename);
-        $this->assertSame('2026-09-07-0933-untitled-call.txt', $candidates[2]->filename);
+        $this->assertSame('20260907_0928_roadmap.md', $candidates[1]->filename);
+        $this->assertSame('20260907_0933_untitled_call.md', $candidates[2]->filename);
     }
 
     public function test_ordering_is_drift_then_slug_match_then_name(): void
     {
-        $this->file('2026-09-07-0932-not-a-match');
-        $this->file('2026-09-07-0932-q4-roadmap-review');
+        $this->file('20260907_0932_not_a_match');
+        $this->file('20260907_0932_q4_roadmap_review');
         $event = $this->eventAt('2026-09-07 09:30:00');
 
         $candidates = $this->resolver()->candidatesFor($event);
 
-        $this->assertSame('2026-09-07-0932-q4-roadmap-review.md', $candidates[0]->filename);
-        $this->assertSame('2026-09-07-0932-not-a-match.md', $candidates[1]->filename);
+        $this->assertSame('20260907_0932_q4_roadmap_review.md', $candidates[0]->filename);
+        $this->assertSame('20260907_0932_not_a_match.md', $candidates[1]->filename);
+    }
+
+    public function test_a_slug_superset_prefix_match_sorts_ahead_of_a_non_matching_file(): void
+    {
+        $this->file('20260907_0930_standup_daily_team');
+        $this->file('20260907_0930_weekly_ops');
+        $event = $this->eventAt('2026-09-07 09:30:00', 'Standup');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertSame('20260907_0930_standup_daily_team.md', $candidates[0]->filename);
+        $this->assertTrue($candidates[0]->slugMatches);
+        $this->assertSame('20260907_0930_weekly_ops.md', $candidates[1]->filename);
+        $this->assertFalse($candidates[1]->slugMatches);
+    }
+
+    public function test_prefix_matching_orders_but_never_filters_and_the_state_stays_ambiguous(): void
+    {
+        $this->file('20260907_0930_standup_daily_team');
+        $this->file('20260907_0930_weekly_ops');
+        $event = $this->eventAt('2026-09-07 09:30:00', 'Standup');
+
+        $this->assertCount(2, $this->resolver()->candidatesFor($event));
+        $this->assertSame(TranscriptState::Ambiguous, $this->resolver()->stateFor($event));
+    }
+
+    public function test_a_blank_event_summary_flags_no_candidate_as_a_slug_match(): void
+    {
+        $this->file('20260907_0930_standup');
+        $this->file('20260907_0930_weekly_ops');
+        $event = $this->eventAt('2026-09-07 09:30:00', '');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertFalse($candidates[0]->slugMatches);
+        $this->assertFalse($candidates[1]->slugMatches);
+    }
+
+    public function test_a_retired_hyphenated_file_inside_the_window_produces_no_candidates(): void
+    {
+        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $this->assertCount(0, $this->resolver()->candidatesFor($event));
+    }
+
+    public function test_a_txt_sibling_of_a_linked_md_file_is_not_indexed_and_stays_linked(): void
+    {
+        $this->file('20260907_0930_q4_roadmap_review');
+        $this->file('20260907_0930_q4_roadmap_review', 'txt');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertCount(1, $candidates);
+        $this->assertSame('20260907_0930_q4_roadmap_review.md', $candidates[0]->filename);
+        $this->assertSame(TranscriptState::Linked, $this->resolver()->stateFor($event));
+    }
+
+    public function test_a_lone_txt_file_inside_the_window_produces_no_candidates(): void
+    {
+        $this->file('20260907_0930_q4_roadmap_review', 'txt');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $this->assertCount(0, $this->resolver()->candidatesFor($event));
+        $this->assertSame(TranscriptState::Missing, $this->resolver()->stateFor($event));
     }
 
     public function test_an_all_day_occurrence_matches_every_file_on_its_date(): void
     {
-        $this->file('2026-09-07-0800-morning-file');
-        $this->file('2026-09-07-1800-evening-file');
-        $this->file('2026-09-08-0800-different-day');
+        $this->file('20260907_0800_morning_file');
+        $this->file('20260907_1800_evening_file');
+        $this->file('20260908_0800_different_day');
 
         $event = $this->eventAt('2026-09-07 00:00:00', allDay: true);
 
@@ -146,18 +212,18 @@ class TranscriptResolverTest extends TestCase
         $missing = $this->eventAt('2026-09-07 09:30:00', 'Nothing here');
         $this->assertSame(TranscriptState::Missing, $this->resolver()->stateFor($missing));
 
-        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $this->file('20260907_0930_q4_roadmap_review');
         $linked = $this->eventAt('2026-09-07 09:30:00');
         $this->assertSame(TranscriptState::Linked, $this->resolver()->stateFor($linked));
 
-        $this->file('2026-09-07-0928-roadmap');
+        $this->file('20260907_0928_roadmap');
         $ambiguous = $this->eventAt('2026-09-07 09:30:00');
         $this->assertSame(TranscriptState::Ambiguous, $this->resolver()->stateFor($ambiguous));
     }
 
     public function test_the_resolver_performs_no_database_writes(): void
     {
-        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $this->file('20260907_0930_q4_roadmap_review');
         $event = $this->eventAt('2026-09-07 09:30:00');
 
         DB::enableQueryLog();
@@ -175,7 +241,7 @@ class TranscriptResolverTest extends TestCase
 
     public function test_a_single_compiled_pattern_and_directory_index_resolves_n_events_consistently(): void
     {
-        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $this->file('20260907_0930_q4_roadmap_review');
 
         // One TranscriptPattern and one TranscriptsDirectory constructed
         // outside the loop — candidatesFor() must never recompile the
@@ -191,7 +257,7 @@ class TranscriptResolverTest extends TestCase
             $candidates = $resolver->candidatesFor($event);
 
             $this->assertCount(1, $candidates);
-            $this->assertSame('2026-09-07-0930-q4-roadmap-review.md', $candidates[0]->filename);
+            $this->assertSame('20260907_0930_q4_roadmap_review.md', $candidates[0]->filename);
         }
     }
 }

@@ -33,8 +33,8 @@ return [
 
     'transcripts_path' => env('KBMS_TRANSCRIPTS_PATH') ?: null,
 
-    // Date + time prefix; the resolver keys off the meeting start datetime (decision journal: "transcript filename convention").
-    'transcript_pattern' => env('KBMS_TRANSCRIPT_PATTERN', '{date}-{time}-{slug}'),
+    // Ymd date + Hi time + underscore slug; the resolver keys off the meeting start datetime (decision journal: "transcript filename convention", superseded by da55147854b4096f).
+    'transcript_pattern' => env('KBMS_TRANSCRIPT_PATTERN', '{date}_{time}_{slug}'),
 
     // Minutes of start-time drift the resolver tolerates either side of the occurrence's start (US-007).
     'transcript_tolerance_minutes' => (int) env('KBMS_TRANSCRIPT_TOLERANCE_MINUTES', 10),
@@ -42,8 +42,9 @@ return [
     // Bytes read from a transcript before truncating the preview (US-007). Default: 2 MiB.
     'transcript_preview_bytes' => (int) env('KBMS_TRANSCRIPT_PREVIEW_BYTES', 2097152),
 
-    // Fixed extension allow-list for the transcripts directory index — one place, not an env var (US-007).
-    'transcript_extensions' => ['md', 'txt'],
+    // md-only: the operator's pipeline emits a .md + .txt pair per recording, so indexing
+    // both made every meeting Ambiguous (decision journal 14f91842c55d2d7f).
+    'transcript_extensions' => ['md'],
 
     'claude_launcher' => env('KBMS_CLAUDE_LAUNCHER') ?: null,
 

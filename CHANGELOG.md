@@ -30,6 +30,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - `kbms:doctor`'s ICS feed check now parses the body with `sabre/vobject` instead of string-matching the envelope. A feed that parses cleanly with zero events now **passes** — it previously failed, since string-matching had no way to distinguish an empty-but-valid calendar from a wrong subscription URL.
+- Transcript filename convention is now `{date}_{time}_{slug}`, with `Ymd` dates and underscore-separated slugs, matching the operator's transcription pipeline output. **Breaking for unlinked files:** the previous hyphenated `Y-m-d` convention is no longer recognized — such filenames are simply not indexed. Already-linked transcripts are unaffected, since the stored path is read directly. Same-drift candidates are now ordered by slug **prefix** rather than exact equality. Convention resolution and the manual picker now index `.md` files only — a pipeline emitting a `.md` + `.txt` pair per recording was otherwise doubling every candidate and turning single-transcript meetings ambiguous. **Breaking for `.txt`:** a `.txt` sibling is no longer auto-linked or offered by the picker; transcripts already linked to a `.txt` path are unaffected and still render as escaped plain text.
+
+### Fixed
+
+- `TranscriptPattern::parse()` no longer silently rolls an impossible calendar date (e.g. `20261345`) forward into the following month — such a name now parses to `null`, the same as any other name the convention does not claim.
 
 ### Removed
 

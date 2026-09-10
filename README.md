@@ -37,7 +37,7 @@ Every machine-specific assumption is a `.env` value, never a code constant. All 
 | `KBMS_ICS_WINDOW_PAST_DAYS` | `90` | No | US-003, US-005 (agenda window) |
 | `KBMS_ICS_WINDOW_FUTURE_DAYS` | `180` | No | US-003, US-005 |
 | `KBMS_TRANSCRIPTS_PATH` | — | Yes | US-007 (transcript resolution) |
-| `KBMS_TRANSCRIPT_PATTERN` | `{date}-{time}-{slug}` | No | US-007 |
+| `KBMS_TRANSCRIPT_PATTERN` | `{date}_{time}_{slug}` | No | US-007, US-010 |
 | `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` | `10` | No | US-007 (start-time drift tolerance) |
 | `KBMS_TRANSCRIPT_PREVIEW_BYTES` | `2097152` | No | US-007 (preview truncation cap, 2 MiB) |
 | `KBMS_CLAUDE_LAUNCHER` | — | Yes | US-007, US-009 (launch bridge) |
@@ -102,15 +102,19 @@ Clearing the editor is an **edit**, not a deletion: the blank body is saved and 
 
 ## Transcript linking
 
-Every meeting resolves to **at most one** transcript file under `KBMS_TRANSCRIPTS_PATH`, driven by `KBMS_TRANSCRIPT_PATTERN` (default `{date}-{time}-{slug}`). Placeholders: `{date}` renders `Y-m-d`, `{time}` renders **`Hi`** (four digits, no colon — a filename cannot portably carry `:`, and the convention's own example is `2026-09-07-1430-standup.md`), `{slug}` is the meeting title slugified. **The pattern must end with `{slug}`** — the trailing portion varies freely, and it is the date-and-time prefix that carries identity.
+Every meeting resolves to **at most one** transcript file under `KBMS_TRANSCRIPTS_PATH`, driven by `KBMS_TRANSCRIPT_PATTERN` (default `{date}_{time}_{slug}`). Placeholders: `{date}` renders **`Ymd`** (e.g. `20260907`), `{time}` renders **`Hi`** (four digits, no colon — a filename cannot portably carry `:`), `{slug}` is the meeting title through `Str::slug($title, '_')` — lowercase, underscore-separated, special characters such as `|` and `#` stripped. Worked example: `20260907_1430_standup.md`. **The pattern must end with `{slug}`** — the trailing portion varies freely, and it is the date-and-time prefix that carries identity.
 
 **This is a deliberate divergence from `KBMS_OUTLOOK_URL_TEMPLATE`**, where `{time}` is `H:i` — the two templates address different media (a filename vs. a URL) and must not be "simplified" to match each other.
 
-Matching tolerates start-time drift within `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`), because a recording rarely starts on the exact calendar minute. When the tolerance window yields exactly one candidate, it is linked automatically the first time the meeting page is opened (never from the agenda, which never writes). When it yields **two or more**, the resolver surfaces every candidate with its drift and size and **does not guess** — the operator chooses. A **manual override** (an in-app file picker, no free-text path field) always wins over the convention, including a pattern change made afterwards; clearing a link writes an explicit tombstone rather than deleting the row, so the convention cannot silently re-link a file the operator just rejected.
+Matching tolerates start-time drift within `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`), because a recording rarely starts on the exact calendar minute. When the tolerance window yields exactly one candidate, it is linked automatically the first time the meeting page is opened (never from the agenda, which never writes). When it yields **two or more**, the resolver surfaces every candidate with its drift and size and **does not guess** — the operator chooses. Among same-drift candidates, one whose file slug **starts with** the event's summary slug sorts ahead of one that does not — ordering only, it never removes a candidate from the list. A **manual override** (an in-app file picker, listing `.md` files only, no free-text path field) always wins over the convention, including a pattern change made afterwards; clearing a link writes an explicit tombstone rather than deleting the row, so the convention cannot silently re-link a file the operator just rejected.
+
+The previous hyphenated convention (`{date}-{time}-{slug}`, `Y-m-d` dates) was retired in US-010 as a hard cutover: filenames in that shape are simply not indexed going forward. Transcripts already linked (an existing database row with a stored path) are unaffected, since the stored path is read directly rather than re-derived from the current pattern.
 
 The preview reads at most `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`, 2 MiB) — a larger file shows its first bounded chunk with a truncation notice rather than loading the whole file. `.md` renders through the same hardened Markdown converter as notes; `.txt` is shown as escaped plain text. **Resolution is single-level and non-recursive** — a nested pipeline layout is a pattern change, not a code change. The application only ever **reads** `KBMS_TRANSCRIPTS_PATH`; it never writes, moves, or deletes a transcript file.
 
-For local development, point `KBMS_TRANSCRIPTS_PATH` at `storage/app/transcripts` (already gitignored) — `MeetingTranscriptSeeder` writes real sample files there so every panel state (linked, ambiguous, `.txt`, manual, broken) is visible after a plain `php artisan migrate:fresh --seed`.
+**Convention resolution and the manual picker consider `.md` files only** (the `transcript_extensions` config, not an env var) — a pipeline that emits a `.md` + `.txt` pair per recording would otherwise index both and turn every single-transcript meeting into an ambiguous one. A `.txt` file is reachable only through a link made before this restriction, and still renders as escaped plain text.
+
+For local development, point `KBMS_TRANSCRIPTS_PATH` at `storage/app/transcripts` (already gitignored) — `MeetingTranscriptSeeder` writes real sample files there so every panel state (linked, ambiguous, `.txt` via a manual link, manual, broken) is visible after a plain `php artisan migrate:fresh --seed`.
 
 ## The launcher script contract
 

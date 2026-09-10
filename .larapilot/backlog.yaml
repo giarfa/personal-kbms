@@ -545,3 +545,132 @@ specs:
       subject: 'chore(US-009): commit the plan, move spec to REVIEW, and log the review gate'
       committed_at: '2026-09-10T08:50:37+02:00'
       url: 'https://github.com/giarfa/personal-kbms/commit/3a0ff9227ffc5f5b11436854a34b02a9445a4329'
+  -
+    code: US-010
+    title: 'Transcript filename convention: Ymd date, underscore slug, prefix match'
+    epic:
+      code: EP-003
+      title: 'Meeting Workspace'
+    priority: HIGH
+    points: 2
+    status: DONE
+    body: |-
+      #### US-010: Transcript filename convention: Ymd date, underscore slug, prefix match
+
+      **Epic:** EP-003 | **Priority:** HIGH | **Points:** 2 | **Status:** TODO
+      **Blocked by:** -
+      **Type:** Evolutiva
+      **Traces to:** FR-006 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want the transcript resolver to match the naming convention my transcription pipeline actually produces (`Ymd` date, underscore-separated slug, prefix-based slug ordering),
+      so that meetings auto-link to their transcript instead of silently falling through to "Missing" or "Ambiguous".
+
+      **Demonstrates**
+      After implementing this spec, a transcript file named `20260907_1430_standup.md` in the transcripts directory auto-links to a meeting starting 2026-09-07 14:30 on the meeting-detail page, and a file whose slug is a superset of the event's slug (e.g. event "Standup" / slug `standup`, file slug `standup_daily_team`) sorts ahead of an equally-timed candidate that shares no slug prefix.
+
+      **Acceptance Criteria**
+      - [x] Default `KBMS_TRANSCRIPT_PATTERN` is `{date}_{time}_{slug}.md`; `{date}` renders/parses as `Ymd` (e.g. `20260907`), `{time}` stays `Hi`, `{slug}` is generated via `Str::slug($title, '_')` (lowercase, underscore-separated, special characters such as `|` and `#` stripped) — `20260907_1430_standup.md` resolves to a 2026-09-07 14:30 meeting
+      - [x] Slug ordering uses prefix semantics: among candidates sharing the same drift, a candidate whose file-slug starts with the event's summary slug (`file_slug LIKE 'event_slug%'`) sorts ahead of one that doesn't, replacing today's exact-equality comparison; this is ordering-only — every file inside the date/time tolerance window still counts as a candidate regardless of slug
+      - [x] The previous hyphenated convention (`{date}-{time}-{slug}`, `Y-m-d` dates) is a hard cutover and no longer recognized — old-format filenames parse to `null` and are excluded from the index, exactly like any other non-matching filename
+      - [x] A custom `KBMS_TRANSCRIPT_PATTERN` still validates under the existing rule (contains `{date}`, ends with `{slug}`) and its render/parse round-trip is unaffected by this change
+      - [x] Already-linked transcripts (an existing `meeting_transcripts` row with a stored `path`) are unaffected — this change only alters convention resolution for occurrences with no stored link
+
+
+      ## Rework Feedback
+
+      ## Verdict: Request changes — restrict convention resolution to `.md` only
+
+      The delivered increment meets all five written ACs, is Larastan/Pint clean, and the
+      transcript suites are green (74/74). It is sent back for **one added requirement**,
+      not for a defect in what was built. Keep every commit already on
+      `feature/US-010-transcript-filename-convention` — this is additive rework.
+
+      ### Why (evidence from the operator's real pipeline directory)
+
+      `/Users/excellence_innovation/Recordings/protocols` holds **123 files across 62 distinct
+      stems, 61 of which exist as both `.md` and `.txt`**. With `config/kbms.php:46`
+      `transcript_extensions => ['md', 'txt']`, each recording indexes twice under the same
+      `Y-m-d H:i` key, yielding 2 candidates and therefore `TranscriptState::Ambiguous` for
+      essentially every meeting. The convention cutover landed correctly, but the user story's
+      stated outcome — "auto-link instead of silently falling through to Missing or Ambiguous"
+      — is still not reached on the only directory that matters.
+
+      **Operator decision (recorded in the decision journal): transcripts resolve from `.md` only.**
+
+      ### Required changes
+
+      - `config/kbms.php:46` — `'transcript_extensions' => ['md']`. Refresh the adjacent
+        docblock shape at `config/kbms.php:13` if it enumerates the values.
+      - `app/Transcripts/TranscriptsDirectory.php:83` — no code change expected; the filter is
+        already config-driven. Confirm, do not refactor.
+      - **Do not remove the `.txt` read path.** `TranscriptContent`/`TranscriptReader` and the
+        `.txt rendered as plain text` branch at
+        `resources/views/livewire/transcript-panel.blade.php:128` must stay: an existing
+        `meeting_transcripts` row whose stored `path` is a `.txt`, and a manual file-picker
+        override, must both keep rendering. Same durability contract as US-010 AC5.
+      - `tests/Feature/ConfigurationSurfaceTest.php:19` — assertion becomes `['md']`.
+      - `tests/Unit/Transcripts/TranscriptResolverTest.php:102,112` — the `.txt` candidate
+        fixture no longer resolves through the convention; rework the ordering assertion so it
+        still covers three candidates.
+      - `tests/Feature/TranscriptPanelTest.php:304-311`
+        (`test_a_txt_transcript_renders_as_plain_text_not_markdown`) currently seeds a `.txt` and
+        expects convention resolution. It must now reach that state through a **persisted link /
+        manual override**, so plain-text rendering stays covered.
+      - `database/seeders/MeetingTranscriptSeeder.php:144-157` — the sprint-planning `.txt`
+        fixture exists to make the plain-text panel state reachable. Keep the state reachable by
+        seeding it as a linked/overridden row rather than relying on convention resolution.
+      - New test: two files sharing a stem (`20260907_0930_standup.md` + `.txt`) inside the
+        tolerance window now produce **exactly one** candidate and state `Linked`, not `Ambiguous`.
+      - `README.md` "Transcript linking" — the sentence `.txt is shown as escaped plain text`
+        must say that `.txt` is no longer auto-resolved by the convention and is reachable only
+        via an existing link or a manual override.
+      - `CHANGELOG.md` Unreleased → `### Changed`: convention resolution is now `.md`-only;
+        breaking for operators who relied on `.txt` auto-linking; existing links unaffected.
+
+      ### Also fix while here (found during review, non-blocking on its own)
+
+      - `.env.example:79` — the comment still reads `{date} (Y-m-d)` directly above
+        `KBMS_TRANSCRIPT_PATTERN={date}_{time}_{slug}`. TASK-04 updated the value and the README
+        prose but missed this line. Must read `Ymd`.
+      - Working tree currently carries uncommitted `.larapilot/backlog.yaml`,
+        `specs/US-010.yaml`, `plans/US-010-plan.yaml`, `usage/ledger.jsonl` and a stray
+        `plans/US-010-plan.yaml.lock` — clean these up in the rework bootstrap commit.
+
+      ### Explicitly NOT in scope for the rework
+
+      - `app/Transcripts/TranscriptPattern.php` and `app/Transcripts/TranscriptResolver.php`
+        behavior is **accepted as delivered** — the `Ymd` cutover, the `Str::slug($t, '_')`
+        rendering, the rolled-over-date guard, and the prefix-ordering hint all stand. Do not
+        re-open them.
+      - The prefix hint misses titles whose separators collapse differently from the pipeline's
+        (event `M1 | Standup` → `m1_standup` vs. file slug `m1__standup__...`). Ordering-only,
+        harmless, and out of scope — note it, do not chase it.
+      - `ConfigurationSurfaceTest::test_every_kbms_config_key_resolves_with_its_documented_default`
+        fails locally on `kbms.ics_url` because the operator's real `.env` leaks
+        `KBMS_ICS_URL` into the test environment. Identical on `develop`. Pre-existing and
+        unrelated — do not "fix" it inside US-010.
+
+      ### Acceptance criterion to add to the spec
+
+      - [x] Convention-based transcript resolution considers `.md` files only; a `.txt` sibling
+            sharing the same stem is not indexed and therefore never turns a single-transcript
+            meeting into `Ambiguous`. Transcripts already linked to a `.txt` path, and `.txt`
+            files chosen through the manual override, still open and render as escaped plain text.
+    status_history:
+      - { status: PLANNED, at: '2026-09-10T12:27:19+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-10T12:29:41+02:00' }
+      - { status: REVIEW, at: '2026-09-10T12:37:02+02:00' }
+      - { status: TODO, at: '2026-09-10T13:13:42+02:00' }
+      - { status: PLANNED, at: '2026-09-10T13:39:27+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-10T13:49:54+02:00' }
+      - { status: REVIEW, at: '2026-09-10T13:59:50+02:00' }
+      - { status: DONE, at: '2026-09-10T14:26:29+02:00' }
+    rework: false
+    merge_commit:
+      sha: 0ce9f6cabcd48252e424c6163abf61c5ac3f4d53
+      short_sha: 0ce9f6c
+      subject: 'docs(US-010): record Robert + Lars rework review notes and decision log entry'
+      committed_at: '2026-09-10T13:59:46+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0ce9f6cabcd48252e424c6163abf61c5ac3f4d53'

@@ -14,6 +14,13 @@ use Illuminate\Support\Str;
  * a tie. Performs no database writes; persistence is the caller's job, and
  * only from the meeting-detail page, never the agenda.
  *
+ * The slug hint is a PREFIX match (`file_slug LIKE 'event_slug%'`), not
+ * equality — a file slug that is a superset of the event's summary slug
+ * (e.g. event slug `standup`, file slug `standup_daily_team`) still counts
+ * as a match. A blank event summary slugifies to `''`, which would make
+ * `str_starts_with()` true for every candidate, so it is guarded to `false`
+ * instead.
+ *
  * Every indexed filename is parsed once through TranscriptPattern into a
  * map keyed `Y-m-d H:i`, so resolving N occurrences costs N times a handful
  * of map lookups rather than N x window x files regex comparisons.
@@ -36,7 +43,7 @@ final class TranscriptResolver
     public function candidatesFor(CalendarEvent $event): array
     {
         $start = CarbonImmutable::instance($event->starts_at);
-        $summarySlug = Str::slug((string) $event->summary);
+        $summarySlug = Str::slug((string) $event->summary, '_');
 
         $entries = $event->is_all_day
             ? $this->entriesForDate($start)
@@ -49,7 +56,7 @@ final class TranscriptResolver
                 driftMinutes: $entry['drift'],
                 bytes: $entry['bytes'],
                 mtime: $entry['mtime'],
-                slugMatches: $entry['slug'] === $summarySlug,
+                slugMatches: $summarySlug !== '' && str_starts_with($entry['slug'], $summarySlug),
             ),
             $entries
         );

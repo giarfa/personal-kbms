@@ -13,11 +13,11 @@ class TranscriptPatternTest extends TestCase
     {
         config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
 
-        $parsed = TranscriptPattern::compile()->parse('2026-09-07-0930-q4-roadmap-review');
+        $parsed = TranscriptPattern::compile()->parse('20260907_0930_q4_roadmap_review');
 
         $this->assertNotNull($parsed);
         $this->assertSame('2026-09-07 09:30', $parsed->datetime->format('Y-m-d H:i'));
-        $this->assertSame('q4-roadmap-review', $parsed->slug);
+        $this->assertSame('q4_roadmap_review', $parsed->slug);
     }
 
     public function test_time_parses_as_four_digits_and_rejects_a_colon(): void
@@ -25,19 +25,30 @@ class TranscriptPatternTest extends TestCase
         config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
         $pattern = TranscriptPattern::compile();
 
-        $this->assertNotNull($pattern->parse('2026-09-07-0930-standup'));
-        $this->assertNull($pattern->parse('2026-09-07-09:30-standup'));
+        $this->assertNotNull($pattern->parse('20260907_0930_standup'));
+        $this->assertNull($pattern->parse('20260907_09:30_standup'));
     }
 
     public function test_a_custom_pattern_with_different_literals_compiles_and_parses(): void
     {
         config(['kbms.transcript_pattern' => 'rec_{date}_{time}__{slug}']);
 
-        $parsed = TranscriptPattern::compile()->parse('rec_2026-09-07_1430__standup');
+        $parsed = TranscriptPattern::compile()->parse('rec_20260907_1430__standup');
 
         $this->assertNotNull($parsed);
         $this->assertSame('2026-09-07 14:30', $parsed->datetime->format('Y-m-d H:i'));
         $this->assertSame('standup', $parsed->slug);
+    }
+
+    public function test_a_custom_pattern_render_and_parse_round_trip(): void
+    {
+        config(['kbms.transcript_pattern' => 'rec_{date}_{time}__{slug}']);
+        $pattern = TranscriptPattern::compile();
+
+        $rendered = $pattern->render(CarbonImmutable::parse('2026-09-07 14:30'), 'Standup');
+
+        $this->assertSame('rec_20260907_1430__standup', $rendered);
+        $this->assertNotNull($pattern->parse($rendered));
     }
 
     public function test_a_non_matching_filename_yields_null_and_no_error(): void
@@ -47,15 +58,40 @@ class TranscriptPatternTest extends TestCase
         $this->assertNull(TranscriptPattern::compile()->parse('random-recording-name'));
     }
 
+    public function test_the_retired_hyphenated_convention_no_longer_parses(): void
+    {
+        config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
+
+        $this->assertNull(TranscriptPattern::compile()->parse('2026-09-07-1430-standup'));
+    }
+
+    public function test_a_rolled_over_date_does_not_silently_normalize(): void
+    {
+        config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
+
+        $this->assertNull(TranscriptPattern::compile()->parse('20261345_1430_x'));
+    }
+
+    public function test_special_characters_are_stripped_by_the_underscore_slugifier(): void
+    {
+        config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
+        $pattern = TranscriptPattern::compile();
+
+        $rendered = $pattern->render(CarbonImmutable::parse('2026-09-07 14:30'), 'Standup | Team #1');
+
+        $this->assertSame('20260907_1430_standup_team_1', $rendered);
+        $this->assertNotNull($pattern->parse($rendered));
+    }
+
     public function test_regex_metacharacters_in_literal_portions_are_escaped(): void
     {
         config(['kbms.transcript_pattern' => '{date}.{time}.{slug}']);
         $pattern = TranscriptPattern::compile();
 
-        // A literal "." must not act as "any character" — "2026-09-07X0930Xstandup"
+        // A literal "." must not act as "any character" — "20260907X0930Xstandup"
         // must not match even though it has the right shape.
-        $this->assertNull($pattern->parse('2026-09-07X0930Xstandup'));
-        $this->assertNotNull($pattern->parse('2026-09-07.0930.standup'));
+        $this->assertNull($pattern->parse('20260907X0930Xstandup'));
+        $this->assertNotNull($pattern->parse('20260907.0930.standup'));
     }
 
     public function test_a_pattern_missing_slug_falls_back_to_the_default_and_logs_a_warning(): void
@@ -64,7 +100,7 @@ class TranscriptPatternTest extends TestCase
 
         config(['kbms.transcript_pattern' => '{date}-{time}']);
 
-        $parsed = TranscriptPattern::compile()->parse('2026-09-07-0930-standup');
+        $parsed = TranscriptPattern::compile()->parse('20260907_0930_standup');
 
         $this->assertNotNull($parsed);
         $this->assertSame('standup', $parsed->slug);
@@ -76,7 +112,7 @@ class TranscriptPatternTest extends TestCase
 
         config(['kbms.transcript_pattern' => '{slug}-{date}-{time}']);
 
-        $parsed = TranscriptPattern::compile()->parse('2026-09-07-0930-standup');
+        $parsed = TranscriptPattern::compile()->parse('20260907_0930_standup');
 
         $this->assertNotNull($parsed);
         $this->assertSame('2026-09-07 09:30', $parsed->datetime->format('Y-m-d H:i'));
@@ -89,7 +125,7 @@ class TranscriptPatternTest extends TestCase
 
         $rendered = $pattern->render(CarbonImmutable::parse('2026-09-07 14:30'), 'Q4 Roadmap Review');
 
-        $this->assertSame('2026-09-07-1430-q4-roadmap-review', $rendered);
+        $this->assertSame('20260907_1430_q4_roadmap_review', $rendered);
         $this->assertNotNull($pattern->parse($rendered));
     }
 }
