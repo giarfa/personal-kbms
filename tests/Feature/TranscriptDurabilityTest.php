@@ -193,4 +193,36 @@ class TranscriptDurabilityTest extends TestCase
         unlink($path);
         rmdir($dir);
     }
+
+    public function test_an_old_convention_persisted_link_still_resolves_as_linked_under_the_default_pattern(): void
+    {
+        $synchronizer = new EventSynchronizer;
+
+        $synchronizer->synchronize(
+            [$this->occurrence()],
+            $this->runStartedAt,
+            $this->windowStart,
+            $this->windowEnd
+        );
+
+        $event = CalendarEvent::query()->where('source_uid', 'durability-uid')->first();
+
+        $dir = realpath(sys_get_temp_dir()).'/kbms-durability-'.uniqid();
+        mkdir($dir, 0755, true);
+        config(['kbms.transcripts_path' => $dir]);
+
+        // A retired hyphenated filename, stored back when that was the
+        // active convention. The *current default* pattern (Ymd/underscore)
+        // cannot parse it either — the row's stored path is what carries it.
+        $path = "{$dir}/2026-06-02-1200-weekly-sync.md";
+        file_put_contents($path, '# Persisted link content');
+        MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $path]);
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertSee('Linked by convention')
+            ->assertSee('Persisted link content');
+
+        unlink($path);
+        rmdir($dir);
+    }
 }

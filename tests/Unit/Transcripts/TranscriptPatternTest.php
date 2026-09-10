@@ -40,11 +40,47 @@ class TranscriptPatternTest extends TestCase
         $this->assertSame('standup', $parsed->slug);
     }
 
+    public function test_a_custom_pattern_render_and_parse_round_trip(): void
+    {
+        config(['kbms.transcript_pattern' => 'rec_{date}_{time}__{slug}']);
+        $pattern = TranscriptPattern::compile();
+
+        $rendered = $pattern->render(CarbonImmutable::parse('2026-09-07 14:30'), 'Standup');
+
+        $this->assertSame('rec_20260907_1430__standup', $rendered);
+        $this->assertNotNull($pattern->parse($rendered));
+    }
+
     public function test_a_non_matching_filename_yields_null_and_no_error(): void
     {
         config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
 
         $this->assertNull(TranscriptPattern::compile()->parse('random-recording-name'));
+    }
+
+    public function test_the_retired_hyphenated_convention_no_longer_parses(): void
+    {
+        config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
+
+        $this->assertNull(TranscriptPattern::compile()->parse('2026-09-07-1430-standup'));
+    }
+
+    public function test_a_rolled_over_date_does_not_silently_normalize(): void
+    {
+        config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
+
+        $this->assertNull(TranscriptPattern::compile()->parse('20261345_1430_x'));
+    }
+
+    public function test_special_characters_are_stripped_by_the_underscore_slugifier(): void
+    {
+        config(['kbms.transcript_pattern' => TranscriptPattern::DEFAULT_PATTERN]);
+        $pattern = TranscriptPattern::compile();
+
+        $rendered = $pattern->render(CarbonImmutable::parse('2026-09-07 14:30'), 'Standup | Team #1');
+
+        $this->assertSame('20260907_1430_standup_team_1', $rendered);
+        $this->assertNotNull($pattern->parse($rendered));
     }
 
     public function test_regex_metacharacters_in_literal_portions_are_escaped(): void

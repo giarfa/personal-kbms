@@ -124,6 +124,50 @@ class TranscriptResolverTest extends TestCase
         $this->assertSame('20260907_0932_not_a_match.md', $candidates[1]->filename);
     }
 
+    public function test_a_slug_superset_prefix_match_sorts_ahead_of_a_non_matching_file(): void
+    {
+        $this->file('20260907_0930_standup_daily_team');
+        $this->file('20260907_0930_weekly_ops');
+        $event = $this->eventAt('2026-09-07 09:30:00', 'Standup');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertSame('20260907_0930_standup_daily_team.md', $candidates[0]->filename);
+        $this->assertTrue($candidates[0]->slugMatches);
+        $this->assertSame('20260907_0930_weekly_ops.md', $candidates[1]->filename);
+        $this->assertFalse($candidates[1]->slugMatches);
+    }
+
+    public function test_prefix_matching_orders_but_never_filters_and_the_state_stays_ambiguous(): void
+    {
+        $this->file('20260907_0930_standup_daily_team');
+        $this->file('20260907_0930_weekly_ops');
+        $event = $this->eventAt('2026-09-07 09:30:00', 'Standup');
+
+        $this->assertCount(2, $this->resolver()->candidatesFor($event));
+        $this->assertSame(TranscriptState::Ambiguous, $this->resolver()->stateFor($event));
+    }
+
+    public function test_a_blank_event_summary_flags_no_candidate_as_a_slug_match(): void
+    {
+        $this->file('20260907_0930_standup');
+        $this->file('20260907_0930_weekly_ops');
+        $event = $this->eventAt('2026-09-07 09:30:00', '');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertFalse($candidates[0]->slugMatches);
+        $this->assertFalse($candidates[1]->slugMatches);
+    }
+
+    public function test_a_retired_hyphenated_file_inside_the_window_produces_no_candidates(): void
+    {
+        $this->file('2026-09-07-0930-q4-roadmap-review');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $this->assertCount(0, $this->resolver()->candidatesFor($event));
+    }
+
     public function test_an_all_day_occurrence_matches_every_file_on_its_date(): void
     {
         $this->file('20260907_0800_morning_file');
