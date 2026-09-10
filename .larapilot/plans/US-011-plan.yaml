@@ -111,12 +111,12 @@ tasks:
       6. `npm run build`
 
       ## Completion Criteria
-      - [ ] `KB_REFRESH_MS` is 60000 and is the only place the cadence is written
-      - [ ] One shared interval regardless of subscriber count; teardown clears it when empty
-      - [ ] Ticks are skipped while `document.hidden`; a catch-up fires on return to visible only when a tick was missed
-      - [ ] `$refresh` failures raise no visible Livewire error UI; non-`$refresh` actions are untouched
-      - [ ] No new configuration key anywhere (`config/kbms.php` and `.env.example` unchanged)
-      - [ ] `npm run build` succeeds
+      - [x] `KB_REFRESH_MS` is 60000 and is the only place the cadence is written
+      - [x] One shared interval regardless of subscriber count; teardown clears it when empty
+      - [x] Ticks are skipped while `document.hidden`; a catch-up fires on return to visible only when a tick was missed
+      - [x] `$refresh` failures raise no visible Livewire error UI; non-`$refresh` actions are untouched
+      - [x] No new configuration key anywhere (`config/kbms.php` and `.env.example` unchanged)
+      - [x] `npm run build` succeeds
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -126,11 +126,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2
     dependencies:
       - TASK-00
+    commit:
+      sha: 44466176763636ca63af3726bf93d479063ce81e
+      short_sha: '4446617'
+      subject: 'feat(US-011): TASK-01 add shared self-refresh cadence and silent refresh failures'
+      committed_at: '2026-09-11T01:26:13+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/44466176763636ca63af3726bf93d479063ce81e'
   -
     id: TASK-02
     title: 'Subscribe the agenda to the refresh cadence'
@@ -292,4 +298,4 @@ tasks:
     dependencies:
       - TASK-02
       - TASK-03
-updated_at: '2026-09-11T01:25:38+02:00'
+updated_at: '2026-09-11T01:26:14+02:00'

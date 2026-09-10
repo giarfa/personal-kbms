@@ -1,4 +1,9 @@
-<div>
+{{-- x-data="kbSelfRefresh" is the whole self-refresh wiring (US-011): it calls
+     $wire.$refresh() on the shared 60s tick, and render() already re-resolves
+     the query, the sync health, the "Now" divider and the relative sync wording
+     from scratch on every request. mount() must stay out of it so a refresh
+     cannot snap a past or future range back to today. --}}
+<div x-data="kbSelfRefresh">
     @php
         $syncNote = $syncHealth->hasEverSynced()
             ? __('Last successful sync was :time.', ['time' => $syncHealth->lastSuccessAt->diffForHumans()])
