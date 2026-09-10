@@ -621,13 +621,13 @@ tasks:
       7. `php artisan larapilot:quality` — Pint + Larastan level 5+
 
       ## Completion Criteria
-      - [ ] `.md` + `.txt` sibling pair yields 1 candidate and `Linked`, not `Ambiguous`
-      - [ ] A lone `.txt` in the window yields 0 candidates
-      - [ ] The picker list excludes `.txt`
-      - [ ] A persisted `.txt` link still renders as escaped plain text
-      - [ ] No Playwright, Dusk, Pest browser, or viewport suites were added
-      - [ ] Existing helpers and factory states reused
-      - [ ] `larapilot:quality` passes (Pint + Larastan level 5+)
+      - [x] `.md` + `.txt` sibling pair yields 1 candidate and `Linked`, not `Ambiguous`
+      - [x] A lone `.txt` in the window yields 0 candidates
+      - [x] The picker list excludes `.txt`
+      - [x] A persisted `.txt` link still renders as escaped plain text
+      - [x] No Playwright, Dusk, Pest browser, or viewport suites were added
+      - [x] Existing helpers and factory states reused
+      - [x] `larapilot:quality` passes (Pint + Larastan level 5+)
 
       ## Test Data
       - N/A — no model or schema changes; existing factory states cover the persisted-link cases
@@ -637,11 +637,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes — no remote
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies:
       - TASK-06
+    commit:
+      sha: 95155095cc29478787fc98e5fb050231f1f0a237
+      short_sha: '9515509'
+      subject: 'test(US-010): TASK-07 cover md-only resolution and txt link durability'
+      committed_at: '2026-09-10T13:54:24+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/95155095cc29478787fc98e5fb050231f1f0a237'
   -
     id: TASK-08
     title: 'Document md-only resolution and fix the stale env comment'
@@ -705,4 +711,4 @@ tasks:
     estimate_hours: 0.5
     dependencies:
       - TASK-04
-updated_at: '2026-09-10T13:53:22+02:00'
+updated_at: '2026-09-10T13:54:26+02:00'
