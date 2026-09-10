@@ -68,6 +68,15 @@
             </p>
         @endif
 
+        {{-- Todo states (US-013). Static, unlike the config-generated colour
+             legend above: the marker vocabulary is hardcoded and unconfigurable. --}}
+        <p class="kb-legend">
+            <span>{{ __('Titles starting with a checkbox:') }}</span>
+            <span class="kb-inline"><span class="kb-legend__todo" aria-hidden="true">☐</span> {{ __('to do') }}</span>
+            <span class="kb-inline"><span class="kb-legend__todo kb-legend__todo--done" aria-hidden="true">☑</span> {{ __('done') }}</span>
+            <span class="kb-inline"><span class="kb-legend__todo kb-legend__todo--overdue" aria-hidden="true">☐ !</span> {{ __('overdue — still open past its end time') }}</span>
+        </p>
+
         <div class="kb-empty" x-show="hasEvents === false" x-cloak>
             <h3>{{ __('Nothing in this range') }}</h3>
             <p>{{ __('The mirror is current — this range is genuinely empty rather than unsynced.') }} {{ $syncNote }}</p>

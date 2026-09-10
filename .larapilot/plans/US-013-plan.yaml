@@ -267,12 +267,12 @@ tasks:
       9. `php artisan larapilot:quality`; `php artisan test --compact --filter=Agenda`
 
       ## Completion Criteria
-      - [ ] Glyph and stripped title render for each state
-      - [ ] A non-todo row is unchanged, with no layout shift
-      - [ ] Status wording is in the accessible name alongside coverage and the rule label
-      - [ ] Coverage tags and rule colour still render on a todo row
-      - [ ] Legend carries open, done and overdue
-      - [ ] Existing agenda tests pass; Pint and Larastan clean
+      - [x] Glyph and stripped title render for each state
+      - [x] A non-todo row is unchanged, with no layout shift
+      - [x] Status wording is in the accessible name alongside coverage and the rule label
+      - [x] Coverage tags and rule colour still render on a todo row
+      - [x] Legend carries open, done and overdue
+      - [x] Existing agenda tests pass; Pint and Larastan clean
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -282,12 +282,18 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-02
       - TASK-03
+    commit:
+      sha: 7c7a08e6bfe6eac3c9f914d31e439f5f725e4c1f
+      short_sha: 7c7a08e
+      subject: 'feat(US-013): TASK-04 render todo status on the agenda'
+      committed_at: '2026-09-11T01:56:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7c7a08e6bfe6eac3c9f914d31e439f5f725e4c1f'
   -
     id: TASK-05
     title: 'Render todo status on the calendar'
@@ -453,4 +459,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-06
-updated_at: '2026-09-11T01:54:25+02:00'
+updated_at: '2026-09-11T01:56:03+02:00'
