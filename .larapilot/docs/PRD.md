@@ -274,6 +274,8 @@ Every machine-specific assumption is a `.env` value, never a code constant:
 - `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`) — minutes of start-time drift the transcript resolver tolerates either side of a meeting's start
 - `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`, 2 MiB) — bytes read from a transcript before the preview is truncated
 - `KBMS_CLAUDE_LAUNCHER`
+- `KBMS_LAUNCH_TIMEOUT_SECONDS` (default `30`) — seconds the queued launch job waits for the launcher script to return before recording a timeout
+- `KBMS_QUESTION_MAX_CHARS` (default `8000`) — maximum character length for a launch question
 - `KBMS_OUTLOOK_URL_TEMPLATE` — placeholders `{date}` (`Y-m-d`), `{time}` (`H:i`), `{datetime}` (ISO 8601), substituted in `KBMS_TIMEZONE`; a feed-carried `event_url` always takes precedence
 - `KBMS_TIMEZONE`
 - `KBMS_SYNC_RUN_RETENTION_DAYS` (default `30`) — days a finished `calendar_sync_runs` row is kept before pruning
@@ -304,7 +306,7 @@ Concrete obligations for this release:
 - `calendar_events` — `source_uid`, `recurrence_id`, `summary`, `description`, `location`, `organizer`, `attendees` (JSON), `starts_at`, `ends_at`, `is_all_day`, `timezone`, `join_url`, `event_url`, `content_hash`, `last_seen_at`, `cancelled_at`. Unique index on (`source_uid`, `recurrence_id`); index on `starts_at`.
 - `meeting_notes` — `event_uid`, `event_recurrence_id`, `body` (Markdown), timestamps. Keyed to the occurrence, not to the event row's surrogate id, so a resync cannot orphan a note.
 - `meeting_transcripts` — `event_uid`, `event_recurrence_id`, `path` (**nullable** — a `NULL` path with `link_source = manual` is the manual-unlink tombstone that stops the convention from re-linking a file the operator just rejected), `link_source` (`convention` \| `manual`), `file_size`, `file_mtime`, `linked_at`.
-- `prompt_launches` — `event_uid`, `event_recurrence_id`, `context_path`, `question`, `command` (JSON argument array), `launched_at`, `status`, `error`.
+- `prompt_launches` — `event_uid`, `event_recurrence_id`, `context_path`, `question`, `command` (JSON argument array), `launched_at`, `status`, `exit_code`, `error`.
 - `calendar_sync_runs` — `started_at`, `finished_at`, `status`, `http_status`, `etag`, `last_modified`, `events_upserted`, `events_cancelled`, `error`.
 
 **Services:**
@@ -353,3 +355,4 @@ Baseline set only, matching a personal project: a `README.md` covering Herd setu
 | 2026-09-07 | larapilot-plan US-003 | Added `KBMS_SYNC_RUN_RETENTION_DAYS` to the configuration surface; added `last_modified` to the `calendar_sync_runs` column list (required to serve `If-Modified-Since` on the next conditional GET) |
 | 2026-09-08 | larapilot-plan US-005 | Recorded the `KBMS_OUTLOOK_URL_TEMPLATE` placeholder vocabulary |
 | 2026-09-09 | larapilot-plan US-007 | Added `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`) and `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`) to the configuration surface; documented the `KBMS_TRANSCRIPT_PATTERN` `{time}` = `Hi` grammar (deliberately unlike `KBMS_OUTLOOK_URL_TEMPLATE`'s `H:i`); marked `meeting_transcripts.path` nullable, carrying the manual-unlink tombstone |
+| 2026-09-10 | larapilot-plan US-009 | Added `KBMS_LAUNCH_TIMEOUT_SECONDS` (`30`) and `KBMS_QUESTION_MAX_CHARS` (`8000`) to the configuration surface; added `exit_code` to `prompt_launches`; recorded that the queued job waits for the launcher's exit code under a bounded timeout, superseding the inception "Process::start" detail |

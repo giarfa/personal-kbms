@@ -47,6 +47,8 @@ Every machine-specific assumption is a `.env` value, never a code constant. All 
 | `KBMS_SYNC_RUN_RETENTION_DAYS` | `30` | No | US-003 (`calendar_sync_runs` pruning) |
 | `KBMS_SYNC_STALE_MULTIPLIER` | `3` | No | US-004 (sync intervals without a success before "stale") |
 | `KBMS_SYNC_STUCK_AFTER_SECONDS` | `300` | No | US-004 (abandon a `Running` row whose worker died) |
+| `KBMS_LAUNCH_TIMEOUT_SECONDS` | `30` | No | US-009 (seconds the launch job waits for the launcher to return) |
+| `KBMS_QUESTION_MAX_CHARS` | `8000` | No | US-009 (maximum launch question length) |
 
 `KBMS_OUTLOOK_URL_TEMPLATE` supports three placeholders, substituted in `KBMS_TIMEZONE`: `{date}` (`Y-m-d`), `{time}` (`H:i`), `{datetime}` (ISO 8601). A feed-carried `event_url` always wins over the template. Worked example against Outlook Web Access: `https://outlook.office.com/calendar/view/day/{date}`.
 
@@ -55,7 +57,7 @@ Every machine-specific assumption is a `.env` value, never a code constant. All 
 Two long-running processes besides the web server:
 
 ```bash
-php artisan queue:work        # calendar sync (US-003) and the launch bridge (US-007) are queued jobs
+php artisan queue:work        # calendar sync (US-003) and the launch bridge (US-009) are queued jobs
 php artisan schedule:work      # fires kbms:sync-calendar on the configured interval
 ```
 
@@ -118,6 +120,8 @@ For local development, point `KBMS_TRANSCRIPTS_PATH` at `storage/app/transcripts
 2. The question text.
 
 Arguments are passed as an argument array, never an interpolated shell string — the question is arbitrary operator input and must never be able to alter the command. The script opens its own terminal window; **the application never captures Claude's reply**.
+
+The invocation runs inside a queued job (`LaunchClaudeSession`) rather than the web request, and **the script must return once it has spawned its own terminal window** — a script that runs Claude in the foreground instead of handing off to a window blocks the job. The job waits up to `KBMS_LAUNCH_TIMEOUT_SECONDS` (default `30`) for that return; a script still running past the bound is recorded as timed out rather than left to hang the worker indefinitely. The launcher's exit code is recorded on the launch row and shown on the meeting page. None of this runs without `php artisan queue:work` actually processing jobs — a reachable queue connection is not the same as a running worker.
 
 Minimal example script:
 
