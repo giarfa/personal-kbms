@@ -125,13 +125,13 @@ tasks:
       9. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Five classes in place with explicit return types and array-shape PHPDoc
-      - [ ] Every malformed rule shape yields `null` from `fromArray` and is dropped from the set
-      - [ ] `match()` returns the first hit in array order and evaluates nothing after it
-      - [ ] An absent, empty, or non-array config value yields an empty rule set rather than an error
-      - [ ] `config/kbms.php` carries the two defaults in the right order, with its PHPDoc updated
-      - [ ] No new `KBMS_*` env key anywhere
-      - [ ] Pint and Larastan (level 5) clean
+      - [x] Five classes in place with explicit return types and array-shape PHPDoc
+      - [x] Every malformed rule shape yields `null` from `fromArray` and is dropped from the set
+      - [x] `match()` returns the first hit in array order and evaluates nothing after it
+      - [x] An absent, empty, or non-array config value yields an empty rule set rather than an error
+      - [x] `config/kbms.php` carries the two defaults in the right order, with its PHPDoc updated
+      - [x] No new `KBMS_*` env key anywhere
+      - [x] Pint and Larastan (level 5) clean
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -141,11 +141,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 3
     dependencies:
       - TASK-00
+    commit:
+      sha: 3d46b41f80d934a9ad023290fc11dbc89e648fff
+      short_sha: 3d46b41
+      subject: 'feat(US-012): TASK-01 add the event colour rule engine and shipped defaults'
+      committed_at: '2026-09-11T01:39:16+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/3d46b41f80d934a9ad023290fc11dbc89e648fff'
   -
     id: TASK-02
     title: 'Unit-test the rule engine'
@@ -399,4 +405,4 @@ tasks:
     dependencies:
       - TASK-04
       - TASK-05
-updated_at: '2026-09-11T01:38:11+02:00'
+updated_at: '2026-09-11T01:39:16+02:00'
