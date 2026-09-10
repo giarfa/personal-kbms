@@ -61,9 +61,9 @@ tasks:
       4. Draft the internal PR title/body toward `develop` — keep it local
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-011-self-refreshing-views` exists locally
-      - [ ] Pending backlog/spec/plan artifacts committed on the branch, `develop` left clean
-      - [ ] PR title/body drafted for `develop` (remote not opened)
+      - [x] Branch `feature/US-011-self-refreshing-views` exists locally
+      - [x] Pending backlog/spec/plan artifacts committed on the branch, `develop` left clean
+      - [x] PR title/body drafted for `develop` (remote not opened)
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -73,10 +73,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally — open remote only if the user requests it
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
+    commit:
+      sha: ce252776abefe5f37a2550161dfd34dfccd340c0
+      short_sha: ce25277
+      subject: 'chore(US-011): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-11T01:25:33+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ce252776abefe5f37a2550161dfd34dfccd340c0'
   -
     id: TASK-01
     title: 'Shared 60s refresh cadence module and silent-failure interceptor'
@@ -286,4 +292,4 @@ tasks:
     dependencies:
       - TASK-02
       - TASK-03
-updated_at: '2026-09-11T01:25:22+02:00'
+updated_at: '2026-09-11T01:25:38+02:00'
