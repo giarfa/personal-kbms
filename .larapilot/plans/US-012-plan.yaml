@@ -321,12 +321,12 @@ tasks:
       6. `php artisan larapilot:quality`; `php artisan test --compact --filter=Calendar`; `npm run build` and check month, week and day.
 
       ## Completion Criteria
-      - [ ] A matched occurrence's JSON payload carries its colour class and its label in the accessible name
-      - [ ] The colour renders in month, week **and** day views
-      - [ ] Coverage marks and edge borders still render on a coloured event; a cancelled match stays dashed, struck and muted
-      - [ ] The calendar legend is generated from config and matches the agenda's
-      - [ ] `calendar.js` needed no change
-      - [ ] Existing calendar tests pass; Pint and Larastan clean; build clean
+      - [x] A matched occurrence's JSON payload carries its colour class and its label in the accessible name
+      - [x] The colour renders in month, week **and** day views
+      - [x] Coverage marks and edge borders still render on a coloured event; a cancelled match stays dashed, struck and muted
+      - [x] The calendar legend is generated from config and matches the agenda's
+      - [x] `calendar.js` needed no change
+      - [x] Existing calendar tests pass; Pint and Larastan clean; build clean
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -336,12 +336,18 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-02
       - TASK-03
+    commit:
+      sha: 6caa8a1c6ec42d248a3f02021a12768680c3dea4
+      short_sha: 6caa8a1
+      subject: 'feat(US-012): TASK-05 colour calendar events and generate the legend from config'
+      committed_at: '2026-09-11T01:43:45+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/6caa8a1c6ec42d248a3f02021a12768680c3dea4'
   -
     id: TASK-06
     title: 'Feature-test both surfaces and prove the query count'
@@ -423,4 +429,4 @@ tasks:
     dependencies:
       - TASK-04
       - TASK-05
-updated_at: '2026-09-11T01:42:22+02:00'
+updated_at: '2026-09-11T01:43:45+02:00'
