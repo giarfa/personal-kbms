@@ -13,6 +13,36 @@ function addDaysToIso(iso, delta) {
     ].join('-');
 }
 
+function isoParts(iso) {
+    const [year, month, day] = iso.split('-').map(Number);
+
+    return { year, month, day };
+}
+
+function formatIso(year, month, day) {
+    return [year, String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-');
+}
+
+function daysInMonth(year, month) {
+    // Day 0 of the following month is the last day of this one.
+    return new Date(year, month, 0).getDate();
+}
+
+/**
+ * Step an ISO date by whole months, landing on `dayOfMonth` clamped to the
+ * target month's length. Pure: strings in, string out, no DOM and no calendar
+ * state. The clamp is explicit because Date's own rollover turns 31 February
+ * into 3 March, which would page the month grid past its own range.
+ */
+function addMonthsToIso(iso, delta, dayOfMonth) {
+    const { year, month } = isoParts(iso);
+    const zeroBased = (year * 12) + (month - 1) + delta;
+    const targetYear = Math.floor(zeroBased / 12);
+    const targetMonth = (zeroBased % 12) + 1;
+
+    return formatIso(targetYear, targetMonth, Math.min(dayOfMonth, daysInMonth(targetYear, targetMonth)));
+}
+
 function markEl(kind) {
     const span = document.createElement('span');
     span.className = `kb-ev__mark kb-ev__mark--${kind}`;
@@ -232,14 +262,35 @@ document.addEventListener('alpine:init', () => {
         },
 
         pageView(direction) {
-            const stepDays = this.currentView === 'week' ? 7 : (this.currentView === 'day' ? 1 : null);
-
-            if (stepDays) {
-                this.pendingFocusDate = addDaysToIso(this.focusedDate, direction * stepDays);
-                this.pendingFocusShouldMoveFocus = true;
-            }
+            this.pendingFocusDate = this.pagedFocusDate(direction);
+            this.pendingFocusShouldMoveFocus = true;
 
             direction > 0 ? this.calendar.next() : this.calendar.prev();
+        },
+
+        /**
+         * Where focus lands after paging. Every view queues a target — a month
+         * that queued nothing used to drop focus to <body>, because datesSet
+         * then only reassigned tabindex and FullCalendar had already destroyed
+         * the focused cell.
+         */
+        pagedFocusDate(direction) {
+            if (this.currentView === 'week') {
+                return addDaysToIso(this.focusedDate, direction * 7);
+            }
+
+            if (this.currentView === 'day') {
+                return addDaysToIso(this.focusedDate, direction);
+            }
+
+            // Month steps off the calendar's own anchor, not focusedDate:
+            // after an arrow-key walk focus can sit on a leading or trailing
+            // cell belonging to a neighbouring month, and stepping from there
+            // would target a month the grid is not about to render.
+            const anchor = this.calendar.getDate();
+            const anchorIso = formatIso(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+
+            return addMonthsToIso(anchorIso, direction, isoParts(this.focusedDate).day);
         },
 
         onGridKeydown(event) {
