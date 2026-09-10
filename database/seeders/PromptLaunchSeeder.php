@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Launcher\LaunchCommand;
 use App\Models\CalendarEvent;
 use App\Models\PromptLaunch;
 use App\Transcripts\TranscriptPattern;
@@ -45,14 +46,14 @@ class PromptLaunchSeeder extends Seeder
         PromptLaunch::factory()->forOccurrence($event)->launched()->create([
             'context_path' => $contextPath,
             'question' => $question,
-            'command' => [$script, $contextPath, $question],
+            'command' => (new LaunchCommand($script, $contextPath, $question))->toArray(),
         ]);
 
         $question = 'What did we agree on the ingestion timeline, and who owns the recurrence expansion fix?';
         PromptLaunch::factory()->forOccurrence($event)->failed(127)->create([
             'context_path' => $contextPath,
             'question' => $question,
-            'command' => [$script, $contextPath, $question],
+            'command' => (new LaunchCommand($script, $contextPath, $question))->toArray(),
         ]);
     }
 
@@ -75,7 +76,7 @@ class PromptLaunchSeeder extends Seeder
         PromptLaunch::factory()->forOccurrence($event)->queued()->create([
             'context_path' => $contextPath,
             'question' => $question,
-            'command' => [$script, $contextPath, $question],
+            'command' => (new LaunchCommand($script, $contextPath, $question))->toArray(),
         ]);
     }
 }

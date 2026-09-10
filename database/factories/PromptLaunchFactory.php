@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Launcher\LaunchCommand;
 use App\Launcher\PromptLaunchStatus;
 use App\Models\CalendarEvent;
 use App\Models\PromptLaunch;
@@ -18,10 +19,9 @@ class PromptLaunchFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * NOTE (TASK-03 follow-up): `command` is built literally here because
-     * `App\Launcher\LaunchCommand` does not exist yet at this point in the
-     * plan. TASK-03 replaces this with a `LaunchCommand::toArray()` call so
-     * factory data cannot drift from what actually gets executed.
+     * `command` is built by calling `LaunchCommand::toArray()` — the single
+     * construction site of the argument array — so factory data cannot
+     * drift from what actually gets executed.
      *
      * @return array<string, mixed>
      */
@@ -41,7 +41,7 @@ class PromptLaunchFactory extends Factory
             'event_recurrence_id' => '',
             'context_path' => $contextPath,
             'question' => $question,
-            'command' => [$script, $contextPath, $question],
+            'command' => (new LaunchCommand($script, $contextPath, $question))->toArray(),
             'status' => PromptLaunchStatus::Queued,
             'exit_code' => null,
             'error' => null,
