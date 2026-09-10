@@ -370,11 +370,11 @@ tasks:
       7. `php artisan test --compact` (full suite) and `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Every bullet above is a named test and passes
-      - [ ] Query-count equality proven for both surfaces
-      - [ ] Full suite green
-      - [ ] Manual handoff written
-      - [ ] Pint and Larastan clean
+      - [x] Every bullet above is a named test and passes
+      - [x] Query-count equality proven for both surfaces
+      - [x] Full suite green
+      - [x] Manual handoff written
+      - [x] Pint and Larastan clean
 
       ## Test Data
       - N/A — reuses existing factories with explicit attribute overrides
@@ -384,12 +384,18 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 3.5
     dependencies:
       - TASK-04
       - TASK-05
+    commit:
+      sha: 7b546bf2d0cfee1ec01411468461a5947808943e
+      short_sha: 7b546bf
+      subject: 'test(US-012): TASK-06 cover colour rendering on both surfaces and the query count'
+      committed_at: '2026-09-11T01:45:42+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7b546bf2d0cfee1ec01411468461a5947808943e'
   -
     id: TASK-07
     title: 'Document the rule vocabulary in README and CHANGELOG'
@@ -429,4 +435,4 @@ tasks:
     dependencies:
       - TASK-04
       - TASK-05
-updated_at: '2026-09-11T01:43:45+02:00'
+updated_at: '2026-09-11T01:45:42+02:00'
