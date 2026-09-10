@@ -175,9 +175,10 @@ class TranscriptDurabilityTest extends TestCase
         $dir = realpath(sys_get_temp_dir()).'/kbms-durability-'.uniqid();
         mkdir($dir, 0755, true);
         config(['kbms.transcripts_path' => $dir]);
-        // A filename matching the ORIGINAL pattern only — the point is that
-        // resolution never re-derives from the current pattern once a row
-        // exists (readerViewData() reads the persisted path directly).
+        // A filename matching the now-RETIRED hyphenated convention — no
+        // pattern parses it anymore, yet the point is that resolution never
+        // re-derives from the current pattern once a row exists
+        // (readerViewData() reads the persisted path directly).
         $path = "{$dir}/2026-06-02-1200-weekly-sync.md";
         file_put_contents($path, '# Persisted link content');
         MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $path]);

@@ -15,16 +15,19 @@ use Illuminate\Support\Str;
  *
  * `{time}` renders as `Hi` — no colon. A filename cannot portably carry `:`
  * (it is the legacy path separator on macOS), and the recorded convention's
- * own example is `2026-09-07-1430-standup.md`. This is a DELIBERATE
- * divergence from `KBMS_OUTLOOK_URL_TEMPLATE`, where `{time}` is `H:i` — do
- * not "simplify" the two templates to match.
+ * own example is `20260907_1430_standup.md`. This is a DELIBERATE divergence
+ * from `KBMS_OUTLOOK_URL_TEMPLATE`, where `{time}` is `H:i` — do not
+ * "simplify" the two templates to match.
+ *
+ * `{date}` renders/parses as `Ymd` and `{slug}` is underscore-separated —
+ * this replaced the hyphenated `Y-m-d` convention as a hard cutover.
  *
  * `parse()`/`render()` operate on the filename STEM (no extension) — the
  * extension is the reader's/directory's concern, not the naming convention's.
  */
 final class TranscriptPattern
 {
-    public const DEFAULT_PATTERN = '{date}-{time}-{slug}';
+    public const DEFAULT_PATTERN = '{date}_{time}_{slug}';
 
     private function __construct(
         private readonly string $pattern,
@@ -73,9 +76,13 @@ final class TranscriptPattern
             return null;
         }
 
-        $datetime = CarbonImmutable::createFromFormat('Y-m-d Hi', "{$date} {$time}");
+        $datetime = CarbonImmutable::createFromFormat('Ymd Hi', "{$date} {$time}");
 
         if ($datetime === null) {
+            return null;
+        }
+
+        if ($datetime->format('Ymd Hi') !== "{$date} {$time}") {
             return null;
         }
 
@@ -90,9 +97,9 @@ final class TranscriptPattern
     public function render(CarbonInterface $at, string $slug): string
     {
         return strtr($this->pattern, [
-            '{date}' => $at->format('Y-m-d'),
+            '{date}' => $at->format('Ymd'),
             '{time}' => $at->format('Hi'),
-            '{slug}' => Str::slug($slug),
+            '{slug}' => Str::slug($slug, '_'),
         ]);
     }
 
@@ -104,7 +111,7 @@ final class TranscriptPattern
     private static function toRegex(string $pattern): string
     {
         $placeholders = [
-            '{date}' => '(?P<date>\d{4}-\d{2}-\d{2})',
+            '{date}' => '(?P<date>\d{8})',
             '{time}' => '(?P<time>\d{4})',
             '{slug}' => '(?P<slug>.*)',
         ];

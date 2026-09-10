@@ -33,8 +33,8 @@ return [
 
     'transcripts_path' => env('KBMS_TRANSCRIPTS_PATH') ?: null,
 
-    // Date + time prefix; the resolver keys off the meeting start datetime (decision journal: "transcript filename convention").
-    'transcript_pattern' => env('KBMS_TRANSCRIPT_PATTERN', '{date}-{time}-{slug}'),
+    // Ymd date + Hi time + underscore slug; the resolver keys off the meeting start datetime (decision journal: "transcript filename convention", superseded by da55147854b4096f).
+    'transcript_pattern' => env('KBMS_TRANSCRIPT_PATTERN', '{date}_{time}_{slug}'),
 
     // Minutes of start-time drift the resolver tolerates either side of the occurrence's start (US-007).
     'transcript_tolerance_minutes' => (int) env('KBMS_TRANSCRIPT_TOLERANCE_MINUTES', 10),
