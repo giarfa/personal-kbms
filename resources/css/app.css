@@ -1083,3 +1083,274 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* --- FullCalendar (US-008) --- */
+
+.kb-cal .fc {
+    --fc-border-color: var(--border);
+    --fc-page-bg-color: var(--card);
+    --fc-neutral-bg-color: var(--muted);
+    --fc-neutral-text-color: var(--muted-foreground);
+    --fc-today-bg-color: color-mix(in oklch, var(--kb-transcript) 8%, transparent);
+    --fc-now-indicator-color: var(--kb-transcript);
+    --fc-event-bg-color: var(--card);
+    --fc-event-border-color: var(--border);
+    --fc-event-text-color: var(--foreground);
+    --fc-small-font-size: 0.6875rem;
+    --fc-more-link-bg-color: transparent;
+    --fc-more-link-text-color: var(--muted-foreground);
+    font-family: inherit;
+}
+
+.kb-cal .fc-scrollgrid {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.kb-cal .fc-col-header-cell-cushion {
+    padding: 0.5rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+    text-decoration: none;
+}
+
+/* Month view day cells */
+.kb-cal .fc-daygrid-day-frame {
+    min-height: 7rem;
+    padding: 0.25rem;
+}
+
+.kb-cal .fc-daygrid-day-number {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    padding: 0.125rem 0.375rem;
+    text-decoration: none;
+}
+
+.kb-cal .fc-day-today .fc-daygrid-day-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.375rem;
+    height: 1.375rem;
+    border-radius: 999px;
+    background: var(--kb-transcript);
+    color: var(--color-white);
+    padding: 0;
+}
+
+.kb-cal .fc-day-other .fc-daygrid-day-number {
+    opacity: 0.65;
+}
+
+/* Event chips */
+.kb-cal .fc-event {
+    border-radius: calc(var(--radius) - 4px);
+    border: 1px solid var(--border);
+    padding: 0.0625rem 0.375rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.kb-cal .fc-event:hover {
+    border-color: var(--ring);
+}
+
+.kb-cal .fc-event:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--ring);
+}
+
+.kb-cal .fc-event-time {
+    font-family: var(--kb-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    margin-right: 0.25rem;
+}
+
+.kb-cal .fc-event-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.kb-cal .fc-event.kb-ev--note {
+    border-left: 3px solid var(--kb-note);
+}
+
+.kb-cal .fc-event.kb-ev--transcript {
+    border-left: 3px solid var(--kb-transcript);
+}
+
+.kb-cal .fc-event.kb-ev--both {
+    border-left: 3px solid var(--kb-note);
+    border-right: 3px solid var(--kb-transcript);
+}
+
+.kb-cal .fc-event.kb-ev--allday {
+    background: var(--kb-transcript-bg);
+    border-color: color-mix(in oklch, var(--kb-transcript) 30%, transparent);
+    color: var(--kb-transcript);
+}
+
+.kb-cal .fc-event.kb-ev--cancelled {
+    border-style: dashed;
+    background: transparent;
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+}
+
+/* Coverage marks — distinct in shape as well as hue (WCAG 1.4.1). Injected
+   by calendar.js's eventDidMount; the accessible name already states the
+   coverage in words, so these stay aria-hidden decoration. */
+.kb-ev__marks {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1875rem;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+}
+
+.kb-ev__mark {
+    display: inline-block;
+    width: 0.4375rem;
+    height: 0.4375rem;
+}
+
+.kb-ev__mark--note {
+    background: var(--kb-note);
+    border-radius: 50%;
+}
+
+.kb-ev__mark--transcript {
+    background: var(--kb-transcript);
+    border-radius: 0;
+}
+
+/* +N more */
+.kb-cal .fc-daygrid-more-link {
+    font-size: 0.6875rem;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    color: var(--muted-foreground);
+}
+
+.kb-cal .fc-daygrid-more-link:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--ring);
+}
+
+.kb-cal .fc-popover {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.kb-cal .fc-popover-header {
+    background: var(--muted);
+    padding: 0.375rem 0.625rem;
+}
+
+/* Week / day views */
+.kb-cal .fc-timegrid-slot-label-cushion,
+.kb-cal .fc-timegrid-axis-cushion {
+    font-family: var(--kb-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+}
+
+.kb-cal .fc-timegrid-now-indicator-line {
+    border-color: var(--kb-transcript);
+}
+
+.kb-cal .fc-timegrid-now-indicator-arrow {
+    border-color: var(--kb-transcript);
+    color: var(--kb-transcript);
+}
+
+/* Roving-tabindex focus targets (TASK-06) */
+.kb-cal .fc-daygrid-day:focus-visible,
+.kb-cal .fc-timegrid-col:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 3px var(--ring);
+}
+
+/* Segmented view switcher */
+.kb-segmented {
+    display: inline-flex;
+    border: 1px solid var(--input);
+    border-radius: calc(var(--radius) - 2px);
+    overflow: hidden;
+}
+
+.kb-segmented button {
+    padding: 0.375rem 0.75rem;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 0.8125rem;
+    color: var(--foreground);
+    cursor: pointer;
+}
+
+.kb-segmented button + button {
+    border-left: 1px solid var(--input);
+}
+
+.kb-segmented button[aria-pressed='true'] {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
+    font-weight: 500;
+}
+
+.kb-segmented button:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--ring);
+}
+
+.kb-legend .kb-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+@media (max-width: 767px) {
+    /* The month grid is the only surface that scrolls horizontally — week
+       and day views are already narrow enough to fit. */
+    .kb-cal .fc-daygrid {
+        overflow-x: auto;
+    }
+
+    .kb-cal .fc-daygrid-day-frame {
+        min-height: 4.5rem;
+        min-width: 2.5rem;
+    }
+
+    .kb-cal .fc-event-time {
+        display: none;
+    }
+
+    .kb-segmented {
+        width: 100%;
+    }
+
+    .kb-segmented button {
+        flex: 1;
+        min-height: 2.75rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kb-cal .fc * {
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+    }
+}
