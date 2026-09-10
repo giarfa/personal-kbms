@@ -5,7 +5,9 @@ namespace App\Transcripts;
 /**
  * One indexed file inside the tolerance window for a given occurrence.
  * `slugMatches` is an ordering hint only — it never filters candidates out
- * and never breaks a tie on its own.
+ * and never breaks a tie on its own. It is a PREFIX match: true when the
+ * file's slug starts with the event's summary slug, not only on exact
+ * equality.
  */
 final readonly class TranscriptCandidate
 {
