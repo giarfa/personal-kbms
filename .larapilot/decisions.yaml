@@ -584,4 +584,17 @@ decisions:
     source: chat
     spec: US-008
     supersedes: 419974f3d275c843
-updated_at: '2026-09-10T07:43:47+02:00'
+  -
+    id: d184baee682dd396
+    ts: '2026-09-10T08:17:27+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'terminal launch mode'
+    label: 'terminal launch mode'
+    value: "Queued job invokes the launcher with Process::run() (argument array) and waits for its exit code, bounded by KBMS_LAUNCH_TIMEOUT_SECONDS (default 30); the script still opens its own OS-owned terminal window and the app never captures Claude's reply"
+    question: null
+    rationale: "Process::start captures no exit code and Symfony's Process::__destruct() calls stop(0), so a started-but-unwaited child is killed; US-009 requires a non-zero exit to be recorded on the launch row and surfaced in the UI. The script returns in milliseconds once its window is spawned, so waiting is free; a script that blocks past the timeout is a documented contract violation, recorded as a specific error rather than hanging the worker."
+    source: askquestion
+    spec: US-009
+    supersedes: 2deaf85cb3b47934
+updated_at: '2026-09-10T08:17:27+02:00'
