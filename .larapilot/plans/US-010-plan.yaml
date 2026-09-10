@@ -558,27 +558,33 @@ tasks:
       7. `php artisan test --compact tests/Feature/TranscriptPanelTest.php`, then the full suite
 
       ## Completion Criteria
-      - [ ] Sprint-planning `.txt` file is still written to disk by the seeder
-      - [ ] It is now linked via `MeetingTranscript::factory()->manual()`, not convention
-      - [ ] `migrate:fresh --seed` succeeds and all five panel states remain reachable
-      - [ ] The plain-text rendering assertion still runs and passes
-      - [ ] No new factory state was introduced
-      - [ ] Full suite green except the known `kbms.ics_url` env-leak failure; Pint clean
+      - [x] Sprint-planning `.txt` file is still written to disk by the seeder
+      - [x] It is now linked via `MeetingTranscript::factory()->manual()`, not convention
+      - [x] `migrate:fresh --seed` succeeds and all five panel states remain reachable
+      - [x] The plain-text rendering assertion still runs and passes
+      - [x] No new factory state was introduced
+      - [x] Full suite green except the known `kbms.ics_url` env-leak failure; Pint clean
 
       ## Test Data
-      - [ ] `MeetingTranscriptSeeder` updated to persist the `.txt` link manually
-      - [ ] `MeetingTranscriptFactory` **unchanged** — `manual()` and `forOccurrence()` already exist
+      - [x] `MeetingTranscriptSeeder` updated to persist the `.txt` link manually
+      - [x] `MeetingTranscriptFactory` **unchanged** — `manual()` and `forOccurrence()` already exist
 
       ## Git Deliverables
       - Commit: `fix(US-010): TASK-06 reach the plain-text panel state through a manual link`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes — no remote
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1
     dependencies:
       - TASK-05
+    commit:
+      sha: 0cd7536c07e31622f5fe709944b88e4cfa98fde1
+      short_sha: 0cd7536
+      subject: 'fix(US-010): TASK-06 reach the plain-text panel state through a manual link'
+      committed_at: '2026-09-10T13:53:20+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0cd7536c07e31622f5fe709944b88e4cfa98fde1'
   -
     id: TASK-07
     title: 'Cover the md-only acceptance criterion'
@@ -699,4 +705,4 @@ tasks:
     estimate_hours: 0.5
     dependencies:
       - TASK-04
-updated_at: '2026-09-10T13:52:12+02:00'
+updated_at: '2026-09-10T13:53:22+02:00'

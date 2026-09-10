@@ -219,6 +219,18 @@ class TranscriptPanelTest extends TestCase
             ->assertSee('20260909_0930_q4_roadmap_review.md');
     }
 
+    public function test_the_picker_excludes_txt_files(): void
+    {
+        $this->configureDirectory();
+        $this->seedFile('20260909_0930_q4_roadmap_review', 'md', 'a');
+        $this->seedFile('20260909_0930_q4_roadmap_review', 'txt', 'a');
+        $event = $this->eventAt('2026-09-09 09:30:00', 'Something else entirely');
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertSee('20260909_0930_q4_roadmap_review.md')
+            ->assertDontSee('20260909_0930_q4_roadmap_review.txt');
+    }
+
     public function test_a_submitted_filename_outside_the_base_is_refused_at_the_action_boundary(): void
     {
         $this->configureDirectory();

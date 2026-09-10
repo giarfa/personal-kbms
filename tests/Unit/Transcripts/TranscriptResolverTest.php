@@ -168,6 +168,28 @@ class TranscriptResolverTest extends TestCase
         $this->assertCount(0, $this->resolver()->candidatesFor($event));
     }
 
+    public function test_a_txt_sibling_of_a_linked_md_file_is_not_indexed_and_stays_linked(): void
+    {
+        $this->file('20260907_0930_q4_roadmap_review');
+        $this->file('20260907_0930_q4_roadmap_review', 'txt');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $candidates = $this->resolver()->candidatesFor($event);
+
+        $this->assertCount(1, $candidates);
+        $this->assertSame('20260907_0930_q4_roadmap_review.md', $candidates[0]->filename);
+        $this->assertSame(TranscriptState::Linked, $this->resolver()->stateFor($event));
+    }
+
+    public function test_a_lone_txt_file_inside_the_window_produces_no_candidates(): void
+    {
+        $this->file('20260907_0930_q4_roadmap_review', 'txt');
+        $event = $this->eventAt('2026-09-07 09:30:00');
+
+        $this->assertCount(0, $this->resolver()->candidatesFor($event));
+        $this->assertSame(TranscriptState::Missing, $this->resolver()->stateFor($event));
+    }
+
     public function test_an_all_day_occurrence_matches_every_file_on_its_date(): void
     {
         $this->file('20260907_0800_morning_file');

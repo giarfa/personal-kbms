@@ -225,4 +225,35 @@ class TranscriptDurabilityTest extends TestCase
         unlink($path);
         rmdir($dir);
     }
+
+    public function test_a_persisted_txt_link_still_resolves_as_linked_and_renders_as_plain_text_under_md_only_config(): void
+    {
+        $synchronizer = new EventSynchronizer;
+
+        $synchronizer->synchronize(
+            [$this->occurrence()],
+            $this->runStartedAt,
+            $this->windowStart,
+            $this->windowEnd
+        );
+
+        $event = CalendarEvent::query()->where('source_uid', 'durability-uid')->first();
+
+        $dir = realpath(sys_get_temp_dir()).'/kbms-durability-'.uniqid();
+        mkdir($dir, 0755, true);
+        config(['kbms.transcripts_path' => $dir]);
+
+        // Convention resolution is md-only, but an already-linked .txt row
+        // must keep working — the stored path is read directly, never
+        // re-derived from the (now-restricted) directory index.
+        $path = "{$dir}/2026-06-02-1200-weekly-sync.txt";
+        file_put_contents($path, 'plain text body');
+        MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertSee('.txt rendered as plain text');
+
+        unlink($path);
+        rmdir($dir);
+    }
 }
