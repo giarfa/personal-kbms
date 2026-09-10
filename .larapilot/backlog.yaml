@@ -433,7 +433,7 @@ specs:
     priority: HIGH
     points: 8
     status: 'IN PROGRESS'
-    body: |
+    body: |-
       #### US-008: Calendar views: month, week and day
 
       **Epic:** EP-003 | **Priority:** HIGH | **Points:** 8 | **Status:** TODO
@@ -464,9 +464,23 @@ specs:
       - [ ] **Error case:** a range with no events renders an empty grid, not a broken layout
       - [ ] **Edge case:** a day with many overlapping meetings degrades gracefully (stacking or a "+N more" affordance) without hiding events silently
       - [ ] **Edge case:** multi-day events span correctly in month view
+
+
+      ## Rework Feedback
+
+      **Rework scope: one finding.** Everything else in the US-008 review passes — 353/353 tests green, Pint + Larastan level 5 clean, `npm run build` succeeds, Lars GO, all acceptance criteria met except the keyboard-navigation gap below. Do not re-open the copy, CHANGELOG or design-system notes from the review; they were explicitly deferred.
+
+      - `resources/js/calendar.js:pageView()` — `PageUp`/`PageDown` drops keyboard focus out of the grid in **Month** view. `stepDays` is computed only for `week` (7) and `day` (1); for `month` it is `null`, so the `if (stepDays)` block never runs and no `pendingFocusDate` is queued before `this.calendar.next()` / `.prev()`. `datesSet` therefore takes the `else` branch and calls `syncRovingTabindex()`, which reassigns `tabindex` but never calls `.focus()` — and FullCalendar has already destroyed the previously focused cell during the re-render, so focus falls back to `<body>`. Week and Day views are unaffected (they queue the focus correctly), and arrow-key navigation past the edge of the visible range is unaffected (`focusOn()` queues `pendingFocusDate` on its own).
+      - `resources/js/calendar.js:pageView()` — the Month branch must queue a focus target too. Stepping by a fixed day count is wrong for months of unequal length; queue the same day-of-month in the adjacent month (clamped to that month's last day when it does not exist, e.g. 31 January → 28/29 February), or another deterministic in-range date, then set `pendingFocusShouldMoveFocus = true` so `datesSet` restores focus through `focusOn()` exactly as the Week and Day paths already do.
+      - `.larapilot/docs/test-results/US-008-manual.md` — the "Keyboard-only pass" section states `PageUp` / `PageDown` "step to the previous/next range (month, week, or day) and land focus on the corresponding day" for all three views. That is the correct target behaviour; it just does not hold in Month view today. No edit needed once the code matches it — but the manual pass must actually exercise Month-view paging, not only Week and Day.
+      - `tests/Feature/CalendarPageTest.php` — automated coverage at the `NORMAL` bar cannot reach FullCalendar's rendered DOM, which is why this slipped through. Do not add a browser suite for it (that is the `BEST` bar). Instead, extract the month-paging focus-target computation into a pure helper in `resources/js/calendar.js` so its clamping behaviour is inspectable, and rely on the manual handoff for the DOM-level assertion.
     status_history:
       - { status: PLANNED, at: '2026-09-09T22:50:38+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-09T23:18:03+02:00' }
+      - { status: REVIEW, at: '2026-09-09T23:41:55+02:00' }
+      - { status: TODO, at: '2026-09-10T07:28:10+02:00' }
+      - { status: PLANNED, at: '2026-09-10T07:31:14+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-10T07:31:58+02:00' }
     rework: false
   -
     code: US-009

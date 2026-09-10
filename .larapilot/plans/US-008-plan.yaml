@@ -73,6 +73,23 @@ plan_body: |
   - **FullCalendar DOM ownership.** Styling reaches into `.fc-*` internals, which a future major version can move. Mitigation: prefer FullCalendar's own CSS custom properties (`--fc-border-color`, `--fc-page-bg-color`, `--fc-today-bg-color`, `--fc-event-*`, `--fc-small-font-size`) over element selectors wherever a variable exists, and keep the remaining `.fc-*` overrides in one clearly commented block in `resources/css/app.css`
   - **MIT-only constraint (hard).** `@fullcalendar/core`, `@fullcalendar/daygrid` and `@fullcalendar/timegrid` only. No `@fullcalendar/resource*`, `@fullcalendar/timeline`, `@fullcalendar/adaptive`, and no `schedulerLicenseKey` key anywhere in the config. `@fullcalendar/interaction` is deliberately **not** installed either: the grid needs no drag, resize or `dateClick`, and this product cannot write to the calendar at all (FR-021)
   - **Convention-resolution cost over a wider window.** `MeetingCoverageLookup` resolves transcript candidates by convention for occurrences with no `meeting_transcripts` row. Across a 42-day month window that is one shared directory listing plus in-memory matching — the same shape the agenda already pays across 7 days. If a very large transcripts directory ever makes it visible, the fix belongs in a cached index inside `TranscriptsDirectory`, not in a per-view special case
+
+
+  ---
+
+  ## Rework — Round 1 (review 2026-09-10)
+
+  The review gate approved every acceptance criterion except **"Views are keyboard navigable with visible focus"**, and requested changes on exactly one finding. Scope is deliberately narrow: the contradictory empty-range copy, the missing `CHANGELOG.md` entry and the unverified AA contrast were **explicitly deferred by the human** and are recorded in `.larapilot/decisions.yaml` (`419974f3d275c843`) — do not re-open them in this round.
+
+  **The defect.** `resources/js/calendar.js:pageView()` computes `stepDays` for `week` (7) and `day` (1) only. In Month view it is `null`, so the `if (stepDays)` block never runs, no `pendingFocusDate` is queued, and `this.calendar.next()` / `.prev()` navigates with nothing pending. `datesSet` therefore takes the `else` branch and calls `syncRovingTabindex()`, which reassigns `tabindex` but never calls `.focus()`. FullCalendar has already destroyed the previously focused cell during the re-render, so focus falls back to `<body>` and a keyboard user is ejected from the grid. Week and Day views are unaffected, and arrow-key navigation past the edge of the visible range is unaffected (`focusOn()` queues `pendingFocusDate` on its own).
+
+  **Why a fixed day-step is the wrong fix.** Months are unequal in length, so `addDaysToIso(this.focusedDate, ±30)` lands on the wrong day and, from a 31-day month, sometimes skips a month entirely.
+
+  **Why `focusedDate` is the wrong base.** After an arrow-key walk, `focusedDate` can sit on a leading or trailing day belonging to a *neighbouring* month while the calendar's own anchor is still the displayed month (focus on 1 October while the September grid is rendered). Adding a month to `focusedDate` would then target November while `calendar.next()` renders October — a target outside the newly rendered range. `focusOn()` would self-correct with a second `gotoDate()` hop, but only by navigating to the wrong month. The month step must be derived from `this.calendar.getDate()` — the view's anchor — with the day-of-month carried over from `focusedDate` and clamped to the target month's length.
+
+  **Git.** `feature/US-008-calendar-views` already exists and is where this round lands — **no TASK-00 this time**. The pending artifact changes from the review gate (`.larapilot/backlog.yaml`, `.larapilot/specs/US-008.yaml`, `.larapilot/decisions.yaml`) belong in their own `chore(US-008)` commit, never folded into a fix commit.
+
+  **Test bar for this round.** Still `NORMAL`, and this project has **no JavaScript test runner** — `package.json` declares only `build` and `dev` scripts, and adding Vitest/Jest would be a dependency change requiring approval that this rework does not have. The extracted helper is therefore for inspectability and reviewability, not for an automated assertion; the DOM-level proof stays with the manual handoff. The PHP suite (353 tests) and `larapilot:quality` must stay green regardless — a JS-only change must not regress either.
 tasks:
   -
     id: TASK-00
@@ -524,4 +541,85 @@ tasks:
       subject: 'docs(US-008): TASK-08 document the calendar surface'
       committed_at: '2026-09-09T23:35:46+02:00'
       url: 'https://github.com/giarfa/personal-kbms/commit/70e82e74c05ebfd044b715d477a8a564665ffeb0'
-updated_at: '2026-09-09T23:40:51+02:00'
+  -
+    id: TASK-09
+    title: 'Fix PageUp/PageDown dropping keyboard focus in Month view'
+    type: Fix
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2
+    dependencies: {}
+    body: |
+      ## Description
+      Fix: `PageUp` / `PageDown` ejects keyboard focus from the grid in Month view because `pageView()` queues no focus target for that view. Month must restore focus to a real day cell after paging, exactly as Week and Day already do.
+
+      ## Files Involved
+      - resources/js/calendar.js
+
+      ## Steps
+      1. Add a pure module-scope helper beside the existing `addDaysToIso()`, e.g. `addMonthsToIso(iso, delta, dayOfMonth)`: parse `iso` as a local date, step the month by `delta`, then set the day to `dayOfMonth` **clamped to the target month's last day**. Build the result with the same `getFullYear()` / `getMonth()+1` / `getDate()` zero-padded join `addDaysToIso()` uses — never `toISOString()`, which shifts to UTC and can move the date by a day. Clamp explicitly (compute the target month's length; do not rely on `Date`'s rollover, which turns 31 February into 3 March).
+      2. In `pageView(direction)`, branch on `this.currentView`:
+         - `week` → `pendingFocusDate = addDaysToIso(this.focusedDate, direction * 7)` (unchanged)
+         - `day` → `addDaysToIso(this.focusedDate, direction * 1)` (unchanged)
+         - `month` → derive the target from the **calendar's anchor, not `focusedDate`**: take `this.calendar.getDate()` as the current month, step it by `direction` months, and carry the day-of-month from `this.focusedDate` clamped to the target month's length. This is the whole point of the helper — see the Rework note in `plan_body` for why `focusedDate` alone targets the wrong month after an arrow-key walk onto a leading or trailing cell.
+      3. Set `pendingFocusShouldMoveFocus = true` on every branch, then call `this.calendar.next()` / `.prev()` as now. `datesSet` already routes a queued `pendingFocusDate` through `focusOn()`, so no change is needed there.
+      4. Verify by hand at `http://personal-kbms.test/calendar`, keyboard only, in **all three** views: `Tab` into the grid, `PageDown` then `PageUp`, and confirm a day cell keeps a visible focus ring after each step and focus never lands on `<body>`. In Month view specifically, page from a 31-day month into a 30-day month and into February, and page while focus sits on a leading or trailing day of a neighbouring month.
+      5. Confirm no regression to the paths that already worked: arrow-key navigation past the edge of the visible range, `Home` / `End`, `Enter` on a chip, and `Esc` out of the `+N more` popover.
+      6. `npm run build`, then `php artisan test` and `php artisan larapilot:quality`.
+
+      ## Completion Criteria
+      - [ ] `pageView()` queues a focus target for Month view as well as Week and Day
+      - [ ] The month step is derived from `this.calendar.getDate()`, not `focusedDate`, so paging from a leading/trailing neighbouring-month cell lands on the adjacent month rather than skipping one
+      - [ ] Day-of-month is clamped to the target month's length — 31 January pages to 28/29 February, never rolls over into March
+      - [ ] The clamping lives in a pure, module-scope helper that takes and returns ISO date strings and touches no DOM or calendar state
+      - [ ] No `toISOString()` anywhere in the new code — local date construction only, matching `addDaysToIso()`
+      - [ ] Keyboard-only pass confirms focus stays on a visible day cell after `PageUp` / `PageDown` in all three views
+      - [ ] Arrow-key edge navigation, `Home` / `End`, chip activation and the `+N more` popover still behave as before
+      - [ ] `npm run build` succeeds; the full PHP suite stays green; `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — no model, migration, factory or seeder change
+
+      ## Git Deliverables
+      - Commit: `fix(US-008): TASK-09 restore keyboard focus when paging the month view`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+  -
+    id: TASK-10
+    title: 'Extend the manual test handoff to cover month paging and re-verify the suite'
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 1
+    dependencies:
+      - TASK-09
+    body: |
+      ## Description
+      The Month-view focus drop reached the review gate because the `NORMAL` bar cannot reach FullCalendar's rendered DOM and the manual handoff, while it states the correct target behaviour, does not force the tester to exercise Month paging or the month-length edges. Close that gap in the checklist and re-verify the automated bar.
+
+      ## Files Involved
+      - .larapilot/docs/test-results/US-008-manual.md
+
+      ## Steps
+      1. In the "Keyboard-only pass" section, keep the existing `PageUp` / `PageDown` line — it already states the correct behaviour — and add explicit sub-steps that name the cases TASK-09 fixes:
+         - page forward and back in **Month** view and confirm focus lands on a visible day cell with a focus ring, never on `<body>`
+         - page from a 31-day month into a 30-day month, and from 31 January into February, confirming the landing day is clamped rather than rolled over
+         - arrow onto a leading or trailing day belonging to a neighbouring month, then page, confirming the calendar advances exactly one month
+      2. Add a one-line note at the top of that section stating that this project has no JavaScript test runner, so grid keyboard behaviour has no automated coverage at any bar below `BEST` and this checklist is the only proof.
+      3. Do **not** add Playwright, Dusk, Pest browser or a viewport matrix — that is the `BEST` bar and `settings.testing` is `NORMAL`. Do not add a JS test runner; that is a dependency change without approval.
+      4. Run `php artisan test` and `php artisan larapilot:quality` and confirm both are still green after TASK-09's JS change.
+
+      ## Completion Criteria
+      - [ ] The manual handoff names Month paging, the month-length clamp cases, and the neighbouring-month-cell case as distinct checks
+      - [ ] The handoff states plainly that no automated coverage exists for grid keyboard behaviour at this bar
+      - [ ] No browser, E2E, viewport or JS-runner tooling was added
+      - [ ] `php artisan test` green (353+ tests); `php artisan larapilot:quality` passes
+
+      ## Test Data
+      - N/A — documentation and verification only
+
+      ## Git Deliverables
+      - Commit: `test(US-008): TASK-10 extend the manual handoff to cover month paging`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes only
+updated_at: '2026-09-10T07:31:14+02:00'
