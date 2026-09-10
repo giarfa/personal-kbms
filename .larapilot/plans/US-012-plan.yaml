@@ -223,11 +223,11 @@ tasks:
       9. `npm run build`, then eyeball `/` and `/calendar` in light and dark.
 
       ## Completion Criteria
-      - [ ] Twelve tokens (six colours × text/fill) defined in both themes, on the inherited lightness pairs
-      - [ ] Fill rules set only `background` and `color`; no border property anywhere in them
-      - [ ] Cancelled wins by selector, not by source order, on both surfaces
-      - [ ] Legend swatch style in place
-      - [ ] `npm run build` succeeds; both themes render sanely
+      - [x] Twelve tokens (six colours × text/fill) defined in both themes, on the inherited lightness pairs
+      - [x] Fill rules set only `background` and `color`; no border property anywhere in them
+      - [x] Cancelled wins by selector, not by source order, on both surfaces
+      - [x] Legend swatch style in place
+      - [x] `npm run build` succeeds; both themes render sanely
 
       ## Test Data
       - N/A — stylesheet only
@@ -237,11 +237,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 2
     dependencies:
       - TASK-01
+    commit:
+      sha: 4e468427eb995af1501bc0046904a5fe9144d3bb
+      short_sha: '4e46842'
+      subject: 'feat(US-012): TASK-03 add the closed colour palette and fill-only channel rules'
+      committed_at: '2026-09-11T01:41:32+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4e468427eb995af1501bc0046904a5fe9144d3bb'
   -
     id: TASK-04
     title: 'Colour the agenda rows and generate its legend'
@@ -411,4 +417,4 @@ tasks:
     dependencies:
       - TASK-04
       - TASK-05
-updated_at: '2026-09-11T01:39:59+02:00'
+updated_at: '2026-09-11T01:41:33+02:00'

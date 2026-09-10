@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Calendar\SyncHealthReporter;
 use App\Meetings\AgendaQuery;
 use App\Meetings\AgendaRange;
+use App\Meetings\EventColourRules;
 use Carbon\CarbonImmutable;
 use Exception;
 use Illuminate\Contracts\View\View;
@@ -46,6 +47,9 @@ class Agenda extends Component
             'range' => $range,
             'days' => AgendaQuery::for($range),
             'syncHealth' => app(SyncHealthReporter::class)->current(),
+            // The legend is generated from configuration, so adding a rule to
+            // the array makes it appear here with no view edit (US-012).
+            'colourRules' => EventColourRules::fromConfig()->all(),
         ]);
     }
 

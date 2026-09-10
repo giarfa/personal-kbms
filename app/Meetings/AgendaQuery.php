@@ -41,10 +41,15 @@ class AgendaQuery
         // scoped binding is shared for the whole request, not constructed fresh).
         $coverageByOccurrence = app(MeetingCoverageLookup::class)->for($events);
 
-        $rows = $events->map(function (CalendarEvent $event) use ($coverageByOccurrence): AgendaRow {
+        // Built once, outside the loop, and matched against columns already
+        // hydrated above: colouring (US-012) adds no query at all, so a dense
+        // week costs exactly what it costs today.
+        $colourRules = EventColourRules::fromConfig();
+
+        $rows = $events->map(function (CalendarEvent $event) use ($coverageByOccurrence, $colourRules): AgendaRow {
             $coverage = $coverageByOccurrence[$event->source_uid."\0".$event->recurrence_id] ?? new MeetingCoverage;
 
-            return new AgendaRow($event, $coverage);
+            return new AgendaRow($event, $coverage, $colourRules->match($event));
         });
 
         $byDate = $rows->groupBy(function (AgendaRow $row) use ($fromDate): string {
