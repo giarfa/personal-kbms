@@ -255,10 +255,10 @@ tasks:
       7. `php artisan test --compact --filter=AgendaSelfRefreshTest` then the full suite; `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] New feature test passes and covers every bullet above
-      - [ ] Full suite green
-      - [ ] Manual handoff document written with steps, expected observation, and failure modes
-      - [ ] Pint and Larastan (level 5) clean
+      - [x] New feature test passes and covers every bullet above
+      - [x] Full suite green
+      - [x] Manual handoff document written with steps, expected observation, and failure modes
+      - [x] Pint and Larastan (level 5) clean
 
       ## Test Data
       - N/A — reuses existing factories; no factory or seeder changes
@@ -268,12 +268,18 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 3
     dependencies:
       - TASK-02
       - TASK-03
+    commit:
+      sha: 82d574a4b30e133cc078843795d6f6c0b9a99986
+      short_sha: 82d574a
+      subject: 'test(US-011): TASK-04 cover agenda self-refresh and document manual checks'
+      committed_at: '2026-09-11T01:31:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/82d574a4b30e133cc078843795d6f6c0b9a99986'
   -
     id: TASK-05
     title: 'Document the self-refresh behaviour in README and CHANGELOG'
@@ -310,4 +316,4 @@ tasks:
     dependencies:
       - TASK-02
       - TASK-03
-updated_at: '2026-09-11T01:27:13+02:00'
+updated_at: '2026-09-11T01:31:06+02:00'

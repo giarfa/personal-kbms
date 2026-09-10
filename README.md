@@ -94,6 +94,16 @@ The grid is built on [FullCalendar](https://fullcalendar.io/) **6.x, MIT-core pa
 
 **The frontend must be built** — `npm install && npm run build` (or `npm run dev` while developing) — before the grid renders anything. A calendar page that loads with a populated agenda but shows a blank grid is the symptom of a stale or missing Vite build, not a sync problem; `php artisan kbms:doctor` cannot see this failure mode because it never touches the frontend build.
 
+## Self-refreshing views
+
+The agenda (`/`) and the calendar (`/calendar`) bring themselves up to date roughly **once a minute** while their tab is visible, so a mirror refreshed by the background sync shows up without a reload. The refresh is deliberately invisible: no toast, no banner, no spinner, no announcement — rows and events simply become current, and scroll position, the agenda's date anchor and Jump-to field, and the calendar's view, anchor date and keyboard-focused day cell all survive it. Time-derived chrome re-derives with it, so on a page left open for hours the `Now` divider keeps moving and the sync pill's relative wording stays honest.
+
+While the tab is hidden, refreshing **pauses** outright; returning to the tab fires one immediate catch-up rather than waiting out another minute. A refresh that fails — a stopped server, a restarted PHP process, an unreachable feed — leaves the last good render on screen and says nothing. Sync failures keep being reported only by the sync pill and the sync alert.
+
+The cadence lives in exactly one place, `resources/js/self-refresh.js`, and is **hardcoded at 60 seconds** to match the sync indicator. **There is no `KBMS_*` key for it and no setting in the UI** — do not go looking for one.
+
+The meeting detail page (`/meetings/{occurrence}`) deliberately does **not** self-refresh: it hosts the notes editor, and a timed re-render there would risk interrupting typing.
+
 ## Notes
 
 Every meeting can carry a Markdown note, written straight into a Write/Preview panel on the detail page — no save button, just an autosave indicator (`Saving…` / `Saved H:i` / `Not saved` with a retry). A note belongs to the **occurrence**, keyed on (`event_uid`, `event_recurrence_id`), never to the `calendar_events` row — so nothing the feed does (retitle, reschedule, cancel, or even a resync that drops and re-creates the mirrored row) can move or destroy one, and a note on one occurrence of a recurring series never leaks onto its siblings.
