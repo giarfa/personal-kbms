@@ -46,17 +46,7 @@
 
             <livewire:transcript-panel :occurrence="$row->event" />
 
-            <section class="kb-panel" aria-labelledby="ask-h">
-                <div class="kb-panel__head">
-                    <div>
-                        <p class="kb-owned-flag">{{ __('Yours') }}</p>
-                        <h2 id="ask-h">{{ __('Ask Claude Code') }}</h2>
-                    </div>
-                </div>
-                <div class="kb-panel__body">
-                    <p class="kb-note-inline">{{ __('The local Claude Code launch bridge arrives with US-009.') }}</p>
-                </div>
-            </section>
+            <livewire:ask-claude :occurrence="$row->event" />
         </div>
     </div>
 </x-layouts::app>
