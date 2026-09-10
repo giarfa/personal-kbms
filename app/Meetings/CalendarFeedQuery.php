@@ -40,10 +40,15 @@ final class CalendarFeedQuery
         // of window density — never resolve coverage per occurrence in a loop.
         $coverageByOccurrence = app(MeetingCoverageLookup::class)->for($events);
 
-        return $events->map(function (CalendarEvent $event) use ($coverageByOccurrence): CalendarEventPayload {
+        // Built once, outside the map, and matched against columns already
+        // hydrated above: colouring (US-012) adds no query, so a dense month
+        // window costs exactly what it costs today.
+        $colourRules = EventColourRules::fromConfig();
+
+        return $events->map(function (CalendarEvent $event) use ($coverageByOccurrence, $colourRules): CalendarEventPayload {
             $coverage = $coverageByOccurrence[$event->source_uid."\0".$event->recurrence_id] ?? new MeetingCoverage;
 
-            return CalendarEventPayload::from($event, $coverage);
+            return CalendarEventPayload::from($event, $coverage, $colourRules->match($event));
         })->values();
     }
 }

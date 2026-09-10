@@ -135,17 +135,23 @@ class CalendarFeedQueryTest extends TestCase
     {
         $dir = $this->transcriptsDir();
 
-        $bare = CalendarEvent::factory()->at(CarbonImmutable::parse('2026-09-08 08:00', 'Europe/Rome'), 30)->create(['summary' => 'Bare meeting']);
+        // Every event here gets an explicit location. The factory only sets one
+        // half the time, and the shipped "location is empty" colour rule (US-012)
+        // would otherwise let a coin flip decide whether these exact-classNames
+        // assertions pass. Leaving the default rules active rather than clearing
+        // them also proves the colour channel stays out of coverage's way.
 
-        $notesOnly = CalendarEvent::factory()->at(CarbonImmutable::parse('2026-09-08 09:00', 'Europe/Rome'), 30)->create(['summary' => 'Notes only meeting']);
+        $bare = CalendarEvent::factory()->at(CarbonImmutable::parse('2026-09-08 08:00', 'Europe/Rome'), 30)->create(['summary' => 'Bare meeting', 'location' => 'Room 1']);
+
+        $notesOnly = CalendarEvent::factory()->at(CarbonImmutable::parse('2026-09-08 09:00', 'Europe/Rome'), 30)->create(['summary' => 'Notes only meeting', 'location' => 'Room 1']);
         MeetingNote::factory()->forOccurrence($notesOnly)->create(['body' => 'notes']);
 
-        $transcriptOnly = CalendarEvent::factory()->at(CarbonImmutable::parse('2026-09-08 10:00', 'Europe/Rome'), 30)->create(['summary' => 'Transcript only meeting']);
+        $transcriptOnly = CalendarEvent::factory()->at(CarbonImmutable::parse('2026-09-08 10:00', 'Europe/Rome'), 30)->create(['summary' => 'Transcript only meeting', 'location' => 'Room 1']);
         $transcriptPath = "{$dir}/transcript-only.md";
         file_put_contents($transcriptPath, 'content');
         MeetingTranscript::factory()->forOccurrence($transcriptOnly)->convention()->create(['path' => $transcriptPath]);
 
-        $both = CalendarEvent::factory()->at(CarbonImmutable::parse('2026-09-08 11:00', 'Europe/Rome'), 30)->create(['summary' => 'Fully annotated meeting']);
+        $both = CalendarEvent::factory()->at(CarbonImmutable::parse('2026-09-08 11:00', 'Europe/Rome'), 30)->create(['summary' => 'Fully annotated meeting', 'location' => 'Room 1']);
         MeetingNote::factory()->forOccurrence($both)->create(['body' => 'notes']);
         $bothPath = "{$dir}/both.md";
         file_put_contents($bothPath, 'content');

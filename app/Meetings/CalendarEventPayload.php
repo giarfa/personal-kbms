@@ -29,7 +29,7 @@ final readonly class CalendarEventPayload
         public string $accessibleName,
     ) {}
 
-    public static function from(CalendarEvent $event, MeetingCoverage $coverage): self
+    public static function from(CalendarEvent $event, MeetingCoverage $coverage, ?EventColourRule $colourRule = null): self
     {
         $start = CarbonImmutable::instance($event->starts_at);
         $end = CarbonImmutable::instance($event->ends_at);
@@ -43,18 +43,18 @@ final readonly class CalendarEventPayload
             end: $isAllDay ? $end->format('Y-m-d') : $end->format('Y-m-d\TH:i:s'),
             allDay: $isAllDay,
             url: route('meetings.show', $event->occurrenceKey()->toRouteKey()),
-            classNames: self::classNames($coverage, $isAllDay, $isCancelled),
+            classNames: self::classNames($coverage, $isAllDay, $isCancelled, $colourRule),
             hasNotes: $coverage->hasNotes,
             hasTranscript: $coverage->hasTranscript,
             cancelled: $isCancelled,
-            accessibleName: self::accessibleName($event->summary, $start, $isAllDay, $coverage, $isCancelled),
+            accessibleName: self::accessibleName($event->summary, $start, $isAllDay, $coverage, $isCancelled, $colourRule),
         );
     }
 
     /**
      * @return list<string>
      */
-    private static function classNames(MeetingCoverage $coverage, bool $isAllDay, bool $isCancelled): array
+    private static function classNames(MeetingCoverage $coverage, bool $isAllDay, bool $isCancelled, ?EventColourRule $colourRule): array
     {
         $classNames = match (true) {
             $coverage->hasNotes && $coverage->hasTranscript => ['kb-ev--both'],
@@ -71,10 +71,17 @@ final readonly class CalendarEventPayload
             $classNames[] = 'kb-ev--cancelled';
         }
 
+        // The rule colour is a separate channel from coverage (US-012): the
+        // stylesheet lets this class paint only the fill, so the coverage
+        // classes above keep their edge borders on the same event.
+        if ($colourRule !== null) {
+            $classNames[] = 'kb-ev--colour-'.$colourRule->colour->value;
+        }
+
         return $classNames;
     }
 
-    private static function accessibleName(string $title, CarbonImmutable $start, bool $isAllDay, MeetingCoverage $coverage, bool $isCancelled): string
+    private static function accessibleName(string $title, CarbonImmutable $start, bool $isAllDay, MeetingCoverage $coverage, bool $isCancelled, ?EventColourRule $colourRule): string
     {
         $coverageWords = match (true) {
             $coverage->hasNotes && $coverage->hasTranscript => __('has notes and transcript'),
@@ -88,6 +95,12 @@ final readonly class CalendarEventPayload
             : $start->format('H:i').' '.$title;
 
         $name = $prefix.', '.$coverageWords;
+
+        // After the coverage words and before the cancelled suffix, so the
+        // existing wording order is preserved and only extended (US-012).
+        if ($colourRule !== null) {
+            $name .= ', '.$colourRule->label;
+        }
 
         return $isCancelled ? $name.', '.__('cancelled') : $name;
     }

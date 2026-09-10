@@ -272,12 +272,12 @@ tasks:
       8. `php artisan larapilot:quality` and `php artisan test --compact --filter=Agenda`
 
       ## Completion Criteria
-      - [ ] A matched agenda row carries its colour class and its screen-reader label
-      - [ ] An unmatched row renders byte-identically to before this spec
-      - [ ] Cancelled and coverage rendering unchanged on a coloured row
-      - [ ] The legend is generated from config — a third rule appears with no view edit; an empty list yields no extra legend entries
-      - [ ] The meeting detail page is still uncoloured, via the constructor default
-      - [ ] Existing agenda tests pass; Pint and Larastan clean
+      - [x] A matched agenda row carries its colour class and its screen-reader label
+      - [x] An unmatched row renders byte-identically to before this spec
+      - [x] Cancelled and coverage rendering unchanged on a coloured row
+      - [x] The legend is generated from config — a third rule appears with no view edit; an empty list yields no extra legend entries
+      - [x] The meeting detail page is still uncoloured, via the constructor default
+      - [x] Existing agenda tests pass; Pint and Larastan clean
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -287,12 +287,18 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-02
       - TASK-03
+    commit:
+      sha: 40d22a0c60987cd85a5eaadc155ec0d83b4a51e3
+      short_sha: 40d22a0
+      subject: 'feat(US-012): TASK-04 colour agenda rows and generate the legend from config'
+      committed_at: '2026-09-11T01:42:21+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/40d22a0c60987cd85a5eaadc155ec0d83b4a51e3'
   -
     id: TASK-05
     title: 'Colour the calendar events and generate its legend'
@@ -417,4 +423,4 @@ tasks:
     dependencies:
       - TASK-04
       - TASK-05
-updated_at: '2026-09-11T01:41:33+02:00'
+updated_at: '2026-09-11T01:42:22+02:00'
