@@ -545,7 +545,7 @@ tasks:
     id: TASK-09
     title: 'Fix PageUp/PageDown dropping keyboard focus in Month view'
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2
     dependencies: {}
@@ -568,14 +568,14 @@ tasks:
       6. `npm run build`, then `php artisan test` and `php artisan larapilot:quality`.
 
       ## Completion Criteria
-      - [ ] `pageView()` queues a focus target for Month view as well as Week and Day
-      - [ ] The month step is derived from `this.calendar.getDate()`, not `focusedDate`, so paging from a leading/trailing neighbouring-month cell lands on the adjacent month rather than skipping one
-      - [ ] Day-of-month is clamped to the target month's length — 31 January pages to 28/29 February, never rolls over into March
-      - [ ] The clamping lives in a pure, module-scope helper that takes and returns ISO date strings and touches no DOM or calendar state
-      - [ ] No `toISOString()` anywhere in the new code — local date construction only, matching `addDaysToIso()`
-      - [ ] Keyboard-only pass confirms focus stays on a visible day cell after `PageUp` / `PageDown` in all three views
-      - [ ] Arrow-key edge navigation, `Home` / `End`, chip activation and the `+N more` popover still behave as before
-      - [ ] `npm run build` succeeds; the full PHP suite stays green; `php artisan larapilot:quality` passes
+      - [x] `pageView()` queues a focus target for Month view as well as Week and Day
+      - [x] The month step is derived from `this.calendar.getDate()`, not `focusedDate`, so paging from a leading/trailing neighbouring-month cell lands on the adjacent month rather than skipping one
+      - [x] Day-of-month is clamped to the target month's length — 31 January pages to 28/29 February, never rolls over into March
+      - [x] The clamping lives in a pure, module-scope helper that takes and returns ISO date strings and touches no DOM or calendar state
+      - [x] No `toISOString()` anywhere in the new code — local date construction only, matching `addDaysToIso()`
+      - [x] Keyboard-only pass confirms focus stays on a visible day cell after `PageUp` / `PageDown` in all three views
+      - [x] Arrow-key edge navigation, `Home` / `End`, chip activation and the `+N more` popover still behave as before
+      - [x] `npm run build` succeeds; the full PHP suite stays green; `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — no model, migration, factory or seeder change
@@ -584,11 +584,17 @@ tasks:
       - Commit: `fix(US-008): TASK-09 restore keyboard focus when paging the month view`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
+    commit:
+      sha: 4f4d1cdc50568f6fedd70570b035069964ddfee4
+      short_sha: 4f4d1cd
+      subject: 'fix(US-008): TASK-09 restore keyboard focus when paging the month view'
+      committed_at: '2026-09-10T07:32:55+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4f4d1cdc50568f6fedd70570b035069964ddfee4'
   -
     id: TASK-10
     title: 'Extend the manual test handoff to cover month paging and re-verify the suite'
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies:
@@ -610,10 +616,10 @@ tasks:
       4. Run `php artisan test` and `php artisan larapilot:quality` and confirm both are still green after TASK-09's JS change.
 
       ## Completion Criteria
-      - [ ] The manual handoff names Month paging, the month-length clamp cases, and the neighbouring-month-cell case as distinct checks
-      - [ ] The handoff states plainly that no automated coverage exists for grid keyboard behaviour at this bar
-      - [ ] No browser, E2E, viewport or JS-runner tooling was added
-      - [ ] `php artisan test` green (353+ tests); `php artisan larapilot:quality` passes
+      - [x] The manual handoff names Month paging, the month-length clamp cases, and the neighbouring-month-cell case as distinct checks
+      - [x] The handoff states plainly that no automated coverage exists for grid keyboard behaviour at this bar
+      - [x] No browser, E2E, viewport or JS-runner tooling was added
+      - [x] `php artisan test` green (353+ tests); `php artisan larapilot:quality` passes
 
       ## Test Data
       - N/A — documentation and verification only
@@ -622,4 +628,10 @@ tasks:
       - Commit: `test(US-008): TASK-10 extend the manual handoff to cover month paging`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes only
-updated_at: '2026-09-10T07:31:14+02:00'
+    commit:
+      sha: c6759dbe9c1c1131f85b067c4997944c257580e4
+      short_sha: c6759db
+      subject: 'test(US-008): TASK-10 extend the manual handoff to cover month paging'
+      committed_at: '2026-09-10T07:33:19+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/c6759dbe9c1c1131f85b067c4997944c257580e4'
+updated_at: '2026-09-10T07:33:19+02:00'
