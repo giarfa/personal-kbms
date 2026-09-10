@@ -413,12 +413,12 @@ tasks:
       12. `php artisan test --compact` (full suite); `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Every bullet above is a named test and passes
-      - [ ] The three-channel case and the cancelled-wins case are both explicit tests
-      - [ ] The self-refresh overdue flip is asserted end to end
-      - [ ] Query-count equality proven on both surfaces
-      - [ ] Full suite green; Pint and Larastan clean
-      - [ ] Manual handoff written
+      - [x] Every bullet above is a named test and passes
+      - [x] The three-channel case and the cancelled-wins case are both explicit tests
+      - [x] The self-refresh overdue flip is asserted end to end
+      - [x] Query-count equality proven on both surfaces
+      - [x] Full suite green; Pint and Larastan clean
+      - [x] Manual handoff written
 
       ## Test Data
       - N/A — reuses existing factories with explicit overrides; no factory or seeder change, by design
@@ -428,11 +428,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 4
     dependencies:
       - TASK-06
+    commit:
+      sha: 831491e390bf1fbe3171af267c0d29d08a022f39
+      short_sha: 831491e
+      subject: 'test(US-013): TASK-07 cover todo rendering, channel independence and the refresh seam'
+      committed_at: '2026-09-11T01:59:10+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/831491e390bf1fbe3171af267c0d29d08a022f39'
   -
     id: TASK-08
     title: 'Document the todo convention in README and CHANGELOG'
@@ -471,4 +477,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-06
-updated_at: '2026-09-11T01:57:32+02:00'
+updated_at: '2026-09-11T01:59:10+02:00'

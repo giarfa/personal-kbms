@@ -125,6 +125,32 @@ Those two are what ships by default.
 
 The legends are generated from the array, so adding a rule makes it appear on both pages with no code change. The meeting detail page at `/meetings/{occurrence}` is deliberately **not** coloured: the two scanning surfaces are where the signal pays for itself.
 
+## Calendar as todo
+
+An event whose title **starts** with a checkbox marker is rendered as a todo item on the agenda, the calendar and the meeting detail page.
+
+| Marker | Meaning |
+| --- | --- |
+| `[]`, `[ ]` (one or more spaces) | open |
+| `[x]`, `[X]` | done |
+
+- The marker is recognised **only at the very start** of the title, with leading whitespace forgiven. `[] Call the vendor`, `  [ ] Call the vendor` and `[x]Call the vendor` are todos; `Review [x] doc` and `Sprint [] planning` are ordinary meetings, because a bracket in the middle of a title is just a bracket.
+- `[ x ]` (padded) and `[y]` are **not** markers — the accepted set is exactly the four forms above.
+- The marker is stripped from the displayed title and replaced by a checkbox glyph. A title that is *only* a marker renders as `Untitled` rather than as a blank row.
+- The vocabulary is **hardcoded**. There is no `KBMS_*` key and no setting for it — the convention is stable and personal, so do not go looking for one.
+
+**Overdue** means **open and past its end time**, re-derived on every render against `KBMS_TIMEZONE`. So an item goes late on its own while a page is left open, on the next self-refresh, with no reload.
+
+- A **done** item is never overdue, however old.
+- A **cancelled** occurrence is never overdue — cancelled wins over late.
+- An **all-day** item turns overdue once its day has ended, not during it.
+
+**It is read-only and derived.** Status is parsed from the mirrored summary at render time: there is **no column, no migration, and no write-back to the calendar**. The mirror stays a mirror. You tick items in Outlook, because this product cannot write to the calendar at all — and the meeting detail page keeps showing the raw feed summary verbatim, marker included, alongside the parsed status.
+
+Todo status is a **third independent channel**, alongside note/transcript coverage and rule colour: an overdue, rule-coloured, annotated occurrence reads as all three at once, and none of them consumes another. The overdue treatment uses its own colour token, deliberately distinct from every rule colour. Status is never signalled by colour alone — the glyph and the accessible name carry it independently.
+
+Deliberately absent, and not oversights: no way to tick a box from this application, no filtering or grouping by status, no overdue count badge, no pinned "overdue" strip, and no notification, digest or reminder of any kind. An overdue item is legible where it already sits.
+
 ## Self-refreshing views
 
 The agenda (`/`) and the calendar (`/calendar`) bring themselves up to date roughly **once a minute** while their tab is visible, so a mirror refreshed by the background sync shows up without a reload. The refresh is deliberately invisible: no toast, no banner, no spinner, no announcement — rows and events simply become current, and scroll position, the agenda's date anchor and Jump-to field, and the calendar's view, anchor date and keyboard-focused day cell all survive it. Time-derived chrome re-derives with it, so on a page left open for hours the `Now` divider keeps moving and the sync pill's relative wording stays honest.
