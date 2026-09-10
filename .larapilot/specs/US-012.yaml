@@ -1,0 +1,54 @@
+code: US-012
+title: 'Rule-based event colouring on the calendar and agenda'
+epic:
+  code: EP-003
+  title: 'Meeting Workspace'
+priority: HIGH
+points: 3
+status: TODO
+body: |
+  #### US-012: Rule-based event colouring on the calendar and agenda
+
+  **Epic:** EP-003 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+  **Blocked by:** US-011
+  **Type:** Evolutiva
+  **Traces to:** FR-023 (MoSCoW: Must), FR-002 (MoSCoW: Must), FR-003 (MoSCoW: Must)
+
+  **User Story**
+  As the operator,
+  I want calendar events and agenda rows tinted by rules I define against the mirrored feed fields,
+  so that a category of meeting — a PING, or one with nowhere to be — is recognisable before I read a single title.
+
+  **Demonstrates**
+  After implementing this spec, `config/kbms.php` carries an ordered rule list whose first two entries are yellow for a summary containing `PING` and purple for an empty location. A meeting titled "PING weekly" renders yellow in month, week and day views at `/calendar` and on its agenda row at `/`; a meeting with no location renders purple on both; a meeting that is both renders yellow, because the PING rule is listed first. Every one of them still shows its note/transcript coverage marks, and each colour is named in the page legend and in the event's accessible name.
+
+  **Acceptance Criteria**
+
+  *Rule engine*
+  - [ ] Rules live as an **ordered array** in `config/kbms.php`. Each rule declares the feed field it inspects, the condition, a colour token, and a short human label. The two rules the operator asked for ship as the shipped defaults: `summary` contains `PING` → yellow, labelled "Ping"; `location` is empty → purple, labelled "No location"
+  - [ ] Two match conditions are supported and are the only ones this spec adds: **`contains`** (substring, **case-insensitive** — `PING`, `Ping` and `ping` all match) and **`empty`** (the field is `null`, absent, or contains only whitespace — an ICS feed emitting `LOCATION:` with a space counts as empty)
+  - [ ] **First match wins.** Rules are evaluated top-down in array order; the first hit paints the occurrence and every later rule is skipped. Reordering the array is the only mechanism for reprioritising — no separate priority key. An occurrence matching no rule renders exactly as it does today
+  - [ ] The colour is a **named token from a closed palette** resolved in the stylesheet, never a raw CSS value taken from configuration. A rule naming an unknown colour, an unknown field, or an unknown condition must not reach the browser as markup: it is rejected or ignored with the event rendering uncoloured, and the page still renders
+  - [ ] An empty or absent rule list is valid and is the "off" state: both views render exactly as they do before this spec, with no legend entries and no colour classes
+
+  *Rendering — both surfaces*
+  - [ ] Calendar events at `/calendar` carry the matched rule's colour in **month, week and day** views. The colour fills the event body
+  - [ ] Agenda rows at `/` carry the same colour for the same occurrences, so the two surfaces never disagree about what a meeting is
+  - [ ] Rule colour and coverage are **separate visual channels**: the existing note/transcript/both edge borders and the dot/square marks on the calendar, and the coverage tags on the agenda, are unchanged and remain visible on a coloured event. An annotated PING meeting reads as both annotated and PING
+  - [ ] Cancelled styling still wins where it conflicts — a cancelled occurrence stays struck through and de-emphasised whether or not a rule matched it
+
+  *Accessibility and legibility*
+  - [ ] Each matched occurrence's **accessible name** gains the rule label, alongside the coverage words already there, so the classification is available without seeing colour
+  - [ ] The legend on both pages lists every configured rule as a swatch plus its label, generated from the configuration rather than hardcoded — adding a third rule to the array makes it appear in both legends with no view edit
+  - [ ] Both colours meet WCAG AA text contrast against their own fill in **light and dark** themes, and remain distinguishable from the existing note and transcript hues
+
+  *Edge cases*
+  - [ ] A `null` summary (the feed permits it) does not error the feed or the agenda: it simply matches no `contains` rule
+  - [ ] Colouring adds **no per-occurrence queries**: rules are evaluated against fields already loaded by `CalendarFeedQuery` and `AgendaQuery`, and a dense month window issues the same number of queries as it does today
+
+  **Out of scope**
+  - No management UI and no database table for rules — configuration file only. A CRUD screen is its own spec if it is ever wanted
+  - No new `KBMS_*` environment key: rules are product shape, not machine shape, and belong in `config/kbms.php` next to the other product constants
+  - No filtering, hiding, or searching by rule — this spec colours, it does not query. Tag-driven filtering remains FR-017
+  - No colouring on the meeting detail page at `/meetings/{occurrence}`; the two scanning surfaces are where the signal pays for itself
+  - No multi-match rendering (split or striped fills): first match wins, deliberately

@@ -675,4 +675,290 @@ decisions:
     source: askquestion
     spec: US-010
     supersedes: null
-updated_at: '2026-09-10T14:36:18+02:00'
+  -
+    id: 27c2c4acfc55ae06
+    ts: '2026-09-10T20:14:12+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'agenda and calendar auto-refresh scope'
+    label: 'agenda and calendar auto-refresh scope'
+    value: 'Agenda page and calendar page both auto-refresh; meeting detail page excluded'
+    question: null
+    rationale: 'Both are mirror-viewing surfaces with the same staleness problem; meeting detail hosts the notes editor and prompt box, where a timed re-render could interrupt typing'
+    source: askquestion
+    spec: US-011
+    supersedes: null
+  -
+    id: 4f154cb76c9bb255
+    ts: '2026-09-10T20:14:12+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'agenda auto-refresh visibility'
+    label: 'agenda auto-refresh visibility'
+    value: 'Silent swap - no toast, banner, aria-live announcement or last-updated timestamp'
+    question: null
+    rationale: 'Matches the PRD density-over-decoration principle for the agenda scanning surface; sync failure stays reported only by the existing sync alert and status components'
+    source: askquestion
+    spec: US-011
+    supersedes: null
+  -
+    id: 3a56459a53db79a9
+    ts: '2026-09-10T20:14:12+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'agenda auto-refresh priority'
+    label: 'agenda auto-refresh priority'
+    value: 'Must -> HIGH; a manually-refreshed agenda is treated as a broken promise of FR-003'
+    question: null
+    rationale: 'FR-002 and FR-003 were already MoSCoW Must, so no MoSCoW change; the freshness expectation was recorded as clarifying bullets under both FRs'
+    source: askquestion
+    spec: US-011
+    supersedes: null
+  -
+    id: 47f9caa4e558fc35
+    ts: '2026-09-10T20:14:12+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'agenda auto-refresh interval and configurability'
+    label: 'agenda auto-refresh interval and configurability'
+    value: 'Fixed ~60 seconds hardcoded, matching the existing sync indicator; no new KBMS_* config key and no operator-facing refresh control'
+    question: null
+    rationale: "User asked for 'once a minute circa'; sync-status already polls at 60s, so a second cadence or a config key would add a surface without adding value"
+    source: chat
+    spec: US-011
+    supersedes: null
+  -
+    id: ef32198318d3edc8
+    ts: '2026-09-10T20:32:31+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'event colour rule configuration surface'
+    label: 'event colour rule configuration surface'
+    value: 'Rules live as an ordered array in config/kbms.php (field + condition + colour token + label); no new KBMS_* env key, no database table, no management UI'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-012
+    supersedes: null
+  -
+    id: 9c14676c3c074b1b
+    ts: '2026-09-10T20:32:31+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'event colour rule surfaces'
+    label: 'event colour rule surfaces'
+    value: 'Rule colours render on the calendar (month/week/day) and on the agenda rows; the meeting detail page is excluded'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-012
+    supersedes: null
+  -
+    id: c174fcc1cb98c265
+    ts: '2026-09-10T20:32:31+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'event colour vs coverage precedence'
+    label: 'event colour vs coverage precedence'
+    value: 'Rule colour and note/transcript coverage are separate visual channels shown together - rule colour fills the event body, coverage keeps its edge borders, marks and agenda tags; cancelled styling still wins where it conflicts'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-012
+    supersedes: null
+  -
+    id: a5151bd1eb857424
+    ts: '2026-09-10T20:32:31+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'event colour multi-match precedence'
+    label: 'event colour multi-match precedence'
+    value: 'First match wins - rules are evaluated top-down in config array order and later matches are skipped; array order is the only priority mechanism, no separate priority key and no split/striped multi-colour fill'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-012
+    supersedes: null
+  -
+    id: e07033119d83e17e
+    ts: '2026-09-10T20:36:10+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'event colour accessibility treatment'
+    label: 'event colour accessibility treatment'
+    value: 'Each rule carries a short label rendered in the page legend (generated from config) and appended to the accessible name of every matched event or row; no visible text badge on the event itself'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-012
+    supersedes: null
+  -
+    id: 4bbed8572398e096
+    ts: '2026-09-10T20:36:10+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'event colour rules prd placement'
+    label: 'event colour rules PRD placement'
+    value: 'New FR-023 at MoSCoW Must, added to MVP In Scope; spec US-012 in EP-003 at priority HIGH, blocked by US-011 so the self-refresh spec settles the shared render path first'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-012
+    supersedes: null
+  -
+    id: efa4e9894e81b504
+    ts: '2026-09-10T20:36:11+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'event colour rule match semantics'
+    label: 'event colour rule match semantics'
+    value: 'contains is a case-insensitive substring match; empty means null, absent or whitespace-only; colour is a named token from a closed palette resolved in the stylesheet, never a raw CSS value taken from config'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-012
+    supersedes: null
+  -
+    id: aa22642c62566646
+    ts: '2026-09-11T00:45:07+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo moscow'
+    label: 'calendar todo moscow'
+    value: Should
+    question: null
+    rationale: 'Valuable triage improvement; workspace usable without it. Default priority MEDIUM.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: 88c79f0c21ffca69
+    ts: '2026-09-11T00:45:08+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo prd traceability'
+    label: 'calendar todo prd traceability'
+    value: 'New FR-024'
+    question: null
+    rationale: 'Introduces a parsed task status plus overdue-vs-now, a new product promise distinct from FR-023 colour rules.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: c28ffdea7f7e769c
+    ts: '2026-09-11T00:45:08+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo marker title display'
+    label: 'calendar todo marker title display'
+    value: 'Strip prefix, render a checkbox glyph before the title'
+    question: null
+    rationale: 'Cleanest scan; raw feed summary still visible on the meeting detail page.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: c99d7e2268a998b2
+    ts: '2026-09-11T00:45:08+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo overdue rule'
+    label: 'calendar todo overdue rule'
+    value: 'Open item whose ends_at is in the past'
+    question: null
+    rationale: 'The reserved slot is over and the item is still open; flips at a moment the Now divider makes visible.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: 14c8c73db7c7b859
+    ts: '2026-09-11T00:45:08+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo overdue surfacing'
+    label: 'calendar todo overdue surfacing'
+    value: 'In-place styling only'
+    question: null
+    rationale: 'No new panel, no second place to check, no query outside the visible window.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: 38f0e09f6835bd4d
+    ts: '2026-09-11T00:45:08+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo render surfaces'
+    label: 'calendar todo render surfaces'
+    value: 'Agenda, calendar (month/week/day) and meeting detail'
+    question: null
+    rationale: 'Wider than the US-012 boundary; operator wants status on the detail page too.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: ed6a169e0bcc8b27
+    ts: '2026-09-11T00:45:09+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo spec dependency'
+    label: 'calendar todo spec dependency'
+    value: 'Blocked by US-012'
+    question: null
+    rationale: 'US-012 establishes the colour-token palette, config-generated legend and the colour-vs-coverage channel contract.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: 002ec067d6a4ee96
+    ts: '2026-09-11T00:45:09+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo mockups'
+    label: 'calendar todo mockups'
+    value: 'No - plan directly'
+    question: null
+    rationale: 'Visual language is a small extension of what US-012 already defines.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: c6e24e0c0aa251af
+    ts: '2026-09-11T00:45:09+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo marker parsing strictness'
+    label: 'calendar todo marker parsing strictness'
+    value: 'Tolerant hardcoded set: [], [ ], [x], [X] with whitespace forgiven'
+    question: null
+    rationale: 'Convention is stable and personal; no config key needed. Forgiving of Outlook and phone keyboards.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: 45677b4ded2adc4d
+    ts: '2026-09-11T00:45:09+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'calendar todo done item styling'
+    label: 'calendar todo done item styling'
+    value: 'Muted and struck through'
+    question: null
+    rationale: 'Done items recede so open ones dominate the scan.'
+    source: askquestion
+    spec: US-013
+    supersedes: null
+  -
+    id: 5478d0d9f31d2af9
+    ts: '2026-09-11T00:52:04+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-settings
+    topic: auto_approve
+    label: auto_approve
+    value: 'YES'
+    question: null
+    rationale: 'Autopilot may spec-approve from a short Robert checklist without a human DONE gate'
+    source: askquestion
+    spec: null
+    supersedes: null
+updated_at: '2026-09-11T00:52:04+02:00'

@@ -43,11 +43,15 @@ A scheduled task fetches the subscribed `.ics` URL and mirrors its events into l
 
 Month, week, and day views of the mirrored calendar. Meetings that carry notes or a linked transcript are visually distinguished from bare ones, so the calendar doubles as a coverage map. Clicking any event opens FR-004.
 
+- The views keep themselves current: a calendar left open reflects what the last background sync mirrored, without the operator reloading the page.
+
 ### FR-003: Agenda view
 
 **MoSCoW:** Must
 
 A chronological list view spanning recent past and upcoming meetings, defaulting to today, with date-range navigation. This is the primary triage surface: it must be usable with the keyboard and must expose note and transcript presence inline without a click.
+
+- Because this is the surface the operator leaves open all day, staying current is part of the requirement, not polish: the list refreshes itself so a meeting the mirror has already picked up is never hidden behind a manual reload. Freshness is silent — the view updates without announcing itself.
 
 ### FR-004: Meeting detail page
 
@@ -126,6 +130,28 @@ The interface always shows when the calendar was last successfully synced and wh
 **MoSCoW:** Must
 
 An Artisan command verifies the whole integration surface in one shot and reports pass/fail per check: ICS URL reachable and parseable; transcripts directory present and readable; launcher script present and executable; queue worker reachable; scheduler registered; configured timezone valid. Every one of the three integration points in this product is an assumption about the operator's machine, and this command is what turns a silent misconfiguration into a stated one.
+
+### FR-023: Rule-based event colouring
+
+**MoSCoW:** Must
+
+Calendar events and agenda rows are tinted by operator-defined rules evaluated against the mirrored feed fields, so a category of meeting is recognisable at a glance without reading titles. Rules are an ordered list in `config/kbms.php`; each names a match (a field plus a condition such as "contains this text" or "is empty") and a colour drawn from a fixed palette. The first rule an occurrence matches paints it — array order is the priority, and the remaining rules are skipped.
+
+- This is a **second, independent channel** from the FR-002 coverage map: rule colour fills the event body, while note/transcript presence keeps owning its own marks. A meeting can be a "PING" meeting *and* an annotated one, and must read as both.
+- Colour never carries the meaning alone: every rule has a short label that appears in the page legend and in the accessible name of each matched event or row.
+- The palette is a closed set of named tokens resolved in the stylesheet, not free-form CSS values supplied by configuration.
+
+### FR-024: Calendar-as-todo — checkbox title convention with time-aware status
+
+**MoSCoW:** Should
+
+The operator also uses the calendar as an occasional todo list, encoded in the event title: a summary beginning with `[]` is an open item, one beginning with `[x]` is a completed one. The product recognises that convention and renders the status as a first-class visual state on the agenda, the calendar, and the meeting detail page — and cross-references it against the current time, so an item still open after its slot has ended reads as late without the operator working it out.
+
+- The convention is **read-only and derived**: status is parsed from the mirrored `summary` at render time. Nothing is written back to the calendar, no status column is stored, and the operator keeps editing items in Outlook. The mirror stays a mirror.
+- Parsing is **tolerant but anchored**: `[]`, `[ ]`, `[x]` and `[X]` are all accepted, with surrounding whitespace forgiven, but only at the very start of the summary. A marker elsewhere in the title is ordinary text. The marker is stripped from the displayed title and replaced by a checkbox glyph.
+- **Overdue** means open *and* past its end time. Time is re-derived on every render, so an item becomes overdue on its own as the day moves (FR-002 / FR-003 self-refresh), and a completed item is never overdue no matter how old.
+- This is a **third independent channel**, alongside the FR-002 coverage map and the FR-023 rule colour. An overdue todo that is also a rule-coloured meeting with notes must read as all three at once — no channel may consume another.
+- Status never rests on colour alone: the checkbox glyph and the accessible name carry "to do", "done" and "overdue" for a reader who cannot see the treatment.
 
 ### FR-012: Prompt launch history per meeting
 
@@ -213,6 +239,8 @@ Single operator, single machine, no accounts, no sharing, no remote hosting in t
 - FR-009 — "Open in Outlook" CTA with feed-carried link preferred and configurable OWA template fallback
 - FR-010 — Sync status, last-error visibility, and manual resync
 - FR-011 — `doctor` command validating every integration assumption
+- FR-023 — Rule-based event colouring on the calendar and agenda, configured as an ordered rule list, layered over (never replacing) the coverage map
+- FR-024 — Calendar-as-todo: `[]` / `[x]` title convention parsed into a time-aware open / done / overdue state on the agenda, calendar, and meeting detail, as a third channel beside coverage and rule colour
 
 ### Out of Scope
 
@@ -358,3 +386,6 @@ Baseline set only, matching a personal project: a `README.md` covering Herd setu
 | 2026-09-09 | larapilot-plan US-007 | Added `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`) and `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`) to the configuration surface; documented the `KBMS_TRANSCRIPT_PATTERN` `{time}` = `Hi` grammar (deliberately unlike `KBMS_OUTLOOK_URL_TEMPLATE`'s `H:i`); marked `meeting_transcripts.path` nullable, carrying the manual-unlink tombstone |
 | 2026-09-10 | larapilot-plan US-009 | Added `KBMS_LAUNCH_TIMEOUT_SECONDS` (`30`) and `KBMS_QUESTION_MAX_CHARS` (`8000`) to the configuration surface; added `exit_code` to `prompt_launches`; recorded that the queued job waits for the launcher's exit code under a bounded timeout, superseding the inception "Process::start" detail |
 | 2026-09-10 | larapilot-feature US-010 | Changed default `KBMS_TRANSCRIPT_PATTERN` to `{date}_{time}_{slug}.md` with `{date}` as `Ymd` and underscore-separated, special-character-stripped `{slug}`; ordering now favors a file-slug-starts-with-event-slug prefix match over exact equality; hard cutover — the old hyphenated/`Y-m-d` convention is no longer recognized, superseding the 2026-09-07 convention decision |
+| 2026-09-10 | larapilot-feature US-011 | Clarified FR-002 and FR-003: the agenda and calendar views must stay current on their own (silent self-refresh), no manual reload — MoSCoW unchanged (both already Must) |
+| 2026-09-10 | larapilot-feature US-012 | Added FR-023 (Must): rule-based event colouring on the calendar and agenda, driven by an ordered rule list in `config/kbms.php` with first-match-wins precedence, a closed colour-token palette, and labels in the legend and accessible names; added to MVP In Scope |
+| 2026-09-11 | larapilot-feature US-013 | Added FR-024 (Should): calendar-as-todo — `[]` / `[x]` title-prefix convention parsed read-only into open / done / overdue status across agenda, calendar and meeting detail, with overdue derived from end time versus now; a third visual channel beside FR-002 coverage and FR-023 rule colour; added to MVP In Scope |

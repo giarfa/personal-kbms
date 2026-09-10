@@ -1,0 +1,46 @@
+code: US-011
+title: 'Self-refreshing agenda and calendar views'
+epic:
+  code: EP-003
+  title: 'Meeting Workspace'
+priority: HIGH
+points: 3
+status: 'IN PROGRESS'
+body: |
+  #### US-011: Self-refreshing agenda and calendar views
+
+  **Epic:** EP-003 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+  **Blocked by:** -
+  **Type:** Evolutiva
+  **Traces to:** FR-003 (MoSCoW: Must), FR-002 (MoSCoW: Must)
+
+  **User Story**
+  As the operator,
+  I want the agenda and calendar views to bring themselves up to date roughly once a minute,
+  so that a mirror refreshed by the background sync is visible without me remembering to reload the page.
+
+  **Demonstrates**
+  After implementing this spec, leaving `/` open while `kbms:sync-calendar` upserts a new meeting into the current range makes that meeting appear in the agenda list within ~60 seconds and no operator action; the same holds for `/calendar` in month, week and day views. Nothing announces the update — rows and events simply become current.
+
+  **Acceptance Criteria**
+  - [ ] The agenda list at `/` re-renders on a ~60 second cadence, matching the interval the sync indicator already uses: a meeting created, retitled, rescheduled or cancelled upstream and picked up by a background sync appears in its correct day group without a manual reload
+  - [ ] The calendar page at `/calendar` refetches `calendar.events` on the same ~60 second cadence in all three views, so newly synced meetings and changed coverage marks (notes / transcript) appear in place
+  - [ ] The refresh is **silent**: no toast, banner, flash message, `aria-live` announcement, spinner or full-page reload — the operator sees only that the content is current. Scroll position is preserved across a refresh
+  - [ ] The refresh does not disturb view state on either page: the agenda keeps its `#[Url] date` anchor (a refresh while viewing a past or future range must not snap back to today) and the value and focus of the "Jump to" date input; the calendar keeps its current view, anchor date, and the keyboard-focused day cell across a refetch
+  - [ ] Time-derived chrome re-derives on each agenda refresh rather than freezing at first paint: the "Now" divider moves as meetings pass, and the relative last-successful-sync wording stays accurate on a page left open for hours
+  - [ ] A failed refresh degrades quietly: a request error, an unreachable feed, or a sync failure leaves the last good render on screen — the view must not blank, throw a visible error, or drop to an empty state. Sync failure keeps being reported only by the existing sync alert and status surfaces (FR-010), which are unchanged by this spec
+  - [ ] Refreshing pauses while the tab is hidden and brings the view up to date when it becomes visible again, so a backgrounded window does not poll the local application indefinitely
+  - [ ] The cadence is a fixed ~60 seconds, deliberately hardcoded to match the existing sync indicator: this spec adds **no** new `KBMS_*` configuration key and no operator-facing refresh control
+
+  **Out of scope**
+  - The meeting detail page keeps its current behaviour — it hosts the notes editor and the prompt box, and a timed re-render there risks interrupting typing. The prompt panel's existing short-lived `wire:poll` while a launch is queued is untouched.
+  - No change to sync scheduling, sync frequency, or the sync status/alert components.
+  - No websockets, no server-sent events, no Laravel Echo: a local single-operator tool polls.
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-11T01:25:22+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-11T01:25:27+02:00'
+rework: false
