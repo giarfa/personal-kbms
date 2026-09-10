@@ -121,14 +121,14 @@ tasks:
       8. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] Only `[]`, `[ ]` (one or more spaces), `[x]`, `[X]` are accepted, only at the start, with leading whitespace forgiven
-      - [ ] A mid-title marker, `[ x ]`, `[y]` and a bare `[` are all ordinary titles
-      - [ ] `displayTitle` strips the marker and the whitespace after it; a marker-only summary yields `Untitled`
-      - [ ] A `null` summary returns `null` and raises nothing
-      - [ ] Overdue is open **and** strictly past **and** not cancelled; done is never overdue
-      - [ ] No configuration key and no `KBMS_*` env var added
-      - [ ] No migration, column, model, factory or seeder touched
-      - [ ] Pint and Larastan (level 5) clean
+      - [x] Only `[]`, `[ ]` (one or more spaces), `[x]`, `[X]` are accepted, only at the start, with leading whitespace forgiven
+      - [x] A mid-title marker, `[ x ]`, `[y]` and a bare `[` are all ordinary titles
+      - [x] `displayTitle` strips the marker and the whitespace after it; a marker-only summary yields `Untitled`
+      - [x] A `null` summary returns `null` and raises nothing
+      - [x] Overdue is open **and** strictly past **and** not cancelled; done is never overdue
+      - [x] No configuration key and no `KBMS_*` env var added
+      - [x] No migration, column, model, factory or seeder touched
+      - [x] Pint and Larastan (level 5) clean
 
       ## Test Data
       - N/A — no model or schema changes in this task, by design
@@ -138,11 +138,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-00
+    commit:
+      sha: b4fcd11ab79062b34d41ebf29080da412fe5a0d4
+      short_sha: b4fcd11
+      subject: 'feat(US-013): TASK-01 parse todo markers and derive time-aware status'
+      committed_at: '2026-09-11T01:51:59+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b4fcd11ab79062b34d41ebf29080da412fe5a0d4'
   -
     id: TASK-02
     title: 'Unit-test parsing and the overdue boundary'
@@ -169,8 +175,8 @@ tasks:
       13. `php artisan test --compact --filter=MeetingTodoTest`
 
       ## Completion Criteria
-      - [ ] Every bullet above is a named test and passes
-      - [ ] Pint and Larastan clean
+      - [x] Every bullet above is a named test and passes
+      - [x] Pint and Larastan clean
 
       ## Test Data
       - N/A — reuses `CalendarEventFactory` with explicit overrides
@@ -180,11 +186,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 2.5
     dependencies:
       - TASK-01
+    commit:
+      sha: 09033394e4f8ca503bc605ae9129d71b746d4c88
+      short_sha: '0903339'
+      subject: 'test(US-013): TASK-02 cover todo parsing and the overdue boundary'
+      committed_at: '2026-09-11T01:52:44+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/09033394e4f8ca503bc605ae9129d71b746d4c88'
   -
     id: TASK-03
     title: 'Todo treatments: glyphs, the overdue token, and the third channel'
@@ -435,4 +447,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-06
-updated_at: '2026-09-11T01:51:24+02:00'
+updated_at: '2026-09-11T01:52:45+02:00'
