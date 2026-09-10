@@ -1,6 +1,7 @@
 import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
+import { onRefreshTick } from './self-refresh.js';
 
 function formatIso(year, month, day) {
     return [year, String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-');
@@ -58,6 +59,10 @@ document.addEventListener('alpine:init', () => {
         pendingFocusShouldMoveFocus: true,
         lastMoreLinkTrigger: null,
 
+        // The last payload that came back for a given window, so a failed
+        // self-refresh can re-serve it instead of blanking the grid (US-011).
+        lastFetch: { key: null, events: [] },
+
         init() {
             this.calendar = new Calendar(this.$refs.grid, {
                 plugins: [dayGridPlugin, timeGridPlugin],
@@ -73,6 +78,7 @@ document.addEventListener('alpine:init', () => {
                 events: (fetchInfo, successCallback, failureCallback) => {
                     const from = fetchInfo.startStr.slice(0, 10);
                     const to = fetchInfo.endStr.slice(0, 10);
+                    const key = `${from}|${to}`;
 
                     fetch(`${config.eventsUrl}?from=${from}&to=${to}`)
                         .then((response) => {
@@ -83,10 +89,32 @@ document.addEventListener('alpine:init', () => {
                             return response.json();
                         })
                         .then((events) => {
+                            this.lastFetch = { key, events };
                             this.hasEvents = events.length > 0;
                             successCallback(events);
                         })
-                        .catch(failureCallback);
+                        .catch((error) => {
+                            // A refresh that fails leaves the last good render
+                            // on screen rather than blanking the grid or
+                            // dropping to the empty state (US-011). A *first*
+                            // fetch for a window has nothing to fall back on,
+                            // so it still fails through — and hasEvents stays
+                            // null, which keeps the empty block hidden instead
+                            // of claiming the range is genuinely empty.
+                            if (this.lastFetch.key === key) {
+                                successCallback(this.lastFetch.events);
+
+                                return;
+                            }
+
+                            failureCallback(error);
+                        });
+                },
+                eventsSet: () => {
+                    // Day cells survive an event-only re-render, but reasserting
+                    // the roving tabindex is cheap and never moves focus, so the
+                    // keyboard-focused cell cannot be lost to a refetch.
+                    this.syncRovingTabindex();
                 },
                 eventDidMount: (info) => {
                     const props = info.event.extendedProps;
@@ -134,6 +162,12 @@ document.addEventListener('alpine:init', () => {
                     this.lastMoreLinkTrigger = event.target.closest('.fc-daygrid-more-link');
                 }
             });
+
+            // refetchEvents() re-runs the events function for the visible
+            // window only. It changes neither the view nor the anchor date and
+            // does not fire datesSet, so the URL state, the pending-focus
+            // machinery and the keyboard-focused day cell are all untouched.
+            this.$cleanup(onRefreshTick(() => this.calendar.refetchEvents()));
 
             // The calendar owns DOM the Alpine directive system never touches
             // directly, so it needs an explicit teardown when this element

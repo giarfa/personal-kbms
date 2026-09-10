@@ -157,11 +157,11 @@ tasks:
       7. `php artisan larapilot:quality` and `php artisan test --compact --filter=AgendaPageTest`
 
       ## Completion Criteria
-      - [ ] The agenda root subscribes to the shared cadence
-      - [ ] A refresh preserves the `#[Url] date` anchor, the `Jump to` value, focus and scroll position
-      - [ ] No toast, banner, flash, spinner, new `aria-live` region, or full-page reload is introduced
-      - [ ] `Now` divider and last-successful-sync wording re-derive on each refresh
-      - [ ] Existing agenda tests pass; Pint and Larastan clean
+      - [x] The agenda root subscribes to the shared cadence
+      - [x] A refresh preserves the `#[Url] date` anchor, the `Jump to` value, focus and scroll position
+      - [x] No toast, banner, flash, spinner, new `aria-live` region, or full-page reload is introduced
+      - [x] `Now` divider and last-successful-sync wording re-derive on each refresh
+      - [x] Existing agenda tests pass; Pint and Larastan clean
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -171,11 +171,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
       - TASK-01
+    commit:
+      sha: ef401a36e6a11e04ba737a835638287aacc42019
+      short_sha: ef401a3
+      subject: 'feat(US-011): TASK-02 self-refresh the agenda view'
+      committed_at: '2026-09-11T01:26:32+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ef401a36e6a11e04ba737a835638287aacc42019'
   -
     id: TASK-03
     title: 'Refetch the calendar feed on the same cadence, with a last-good fallback'
@@ -298,4 +304,4 @@ tasks:
     dependencies:
       - TASK-02
       - TASK-03
-updated_at: '2026-09-11T01:26:14+02:00'
+updated_at: '2026-09-11T01:26:32+02:00'
