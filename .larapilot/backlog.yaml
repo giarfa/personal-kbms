@@ -499,7 +499,7 @@ specs:
       objective: "A question typed against a meeting opens an interactive local Claude Code session preloaded with that meeting's transcript"
     priority: HIGH
     points: 8
-    status: REVIEW
+    status: DONE
     body: |
       #### US-009: Claude Code session launch bridge
 
@@ -517,24 +517,31 @@ specs:
       After implementing this spec, typing a question on a meeting with a linked transcript and triggering the launch invokes the configured `.sh` with exactly two arguments — the transcript path and the question — and an interactive terminal session opens.
 
       **Acceptance Criteria**
-      - [ ] A text input on the meeting detail page accepts the initial question
-      - [ ] Triggering the launch invokes the script at `KBMS_CLAUDE_LAUNCHER` with exactly two arguments, **in order**: (1) the resolved context file path from US-007, (2) the question text
-      - [ ] Arguments are passed as an **argument array**, never an interpolated shell string
-      - [ ] **Question text containing quotes, newlines, backticks, semicolons, `$(…)`, or other shell metacharacters reaches the script as a single intact argument** and cannot alter the command — this is the security-critical criterion of the spec
-      - [ ] Invocation happens inside a **queued job**, not the web request, because Symfony's `Process` destructor terminates its child and a request-scoped launch could kill the script mid-flight
-      - [ ] The script is expected to open its own terminal window; the application does not attempt to allocate a TTY or drive a terminal application
-      - [ ] The launch returns promptly and the spawned session's lifetime is independent of PHP — quitting the worker does not close the operator's terminal
-      - [ ] Each launch persists a `prompt_launches` row: occurrence keys, context path, question, resolved argument array, timestamp, status, error
-      - [ ] **The application does not attempt to capture Claude's reply** — the session is interactive and owned by the terminal; the meeting record holds the question, not the answer (PRD FR-018 defers this)
-      - [ ] The exact invocation is displayed and copyable, so the operator can run it manually instead
-      - [ ] **Error case:** launch is blocked with a specific reason when `KBMS_CLAUDE_LAUNCHER` is unset, the script is missing, or the script is not executable
-      - [ ] **Error case:** launch is blocked with a specific reason when the meeting has **no linked transcript**, since there would be no context file to pass
-      - [ ] **Error case:** a non-zero exit from the launcher is recorded on the launch row and surfaced in the interface
-      - [ ] **Edge case:** an empty or whitespace-only question is rejected before dispatch
-      - [ ] **Edge case:** a very long question is accepted or explicitly bounded — it must not fail opaquely against argument-length limits
-      - [ ] Tests use `Process::fake()` to assert the exact argument array for adversarial question strings, plus every blocked-launch precondition
+      - [x] A text input on the meeting detail page accepts the initial question
+      - [x] Triggering the launch invokes the script at `KBMS_CLAUDE_LAUNCHER` with exactly two arguments, **in order**: (1) the resolved context file path from US-007, (2) the question text
+      - [x] Arguments are passed as an **argument array**, never an interpolated shell string
+      - [x] **Question text containing quotes, newlines, backticks, semicolons, `$(…)`, or other shell metacharacters reaches the script as a single intact argument** and cannot alter the command — this is the security-critical criterion of the spec
+      - [x] Invocation happens inside a **queued job**, not the web request, because Symfony's `Process` destructor terminates its child and a request-scoped launch could kill the script mid-flight
+      - [x] The script is expected to open its own terminal window; the application does not attempt to allocate a TTY or drive a terminal application
+      - [x] The launch returns promptly and the spawned session's lifetime is independent of PHP — quitting the worker does not close the operator's terminal
+      - [x] Each launch persists a `prompt_launches` row: occurrence keys, context path, question, resolved argument array, timestamp, status, error
+      - [x] **The application does not attempt to capture Claude's reply** — the session is interactive and owned by the terminal; the meeting record holds the question, not the answer (PRD FR-018 defers this)
+      - [x] The exact invocation is displayed and copyable, so the operator can run it manually instead
+      - [x] **Error case:** launch is blocked with a specific reason when `KBMS_CLAUDE_LAUNCHER` is unset, the script is missing, or the script is not executable
+      - [x] **Error case:** launch is blocked with a specific reason when the meeting has **no linked transcript**, since there would be no context file to pass
+      - [x] **Error case:** a non-zero exit from the launcher is recorded on the launch row and surfaced in the interface
+      - [x] **Edge case:** an empty or whitespace-only question is rejected before dispatch
+      - [x] **Edge case:** a very long question is accepted or explicitly bounded — it must not fail opaquely against argument-length limits
+      - [x] Tests use `Process::fake()` to assert the exact argument array for adversarial question strings, plus every blocked-launch precondition
     status_history:
       - { status: PLANNED, at: '2026-09-10T08:23:00+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-10T08:26:45+02:00' }
       - { status: REVIEW, at: '2026-09-10T08:50:18+02:00' }
+      - { status: DONE, at: '2026-09-10T09:00:29+02:00' }
     rework: false
+    merge_commit:
+      sha: 3a0ff9227ffc5f5b11436854a34b02a9445a4329
+      short_sha: 3a0ff92
+      subject: 'chore(US-009): commit the plan, move spec to REVIEW, and log the review gate'
+      committed_at: '2026-09-10T08:50:37+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/3a0ff9227ffc5f5b11436854a34b02a9445a4329'

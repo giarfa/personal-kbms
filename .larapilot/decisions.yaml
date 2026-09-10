@@ -597,4 +597,17 @@ decisions:
     source: askquestion
     spec: US-009
     supersedes: 2deaf85cb3b47934
-updated_at: '2026-09-10T08:17:27+02:00'
+  -
+    id: 2a1e52360ef6f8ea
+    ts: '2026-09-10T09:00:52+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-009 review verdict'
+    label: 'us-009 review verdict'
+    value: "Approve and merge: US-009 (Claude Code session launch bridge) accepted to DONE at the human gate. Evidence re-verified in-session — 441/441 tests green (1135 assertions), Pint + Larastan level 5 clean, migrate:fresh --seed coherent on a throwaway DB copy (3 launches, all 3-element command arrays, all context paths real files), no shell-string construction anywhere in app/. Robert's one Medium (dropped LaunchBlock detail in the job's second-pass path) was fixed in-branch via LaunchBlockDetail; Lars GO with no findings. Accepted with Anne's six-item manual handoff still owed (real launcher script, worker-quit survival, chmod -x, timeout, clipboard, dark-mode contrast at 768px) and the duplicated QuestionEmpty sentence carried as a non-blocking copy note. Merge the feature branch into develop locally, no push (git_mode GITFLOW)."
+    question: null
+    rationale: null
+    source: chat
+    spec: US-009
+    supersedes: null
+updated_at: '2026-09-10T09:00:52+02:00'
