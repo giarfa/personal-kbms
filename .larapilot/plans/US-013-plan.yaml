@@ -314,12 +314,12 @@ tasks:
       6. `php artisan larapilot:quality`; `php artisan test --compact --filter=Calendar`; `npm run build` and check month, week and day.
 
       ## Completion Criteria
-      - [ ] Glyph and stripped title render in month, week **and** day views
-      - [ ] The accessible name carries coverage, rule label and status, in that order, with `cancelled` last
-      - [ ] A coloured, annotated, overdue event shows all three channels at once
-      - [ ] Cancelled styling still wins and a cancelled occurrence is never overdue
-      - [ ] `calendar.js` needed no change
-      - [ ] Existing calendar tests pass; Pint and Larastan clean; build clean
+      - [x] Glyph and stripped title render in month, week **and** day views
+      - [x] The accessible name carries coverage, rule label and status, in that order, with `cancelled` last
+      - [x] A coloured, annotated, overdue event shows all three channels at once
+      - [x] Cancelled styling still wins and a cancelled occurrence is never overdue
+      - [x] `calendar.js` needed no change
+      - [x] Existing calendar tests pass; Pint and Larastan clean; build clean
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -329,12 +329,18 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-02
       - TASK-03
+    commit:
+      sha: 212877c5e04e63bef33c6c3386586d96a40b5b10
+      short_sha: 212877c
+      subject: 'feat(US-013): TASK-05 render todo status on the calendar'
+      committed_at: '2026-09-11T01:56:55+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/212877c5e04e63bef33c6c3386586d96a40b5b10'
   -
     id: TASK-06
     title: 'Show status on the meeting detail page without hiding the raw summary'
@@ -459,4 +465,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-06
-updated_at: '2026-09-11T01:56:03+02:00'
+updated_at: '2026-09-11T01:56:55+02:00'
