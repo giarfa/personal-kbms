@@ -94,6 +94,37 @@ The grid is built on [FullCalendar](https://fullcalendar.io/) **6.x, MIT-core pa
 
 **The frontend must be built** — `npm install && npm run build` (or `npm run dev` while developing) — before the grid renders anything. A calendar page that loads with a populated agenda but shows a blank grid is the symptom of a stale or missing Vite build, not a sync problem; `php artisan kbms:doctor` cannot see this failure mode because it never touches the frontend build.
 
+## Event colour rules
+
+Calendar events and agenda rows can be tinted by rules you define against the mirrored feed fields, so a category of meeting is recognisable before you read a single title. Rules live in **`config/kbms.php`** under `event_colour_rules` — **not** in `.env`. There is deliberately **no `KBMS_*` key** for this, no database table, and no management screen: the array is the whole control surface, because rules are product shape rather than machine shape.
+
+```php
+'event_colour_rules' => [
+    ['field' => 'summary', 'condition' => 'contains', 'value' => 'PING', 'colour' => 'yellow', 'label' => 'Ping'],
+    ['field' => 'location', 'condition' => 'empty', 'colour' => 'purple', 'label' => 'No location'],
+],
+```
+
+Those two are what ships by default.
+
+| Key | Allowed values |
+| --- | --- |
+| `field` | `summary`, `location`, `description`, `organizer` |
+| `condition` | `contains`, `empty` |
+| `value` | the needle — **required** for `contains`, ignored by `empty` |
+| `colour` | `yellow`, `purple`, `green`, `blue`, `orange`, `grey` |
+| `label` | short human name, shown in the legend and in the accessible name |
+
+- **`contains`** is a **case-insensitive** substring match: `PING`, `Ping` and `ping` all hit, anywhere in the field.
+- **`empty`** is true when the field is `null`, absent, or contains only whitespace — an ICS feed emitting `LOCATION:` followed by a space counts as empty.
+- **Array order is the priority, and the first match wins.** Rules are evaluated top-down; the first hit paints the occurrence and every later rule is skipped. Reordering the array is the only way to reprioritise — there is no priority key, and an occurrence never gets a split or striped two-colour fill.
+- **A rule naming anything outside those vocabularies is dropped.** An unknown field, condition, or colour — or a raw CSS value like `#ff0000` — means the rule does not exist: its events render uncoloured, it does not appear in the legend, and the page still renders. A colour is always a named token resolved in the stylesheet, so configuration can never inject CSS into markup.
+- **An empty or absent list is valid** and is the supported "off" state: both views render exactly as they did before this feature, with no legend entries and no fills.
+
+**Three independent channels.** Rule colour fills the event body; note/transcript coverage keeps its own edge borders, marks and agenda tags; cancelled keeps its dashed, struck, muted treatment and wins where it conflicts with a fill. A meeting can be a PING meeting *and* an annotated one *and* cancelled, and each of those reads on its own. Colour never carries the meaning alone — every rule's label appears in the page legend on both surfaces, generated from the configuration, and is appended to each matched event's accessible name.
+
+The legends are generated from the array, so adding a rule makes it appear on both pages with no code change. The meeting detail page at `/meetings/{occurrence}` is deliberately **not** coloured: the two scanning surfaces are where the signal pays for itself.
+
 ## Self-refreshing views
 
 The agenda (`/`) and the calendar (`/calendar`) bring themselves up to date roughly **once a minute** while their tab is visible, so a mirror refreshed by the background sync shows up without a reload. The refresh is deliberately invisible: no toast, no banner, no spinner, no announcement — rows and events simply become current, and scroll position, the agenda's date anchor and Jump-to field, and the calendar's view, anchor date and keyboard-focused day cell all survive it. Time-derived chrome re-derives with it, so on a page left open for hours the `Now` divider keeps moving and the sync pill's relative wording stays honest.

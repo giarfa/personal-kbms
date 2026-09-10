@@ -27,8 +27,20 @@ final readonly class AgendaRow
 
     public MeetingCoverage $coverage;
 
-    public function __construct(public CalendarEvent $event, MeetingCoverage $coverage = new MeetingCoverage)
-    {
+    /**
+     * The first colour rule this occurrence satisfies, or `null` (US-012).
+     *
+     * The default is load-bearing, not convenience: it is what keeps
+     * MeetingController's detail-page row uncoloured without a second code
+     * path. "No colouring on /meetings/{occurrence}" is enforced here, at the
+     * only place that builds an uncoloured row, rather than by a Blade
+     * omission that a later edit could undo.
+     */
+    public function __construct(
+        public CalendarEvent $event,
+        MeetingCoverage $coverage = new MeetingCoverage,
+        public ?EventColourRule $colourRule = null,
+    ) {
         $this->start = CarbonImmutable::instance($event->starts_at);
         $this->end = CarbonImmutable::instance($event->ends_at);
         $this->isAllDay = (bool) $event->is_all_day;

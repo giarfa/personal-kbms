@@ -20,6 +20,7 @@
  *     sync_stuck_after_seconds: int,
  *     launch_timeout_seconds: int,
  *     question_max_chars: int,
+ *     event_colour_rules: list<array{field: string, condition: string, value?: string, colour: string, label: string}>,
  * }
  */
 return [
@@ -69,4 +70,30 @@ return [
     // Maximum character length for a launch question (US-009). A product bound,
     // not a system one — macOS ARG_MAX is two orders of magnitude clear of it.
     'question_max_chars' => (int) env('KBMS_QUESTION_MAX_CHARS', 8000),
+
+    /*
+     * Rule-based event colouring on the calendar and the agenda (US-012, FR-023).
+     *
+     * Deliberately not an env key: rules are product shape, not machine shape.
+     * Deliberately not a database table and not a management UI either — this is
+     * the whole control surface (decision journal ef32198318d3edc8).
+     *
+     * Each rule names a `field` (summary, location, description, organizer), a
+     * `condition` (`contains` — case-insensitive substring, needs a `value`; or
+     * `empty` — null, absent, or whitespace-only), a `colour` from the closed
+     * palette (yellow, purple, green, blue, orange, grey), and a short `label`
+     * shown in the page legend and appended to each matched event's accessible
+     * name.
+     *
+     * ARRAY ORDER IS THE PRIORITY. Rules are evaluated top-down and the first hit
+     * paints the occurrence; every later rule is skipped. Reordering this array is
+     * the only way to reprioritise — there is no priority key, and no split or
+     * striped multi-colour fill. A rule naming anything outside the vocabularies
+     * above is dropped: its occurrences simply render uncoloured, and the page
+     * still renders. An empty list is valid and is the supported "off" state.
+     */
+    'event_colour_rules' => [
+        ['field' => 'summary', 'condition' => 'contains', 'value' => 'PING', 'colour' => 'yellow', 'label' => 'Ping'],
+        ['field' => 'location', 'condition' => 'empty', 'colour' => 'purple', 'label' => 'No location'],
+    ],
 ];

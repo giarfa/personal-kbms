@@ -52,6 +52,22 @@
             <span>{{ __('both = note and transcript marks together · dashed and struck = cancelled · every event also states its coverage in its accessible name') }}</span>
         </p>
 
+        {{-- Colour-rule legend (US-012), generated from the same
+             config('kbms.event_colour_rules') the agenda legend reads, so the two
+             pages cannot disagree. An empty rule list renders nothing. --}}
+        @if (count($colourRules) > 0)
+            <p class="kb-legend">
+                <span>{{ __('Fill marks a rule:') }}</span>
+                @foreach ($colourRules as $colourRule)
+                    <span class="kb-inline">
+                        <span class="kb-legend__swatch kb-legend__swatch--{{ $colourRule->colour->value }}" aria-hidden="true"></span>
+                        {{ $colourRule->label }}
+                    </span>
+                @endforeach
+                <span>{{ __('· first matching rule wins · each match also names its rule in its accessible name') }}</span>
+            </p>
+        @endif
+
         <div class="kb-empty" x-show="hasEvents === false" x-cloak>
             <h3>{{ __('Nothing in this range') }}</h3>
             <p>{{ __('The mirror is current — this range is genuinely empty rather than unsynced.') }} {{ $syncNote }}</p>

@@ -43,6 +43,20 @@
         <span class="kb-tag kb-tag--cancelled">{{ __('Cancelled') }}</span>
     </p>
 
+    {{-- Colour-rule legend (US-012), generated from config('kbms.event_colour_rules').
+         An empty rule list renders nothing at all — that is the documented "off" state. --}}
+    @if (count($colourRules) > 0)
+        <p class="kb-legend">
+            <span>{{ __('Rule colours:') }}</span>
+            @foreach ($colourRules as $colourRule)
+                <span class="kb-inline">
+                    <span class="kb-legend__swatch kb-legend__swatch--{{ $colourRule->colour->value }}" aria-hidden="true"></span>
+                    {{ $colourRule->label }}
+                </span>
+            @endforeach
+        </p>
+    @endif
+
     @if ($totalMeetings === 0)
         <div class="kb-empty">
             <h3>{{ __('Nothing in this range') }}</h3>
@@ -100,7 +114,7 @@
 
                             <li>
                                 <a
-                                    class="kb-row @if ($row->isCancelled) kb-row--cancelled @endif @if ($i === $nowIndex) kb-row--now @endif"
+                                    class="kb-row @if ($row->isCancelled) kb-row--cancelled @endif @if ($i === $nowIndex) kb-row--now @endif @if ($row->colourRule) kb-row--colour-{{ $row->colourRule->colour->value }} @endif"
                                     href="{{ route('meetings.show', $row->routeKey) }}"
                                     wire:navigate
                                 >
@@ -127,6 +141,11 @@
                                     </span>
                                     <span>
                                         <span class="kb-row__title">{{ $row->event->summary }}</span>
+                                        {{-- The rule label rides the accessible name so the
+                                             classification never rests on colour alone (US-012). --}}
+                                        @if ($row->colourRule)
+                                            <span class="kb-sronly">{{ $row->colourRule->label }}</span>
+                                        @endif
                                         <span class="kb-row__meta">
                                             @if ($row->event->organizer)
                                                 <span>{{ __('Organiser: :name', ['name' => $row->event->organizer]) }}</span>
