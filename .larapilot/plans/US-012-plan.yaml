@@ -75,8 +75,8 @@ tasks:
       4. Draft the internal PR title/body toward `develop` — keep it local
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-012-event-colour-rules` exists locally, cut from a `develop` that already carries US-011
-      - [ ] PR title/body drafted for `develop` (remote not opened)
+      - [x] Branch `feature/US-012-event-colour-rules` exists locally, cut from a `develop` that already carries US-011
+      - [x] PR title/body drafted for `develop` (remote not opened)
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -86,10 +86,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
+    commit:
+      sha: b834807c929cb7c024ef43bd6cb9996ebc019d9e
+      short_sha: b834807
+      subject: 'chore(US-012): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-11T01:38:11+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b834807c929cb7c024ef43bd6cb9996ebc019d9e'
   -
     id: TASK-01
     title: 'Colour rule engine: closed vocabulary, first-match-wins, shipped defaults'
@@ -393,4 +399,4 @@ tasks:
     dependencies:
       - TASK-04
       - TASK-05
-updated_at: '2026-09-11T01:38:10+02:00'
+updated_at: '2026-09-11T01:38:11+02:00'
