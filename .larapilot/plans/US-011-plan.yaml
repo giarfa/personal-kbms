@@ -298,9 +298,9 @@ tasks:
       4. Do not restructure either document; this is an additive edit.
 
       ## Completion Criteria
-      - [ ] README describes the cadence, the visibility policy, the detail-page exclusion, and the absence of a config key
-      - [ ] CHANGELOG `Unreleased` → `Added` carries the US-011 entry
-      - [ ] No configuration surface documented that does not exist
+      - [x] README describes the cadence, the visibility policy, the detail-page exclusion, and the absence of a config key
+      - [x] CHANGELOG `Unreleased` → `Added` carries the US-011 entry
+      - [x] No configuration surface documented that does not exist
 
       ## Test Data
       - N/A — documentation only
@@ -310,10 +310,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 0.5
     dependencies:
       - TASK-02
       - TASK-03
-updated_at: '2026-09-11T01:31:06+02:00'
+    commit:
+      sha: 776fb7abaca4f35b73c1df197d9ff19e50dac9e8
+      short_sha: 776fb7a
+      subject: 'docs(US-011): TASK-05 document the self-refreshing views'
+      committed_at: '2026-09-11T01:31:52+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/776fb7abaca4f35b73c1df197d9ff19e50dac9e8'
+updated_at: '2026-09-11T01:31:53+02:00'
