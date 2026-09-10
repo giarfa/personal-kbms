@@ -690,13 +690,13 @@ tasks:
          must still read as one coherent explanation, not a changelog of patches.
 
       ## Completion Criteria
-      - [ ] `.env.example:79` says `Ymd` and underscore slug; the colon warning and the
+      - [x] `.env.example:79` says `Ymd` and underscore slug; the colon warning and the
             `{slug}`-terminator rule survive verbatim
-      - [ ] `.env.example:96` (Outlook template) untouched
-      - [ ] README states md-only indexing + picker, and that a pre-existing `.txt` link still renders
-      - [ ] README's seeded-panel-state list matches what TASK-06 actually seeds
-      - [ ] CHANGELOG records the md-only restriction and flags it as breaking for unlinked `.txt`
-      - [ ] The "Transcript linking" section reads coherently start to finish
+      - [x] `.env.example:96` (Outlook template) untouched
+      - [x] README states md-only indexing + picker, and that a pre-existing `.txt` link still renders
+      - [x] README's seeded-panel-state list matches what TASK-06 actually seeds
+      - [x] CHANGELOG records the md-only restriction and flags it as breaking for unlinked `.txt`
+      - [x] The "Transcript linking" section reads coherently start to finish
 
       ## Test Data
       - N/A — documentation only
@@ -706,9 +706,15 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes — no remote
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 0.5
     dependencies:
       - TASK-04
-updated_at: '2026-09-10T13:54:26+02:00'
+    commit:
+      sha: 30b1f82b852ee9f6c584f17b312b447d3c7d379d
+      short_sha: 30b1f82
+      subject: 'docs(US-010): TASK-08 document md-only transcript resolution'
+      committed_at: '2026-09-10T13:55:23+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/30b1f82b852ee9f6c584f17b312b447d3c7d379d'
+updated_at: '2026-09-10T13:55:25+02:00'

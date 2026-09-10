@@ -649,4 +649,17 @@ decisions:
     source: askquestion
     spec: US-010
     supersedes: a1fe16dc96f207a4
-updated_at: '2026-09-10T13:37:04+02:00'
+  -
+    id: 45cfeefbe42fb4c6
+    ts: '2026-09-10T13:59:16+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-implement
+    topic: 'us-010 test isolation: kbms_transcripts_path in phpunit.xml'
+    label: 'US-010 test isolation: KBMS_TRANSCRIPTS_PATH in phpunit.xml'
+    value: 'Added <env name="KBMS_TRANSCRIPTS_PATH" value=""/> to phpunit.xml because the operator''s real .env path (~/Recordings/protocols) was leaking into feature tests (e.g. AgendaPageTest) that don''t override kbms.transcripts_path. Narrowing transcript_extensions to md-only in TASK-05 stopped md/txt double-counting from masking the leak via Ambiguous, surfacing it as a Linked-state false positive. Fixed globally in phpunit.xml rather than per-test, matching the existing DB_URL="" isolation pattern; the analogous KBMS_ICS_URL leak was left untouched per the prior reviewer''s explicit instruction.'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-010
+    supersedes: null
+updated_at: '2026-09-10T13:59:16+02:00'
