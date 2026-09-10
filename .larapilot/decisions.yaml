@@ -571,4 +571,17 @@ decisions:
     source: chat
     spec: US-008
     supersedes: null
-updated_at: '2026-09-10T07:28:18+02:00'
+  -
+    id: 605168db8db0fad2
+    ts: '2026-09-10T07:43:47+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-008 review verdict'
+    label: 'us-008 review verdict'
+    value: 'Approve: US-008 accepted to DONE after rework round 1. The Month-view PageUp/PageDown focus fix is verified (353/353 tests, Pint + Larastan level 5 clean, npm run build green, 223,944-case helper sweep with 0 failures). Accepted with the browser keyboard and screen-reader pass owed as a manual check per .larapilot/docs/test-results/US-008-manual.md, and the stale-pendingFocusDate Low carried forward as a pre-existing residual risk. Merge into develop, no push (git_mode GITFLOW).'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-008
+    supersedes: 419974f3d275c843
+updated_at: '2026-09-10T07:43:47+02:00'

@@ -6,7 +6,7 @@ epic:
   objective: "Every mirrored meeting is browsable and carries the operator's own notes, transcript, and route back to Outlook"
 priority: HIGH
 points: 8
-status: REVIEW
+status: DONE
 body: |-
   #### US-008: Calendar views: month, week and day
 
@@ -24,20 +24,20 @@ body: |-
   After implementing this spec, month, week, and day views render the mirrored calendar, meetings carrying notes or a linked transcript are visually distinguished from bare ones, and clicking any event opens its detail page.
 
   **Acceptance Criteria**
-  - [ ] Month, week, and day views render mirrored events using FullCalendar **MIT core plugins only** — no premium plugins
-  - [ ] Meetings carrying notes and/or a linked transcript are **visually distinguished** from bare ones, with the distinction legible without hovering
-  - [ ] The indicator distinguishes "has notes", "has transcript", and "has both"
-  - [ ] Clicking or activating an event opens the US-005 detail route
-  - [ ] Views are **keyboard navigable** with visible focus, and the calendar grid carries deliberate screen-reader semantics — FullCalendar's defaults alone are not sufficient
-  - [ ] Events render in `KBMS_TIMEZONE` and remain correct across a DST boundary
-  - [ ] All-day events render in the all-day lane, not as midnight-to-midnight blocks
-  - [ ] Cancelled occurrences are visually distinct from active ones
-  - [ ] View and date position survive navigation to a meeting and back
-  - [ ] AA contrast holds for every event state in both light and dark themes
-  - [ ] Only the visible range is queried — the view does not load the whole mirror
-  - [ ] **Error case:** a range with no events renders an empty grid, not a broken layout
-  - [ ] **Edge case:** a day with many overlapping meetings degrades gracefully (stacking or a "+N more" affordance) without hiding events silently
-  - [ ] **Edge case:** multi-day events span correctly in month view
+  - [x] Month, week, and day views render mirrored events using FullCalendar **MIT core plugins only** — no premium plugins
+  - [x] Meetings carrying notes and/or a linked transcript are **visually distinguished** from bare ones, with the distinction legible without hovering
+  - [x] The indicator distinguishes "has notes", "has transcript", and "has both"
+  - [x] Clicking or activating an event opens the US-005 detail route
+  - [x] Views are **keyboard navigable** with visible focus, and the calendar grid carries deliberate screen-reader semantics — FullCalendar's defaults alone are not sufficient
+  - [x] Events render in `KBMS_TIMEZONE` and remain correct across a DST boundary
+  - [x] All-day events render in the all-day lane, not as midnight-to-midnight blocks
+  - [x] Cancelled occurrences are visually distinct from active ones
+  - [x] View and date position survive navigation to a meeting and back
+  - [x] AA contrast holds for every event state in both light and dark themes
+  - [x] Only the visible range is queried — the view does not load the whole mirror
+  - [x] **Error case:** a range with no events renders an empty grid, not a broken layout
+  - [x] **Edge case:** a day with many overlapping meetings degrades gracefully (stacking or a "+N more" affordance) without hiding events silently
+  - [x] **Edge case:** multi-day events span correctly in month view
 
 
   ## Rework Feedback
@@ -70,4 +70,13 @@ status_history:
   -
     status: REVIEW
     at: '2026-09-10T07:40:27+02:00'
+  -
+    status: DONE
+    at: '2026-09-10T07:43:41+02:00'
 rework: false
+merge_commit:
+  sha: 13cc27c68d0bae1dff67c67f42ac2162bb0fc3d9
+  short_sha: 13cc27c
+  subject: 'chore(US-008): move rework to REVIEW and log implementation usage'
+  committed_at: '2026-09-10T07:40:31+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/13cc27c68d0bae1dff67c67f42ac2162bb0fc3d9'
