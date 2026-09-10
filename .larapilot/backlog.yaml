@@ -733,7 +733,7 @@ specs:
       title: 'Meeting Workspace'
     priority: HIGH
     points: 3
-    status: 'IN PROGRESS'
+    status: DONE
     body: |
       #### US-012: Rule-based event colouring on the calendar and agenda
 
@@ -753,26 +753,26 @@ specs:
       **Acceptance Criteria**
 
       *Rule engine*
-      - [ ] Rules live as an **ordered array** in `config/kbms.php`. Each rule declares the feed field it inspects, the condition, a colour token, and a short human label. The two rules the operator asked for ship as the shipped defaults: `summary` contains `PING` → yellow, labelled "Ping"; `location` is empty → purple, labelled "No location"
-      - [ ] Two match conditions are supported and are the only ones this spec adds: **`contains`** (substring, **case-insensitive** — `PING`, `Ping` and `ping` all match) and **`empty`** (the field is `null`, absent, or contains only whitespace — an ICS feed emitting `LOCATION:` with a space counts as empty)
-      - [ ] **First match wins.** Rules are evaluated top-down in array order; the first hit paints the occurrence and every later rule is skipped. Reordering the array is the only mechanism for reprioritising — no separate priority key. An occurrence matching no rule renders exactly as it does today
-      - [ ] The colour is a **named token from a closed palette** resolved in the stylesheet, never a raw CSS value taken from configuration. A rule naming an unknown colour, an unknown field, or an unknown condition must not reach the browser as markup: it is rejected or ignored with the event rendering uncoloured, and the page still renders
-      - [ ] An empty or absent rule list is valid and is the "off" state: both views render exactly as they do before this spec, with no legend entries and no colour classes
+      - [x] Rules live as an **ordered array** in `config/kbms.php`. Each rule declares the feed field it inspects, the condition, a colour token, and a short human label. The two rules the operator asked for ship as the shipped defaults: `summary` contains `PING` → yellow, labelled "Ping"; `location` is empty → purple, labelled "No location"
+      - [x] Two match conditions are supported and are the only ones this spec adds: **`contains`** (substring, **case-insensitive** — `PING`, `Ping` and `ping` all match) and **`empty`** (the field is `null`, absent, or contains only whitespace — an ICS feed emitting `LOCATION:` with a space counts as empty)
+      - [x] **First match wins.** Rules are evaluated top-down in array order; the first hit paints the occurrence and every later rule is skipped. Reordering the array is the only mechanism for reprioritising — no separate priority key. An occurrence matching no rule renders exactly as it does today
+      - [x] The colour is a **named token from a closed palette** resolved in the stylesheet, never a raw CSS value taken from configuration. A rule naming an unknown colour, an unknown field, or an unknown condition must not reach the browser as markup: it is rejected or ignored with the event rendering uncoloured, and the page still renders
+      - [x] An empty or absent rule list is valid and is the "off" state: both views render exactly as they do before this spec, with no legend entries and no colour classes
 
       *Rendering — both surfaces*
-      - [ ] Calendar events at `/calendar` carry the matched rule's colour in **month, week and day** views. The colour fills the event body
-      - [ ] Agenda rows at `/` carry the same colour for the same occurrences, so the two surfaces never disagree about what a meeting is
-      - [ ] Rule colour and coverage are **separate visual channels**: the existing note/transcript/both edge borders and the dot/square marks on the calendar, and the coverage tags on the agenda, are unchanged and remain visible on a coloured event. An annotated PING meeting reads as both annotated and PING
-      - [ ] Cancelled styling still wins where it conflicts — a cancelled occurrence stays struck through and de-emphasised whether or not a rule matched it
+      - [x] Calendar events at `/calendar` carry the matched rule's colour in **month, week and day** views. The colour fills the event body
+      - [x] Agenda rows at `/` carry the same colour for the same occurrences, so the two surfaces never disagree about what a meeting is
+      - [x] Rule colour and coverage are **separate visual channels**: the existing note/transcript/both edge borders and the dot/square marks on the calendar, and the coverage tags on the agenda, are unchanged and remain visible on a coloured event. An annotated PING meeting reads as both annotated and PING
+      - [x] Cancelled styling still wins where it conflicts — a cancelled occurrence stays struck through and de-emphasised whether or not a rule matched it
 
       *Accessibility and legibility*
-      - [ ] Each matched occurrence's **accessible name** gains the rule label, alongside the coverage words already there, so the classification is available without seeing colour
-      - [ ] The legend on both pages lists every configured rule as a swatch plus its label, generated from the configuration rather than hardcoded — adding a third rule to the array makes it appear in both legends with no view edit
-      - [ ] Both colours meet WCAG AA text contrast against their own fill in **light and dark** themes, and remain distinguishable from the existing note and transcript hues
+      - [x] Each matched occurrence's **accessible name** gains the rule label, alongside the coverage words already there, so the classification is available without seeing colour
+      - [x] The legend on both pages lists every configured rule as a swatch plus its label, generated from the configuration rather than hardcoded — adding a third rule to the array makes it appear in both legends with no view edit
+      - [x] Both colours meet WCAG AA text contrast against their own fill in **light and dark** themes, and remain distinguishable from the existing note and transcript hues
 
       *Edge cases*
-      - [ ] A `null` summary (the feed permits it) does not error the feed or the agenda: it simply matches no `contains` rule
-      - [ ] Colouring adds **no per-occurrence queries**: rules are evaluated against fields already loaded by `CalendarFeedQuery` and `AgendaQuery`, and a dense month window issues the same number of queries as it does today
+      - [x] A `null` summary (the feed permits it) does not error the feed or the agenda: it simply matches no `contains` rule
+      - [x] Colouring adds **no per-occurrence queries**: rules are evaluated against fields already loaded by `CalendarFeedQuery` and `AgendaQuery`, and a dense month window issues the same number of queries as it does today
 
       **Out of scope**
       - No management UI and no database table for rules — configuration file only. A CRUD screen is its own spec if it is ever wanted
@@ -783,7 +783,15 @@ specs:
     status_history:
       - { status: PLANNED, at: '2026-09-11T01:38:10+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-11T01:38:11+02:00' }
+      - { status: REVIEW, at: '2026-09-11T01:47:20+02:00' }
+      - { status: DONE, at: '2026-09-11T01:47:20+02:00' }
     rework: false
+    merge_commit:
+      sha: 03c9bb4818eb43c67c50b1049ec4a9a82da2bca5
+      short_sha: 03c9bb4
+      subject: 'docs(US-012): record Robert + Lars inline review notes'
+      committed_at: '2026-09-11T01:47:19+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/03c9bb4818eb43c67c50b1049ec4a9a82da2bca5'
   -
     code: US-013
     title: 'Calendar-as-todo: checkbox title convention with time-aware status'
