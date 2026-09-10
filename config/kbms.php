@@ -18,6 +18,8 @@
  *     sync_run_retention_days: int,
  *     sync_stale_multiplier: int,
  *     sync_stuck_after_seconds: int,
+ *     launch_timeout_seconds: int,
+ *     question_max_chars: int,
  * }
  */
 return [
@@ -56,4 +58,14 @@ return [
     'sync_stale_multiplier' => (int) env('KBMS_SYNC_STALE_MULTIPLIER', 3),
 
     'sync_stuck_after_seconds' => (int) env('KBMS_SYNC_STUCK_AFTER_SECONDS', 300),
+
+    // Seconds the launch job waits for the launcher script to return (US-009). The
+    // script is expected to spawn its own terminal window and exit promptly; a
+    // script still running after this bound is violating that contract, and the
+    // job records a timed-out outcome instead of leaving the worker hanging.
+    'launch_timeout_seconds' => (int) env('KBMS_LAUNCH_TIMEOUT_SECONDS', 30),
+
+    // Maximum character length for a launch question (US-009). A product bound,
+    // not a system one — macOS ARG_MAX is two orders of magnitude clear of it.
+    'question_max_chars' => (int) env('KBMS_QUESTION_MAX_CHARS', 8000),
 ];

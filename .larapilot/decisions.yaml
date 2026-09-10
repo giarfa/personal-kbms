@@ -584,4 +584,30 @@ decisions:
     source: chat
     spec: US-008
     supersedes: 419974f3d275c843
-updated_at: '2026-09-10T07:43:47+02:00'
+  -
+    id: d184baee682dd396
+    ts: '2026-09-10T08:17:27+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'terminal launch mode'
+    label: 'terminal launch mode'
+    value: "Queued job invokes the launcher with Process::run() (argument array) and waits for its exit code, bounded by KBMS_LAUNCH_TIMEOUT_SECONDS (default 30); the script still opens its own OS-owned terminal window and the app never captures Claude's reply"
+    question: null
+    rationale: "Process::start captures no exit code and Symfony's Process::__destruct() calls stop(0), so a started-but-unwaited child is killed; US-009 requires a non-zero exit to be recorded on the launch row and surfaced in the UI. The script returns in milliseconds once its window is spawned, so waiting is free; a script that blocks past the timeout is a documented contract violation, recorded as a specific error rather than hanging the worker."
+    source: askquestion
+    spec: US-009
+    supersedes: 2deaf85cb3b47934
+  -
+    id: 2a1e52360ef6f8ea
+    ts: '2026-09-10T09:00:52+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-009 review verdict'
+    label: 'us-009 review verdict'
+    value: "Approve and merge: US-009 (Claude Code session launch bridge) accepted to DONE at the human gate. Evidence re-verified in-session — 441/441 tests green (1135 assertions), Pint + Larastan level 5 clean, migrate:fresh --seed coherent on a throwaway DB copy (3 launches, all 3-element command arrays, all context paths real files), no shell-string construction anywhere in app/. Robert's one Medium (dropped LaunchBlock detail in the job's second-pass path) was fixed in-branch via LaunchBlockDetail; Lars GO with no findings. Accepted with Anne's six-item manual handoff still owed (real launcher script, worker-quit survival, chmod -x, timeout, clipboard, dark-mode contrast at 768px) and the duplicated QuestionEmpty sentence carried as a non-blocking copy note. Merge the feature branch into develop locally, no push (git_mode GITFLOW)."
+    question: null
+    rationale: null
+    source: chat
+    spec: US-009
+    supersedes: null
+updated_at: '2026-09-10T09:00:52+02:00'
