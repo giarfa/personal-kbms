@@ -33,3 +33,4 @@
 {"id":"cbfc54945d189c37","ts":"2026-09-10T12:27:22+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"planning","tokens":33000,"minutes":14,"skill":"larapilot-plan","spec":"US-010","note":null,"estimated":true}
 {"id":"07f1be13dd44c0e1","ts":"2026-09-10T13:13:54+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"review","tokens":42000,"minutes":12,"skill":"larapilot-review","spec":"US-010","note":null,"estimated":false}
 {"id":"fa4cca5de7f09313","ts":"2026-09-10T13:39:34+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"planning","tokens":38000,"minutes":10,"skill":"larapilot-plan","spec":"US-010","note":null,"estimated":false}
+{"id":"b5616f69509b8ca4","ts":"2026-09-10T14:26:37+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"review","tokens":48000,"minutes":9,"skill":"larapilot-review","spec":"US-010","note":null,"estimated":false}

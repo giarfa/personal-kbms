@@ -662,4 +662,17 @@ decisions:
     source: chat
     spec: US-010
     supersedes: null
-updated_at: '2026-09-10T13:59:16+02:00'
+  -
+    id: 98125659923b987c
+    ts: '2026-09-10T14:36:17+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-010 review verdict'
+    label: 'us-010 review verdict'
+    value: "Approved US-010 (Ymd/underscore transcript convention + md-only resolution) at the human gate: all six ACs met including the md-only rework criterion, 453/454 tests green, Pint + Larastan L5 clean. Three notes accepted as non-blocking rather than folded into further rework: no server-side .md extension gate in TranscriptPanel::link() (Lars Low, unreachable via the picker UI), the pre-existing KBMS_ICS_URL env leak keeping ConfigurationSurfaceTest red, and the stale .md/.txt picker wording in the earlier 'transcript manual override mechanism' entry. Merge the feature branch into develop locally, no push (git_mode GITFLOW)."
+    question: null
+    rationale: 'Real pipeline directory now resolves cleanly: 63 of 63 .md files match Ymd_Hi_slug and the 64 .txt doubles that made every meeting Ambiguous are no longer indexed.'
+    source: askquestion
+    spec: US-010
+    supersedes: null
+updated_at: '2026-09-10T14:36:18+02:00'
