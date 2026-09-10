@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Jobs\LaunchClaudeSession;
 use App\Launcher\LaunchBlock;
+use App\Launcher\LaunchBlockDetail;
 use App\Launcher\LaunchCommand;
 use App\Launcher\LaunchPreflight;
 use App\Launcher\PromptLaunchStatus;
@@ -102,7 +103,9 @@ class AskClaude extends Component
             // arguments in colour spans without re-deriving the quoting —
             // the panel and the job stay derived from the same object.
             'commandLines' => $command !== null ? explode("\n", $command->display()) : null,
-            'blockMessage' => $result instanceof LaunchBlock ? $result->message($this->blockDetail($result, $transcript)) : null,
+            'blockMessage' => $result instanceof LaunchBlock
+                ? $result->message(LaunchBlockDetail::for($result, $this->question, $transcript?->path))
+                : null,
             'isQuestionBlock' => $isQuestionBlock,
             'latest' => $latest,
             'stillQueued' => $latest !== null
@@ -110,23 +113,6 @@ class AskClaude extends Component
                 && $latest->created_at !== null
                 && $latest->created_at->lt(now()->subSeconds(2 * (int) config('kbms.launch_timeout_seconds'))),
         ]);
-    }
-
-    /**
-     * The interpolation each blocked case needs to name its configuration
-     * key, path, or bound — computed here rather than inside LaunchBlock,
-     * which is stateless.
-     */
-    private function blockDetail(LaunchBlock $block, ?MeetingTranscript $transcript): ?string
-    {
-        return match ($block) {
-            LaunchBlock::LauncherMissing, LaunchBlock::LauncherNotExecutable => (string) config('kbms.claude_launcher'),
-            LaunchBlock::TranscriptUnreadable => $transcript?->path,
-            LaunchBlock::QuestionTooLong => str_contains($this->question, "\0")
-                ? 'A question cannot contain a null byte.'
-                : 'Question is '.mb_strlen($this->question).' characters; the bound is '.config('kbms.question_max_chars').'.',
-            default => null,
-        };
     }
 
     private function currentEvent(): ?CalendarEvent

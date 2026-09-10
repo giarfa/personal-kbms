@@ -4,9 +4,11 @@ namespace App\Jobs;
 
 use App\Launcher\ClaudeSessionLauncher;
 use App\Launcher\LaunchBlock;
+use App\Launcher\LaunchBlockDetail;
 use App\Launcher\LaunchPreflight;
 use App\Launcher\PromptLaunchStatus;
 use App\Models\CalendarEvent;
+use App\Models\MeetingTranscript;
 use App\Models\PromptLaunch;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -52,9 +54,11 @@ class LaunchClaudeSession implements ShouldQueue
             : LaunchBlock::NoTranscript;
 
         if ($result instanceof LaunchBlock) {
+            $transcriptPath = MeetingTranscript::query()->forOccurrence($launch->occurrenceKey())->first()?->path;
+
             $launch->update([
                 'status' => PromptLaunchStatus::Blocked,
-                'error' => $result->message(),
+                'error' => $result->message(LaunchBlockDetail::for($result, $launch->question, $transcriptPath)),
             ]);
 
             Log::info('kbms.launch', [

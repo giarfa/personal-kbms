@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Jobs\LaunchClaudeSession;
+use App\Launcher\LaunchBlock;
+use App\Launcher\LaunchBlockDetail;
 use App\Launcher\PromptLaunchStatus;
 use App\Models\CalendarEvent;
 use App\Models\MeetingTranscript;
@@ -156,6 +158,9 @@ class LaunchClaudeSessionJobTest extends TestCase
         $fresh = $launch->fresh();
         $this->assertSame(PromptLaunchStatus::Blocked, $fresh->status);
         $this->assertStringContainsString('no longer readable', $fresh->error);
+        // The path detail must not be dropped — a blanked detail would still
+        // contain "no longer readable" but with an empty quoted path.
+        $this->assertStringContainsString($launch->context_path, $fresh->error);
     }
 
     public function test_launcher_deleted_after_dispatch_blocks_and_runs_nothing(): void
@@ -168,7 +173,9 @@ class LaunchClaudeSessionJobTest extends TestCase
         LaunchClaudeSession::dispatchSync($launch->id);
 
         Process::assertNothingRan();
-        $this->assertSame(PromptLaunchStatus::Blocked, $launch->fresh()->status);
+        $fresh = $launch->fresh();
+        $this->assertSame(PromptLaunchStatus::Blocked, $fresh->status);
+        $this->assertStringContainsString($this->launcherFile, $fresh->error);
     }
 
     public function test_transcripts_path_repointed_after_dispatch_blocks_and_runs_nothing(): void
@@ -181,7 +188,22 @@ class LaunchClaudeSessionJobTest extends TestCase
         LaunchClaudeSession::dispatchSync($launch->id);
 
         Process::assertNothingRan();
-        $this->assertSame(PromptLaunchStatus::Blocked, $launch->fresh()->status);
+        $fresh = $launch->fresh();
+        $this->assertSame(PromptLaunchStatus::Blocked, $fresh->status);
+        $this->assertStringContainsString('KBMS_TRANSCRIPTS_PATH', $fresh->error);
+    }
+
+    /**
+     * Robert's review flagged that dropping the detail for a second-pass
+     * QuestionTooLong block would persist an EMPTY error string — this
+     * cannot arise in practice (the question is already bounded before
+     * dispatch), but the unit-level guarantee is asserted directly here.
+     */
+    public function test_second_pass_question_too_long_detail_is_never_dropped(): void
+    {
+        $detail = LaunchBlockDetail::for(LaunchBlock::QuestionTooLong, str_repeat('a', 8001), null);
+
+        $this->assertNotSame('', LaunchBlock::QuestionTooLong->message($detail));
     }
 
     public function test_a_row_already_launched_is_skipped_without_running_a_process(): void
