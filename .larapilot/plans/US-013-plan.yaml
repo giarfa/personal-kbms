@@ -360,12 +360,12 @@ tasks:
       6. `php artisan larapilot:quality`; `php artisan test --compact --filter=MeetingDetail`
 
       ## Completion Criteria
-      - [ ] The heading shows glyph, stripped title and a visible status tag
-      - [ ] The mirror panel still shows the raw summary verbatim, including the marker
-      - [ ] Page title and breadcrumb use the stripped title
-      - [ ] The detail page carries no rule colour
-      - [ ] A non-todo meeting's detail page is unchanged
-      - [ ] Existing detail tests pass; Pint and Larastan clean
+      - [x] The heading shows glyph, stripped title and a visible status tag
+      - [x] The mirror panel still shows the raw summary verbatim, including the marker
+      - [x] Page title and breadcrumb use the stripped title
+      - [x] The detail page carries no rule colour
+      - [x] A non-todo meeting's detail page is unchanged
+      - [x] Existing detail tests pass; Pint and Larastan clean
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -375,12 +375,18 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
       - TASK-04
       - TASK-05
+    commit:
+      sha: 69ee360d674eb8a629ee97f3cb1fac6fbf9017cf
+      short_sha: 69ee360
+      subject: 'feat(US-013): TASK-06 show todo status on the meeting detail page'
+      committed_at: '2026-09-11T01:57:32+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/69ee360d674eb8a629ee97f3cb1fac6fbf9017cf'
   -
     id: TASK-07
     title: 'Feature-test the three surfaces, the channels, the self-refresh seam and the query count'
@@ -465,4 +471,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-06
-updated_at: '2026-09-11T01:56:55+02:00'
+updated_at: '2026-09-11T01:57:32+02:00'
