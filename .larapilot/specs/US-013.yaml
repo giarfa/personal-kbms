@@ -5,7 +5,7 @@ epic:
   title: 'Meeting Workspace'
 priority: MEDIUM
 points: 3
-status: TODO
+status: 'IN PROGRESS'
 body: |
   #### US-013: Calendar-as-todo: checkbox title convention with time-aware status
 
@@ -66,3 +66,11 @@ body: |
   - No configurable marker vocabulary and no new `KBMS_*` key — the convention is stable and personal
   - No new database column, migration, or index
   - No due-date semantics beyond the event's own end time, and no notification, digest, or reminder of any kind
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-11T01:51:24+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-11T01:51:24+02:00'
+rework: false
