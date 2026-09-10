@@ -65,6 +65,16 @@
     --kb-rule-grey: oklch(0.45 0 0);
     --kb-rule-grey-bg: oklch(0.955 0 0);
 
+    /* --- Calendar-as-todo (US-013) ---
+     *
+     * Its own token, not one of the six rule colours: the spec forbids an alert
+     * treatment that collides with a configured rule colour. Hue 40 sits clear of
+     * --kb-danger (25, cancelled and failure), --kb-warn (70/80, stale), and both
+     * shipped rule defaults (yellow 90, purple 320). Same inherited lightness pair
+     * as every other --kb-* token, so AA carries over by construction. */
+    --kb-todo-overdue: oklch(0.45 0.13 40);
+    --kb-todo-overdue-bg: oklch(0.955 0.04 40);
+
     --kb-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
     --kb-frame-max: 88rem;
 }
@@ -102,6 +112,9 @@
         --kb-rule-orange-bg: oklch(0.28 0.055 55);
         --kb-rule-grey: oklch(0.8 0 0);
         --kb-rule-grey-bg: oklch(0.28 0 0);
+
+        --kb-todo-overdue: oklch(0.8 0.12 40);
+        --kb-todo-overdue-bg: oklch(0.28 0.055 40);
     }
 }
 
@@ -413,6 +426,21 @@
     border-color: color-mix(in oklch, var(--kb-rule-orange) 40%, transparent);
 }
 
+.kb-legend__todo {
+    font-family: var(--kb-mono);
+    font-size: 0.8125rem;
+    line-height: 1;
+}
+
+.kb-legend__todo--overdue {
+    color: var(--kb-todo-overdue);
+    font-weight: 700;
+}
+
+.kb-legend__todo--done {
+    color: var(--muted-foreground);
+}
+
 .kb-legend__swatch--grey {
     background: var(--kb-rule-grey-bg);
     border-color: color-mix(in oklch, var(--kb-rule-grey) 40%, transparent);
@@ -566,6 +594,46 @@
 
 .kb-row--colour-grey:not(.kb-row--cancelled) {
     background: var(--kb-rule-grey-bg);
+}
+
+/* Calendar-as-todo (US-013) — the third channel.
+ *
+ * It owns a glyph, the title's weight and strike, and `color` on the glyph and
+ * the status tag. It owns NO background, so the US-012 rule fill survives
+ * underneath it, and it never colours the row or chip element itself, so it
+ * cannot fight the rule colour. Do not add a background here. */
+.kb-todo {
+    font-family: var(--kb-mono);
+    font-size: 0.875rem;
+    line-height: 1;
+    margin-right: 0.375rem;
+    flex-shrink: 0;
+    vertical-align: baseline;
+}
+
+.kb-todo--done {
+    color: var(--muted-foreground);
+}
+
+.kb-todo--overdue {
+    color: var(--kb-todo-overdue);
+    font-weight: 700;
+}
+
+.kb-row--todo-done .kb-row__title {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+}
+
+.kb-row--todo-overdue:not(.kb-row--cancelled) .kb-row__title {
+    color: var(--kb-todo-overdue);
+    font-weight: 600;
+}
+
+.kb-tag--overdue {
+    background: var(--kb-todo-overdue-bg);
+    color: var(--kb-todo-overdue);
+    border-color: color-mix(in oklch, var(--kb-todo-overdue) 30%, transparent);
 }
 
 .kb-row--cancelled {
@@ -1374,6 +1442,42 @@ select:focus[data-flux-control] {
 .kb-cal .fc-event.kb-ev--colour-grey:not(.kb-ev--cancelled) {
     background: var(--kb-rule-grey-bg);
     color: var(--kb-rule-grey);
+}
+
+/* Calendar-as-todo glyphs (US-013). Generated content is presentational, and
+   eventDidMount sets an aria-label on the chip that replaces the whole subtree
+   name, so the status wording is never announced twice. One class picks one
+   glyph — overdue replaces open rather than stacking on it.
+
+   Overdue carries an added `!` shape, not only the alert hue: the criterion is
+   that overdue is never signalled by colour alone, and that has to hold for a
+   reader who cannot distinguish the colour as well as for one who cannot see
+   the treatment at all.
+
+   Every rule below targets .fc-event-title, never the chip: the chip's
+   background belongs to the US-012 rule fill. */
+.kb-cal .fc-event.kb-ev--todo-open .fc-event-title::before {
+    content: '☐ ';
+}
+
+.kb-cal .fc-event.kb-ev--todo-done .fc-event-title::before {
+    content: '☑ ';
+}
+
+.kb-cal .fc-event.kb-ev--todo-overdue:not(.kb-ev--cancelled) .fc-event-title::before {
+    content: '☐ ! ';
+    color: var(--kb-todo-overdue);
+    font-weight: 700;
+}
+
+.kb-cal .fc-event.kb-ev--todo-done .fc-event-title {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+}
+
+.kb-cal .fc-event.kb-ev--todo-overdue:not(.kb-ev--cancelled) .fc-event-title {
+    color: var(--kb-todo-overdue);
+    font-weight: 600;
 }
 
 .kb-cal .fc-event.kb-ev--cancelled {
