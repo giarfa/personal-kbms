@@ -9,6 +9,10 @@
             ? __('Last successful sync was :time.', ['time' => $syncHealth->lastSuccessAt->diffForHumans()])
             : __('No successful sync has completed yet.');
         $totalMeetings = $days->sum(fn ($day) => $day->meetingCount);
+
+        // Overdue carries an added shape, not only the alert hue, so the state
+        // survives for a reader who cannot distinguish the colour (US-013).
+        $todoGlyphs = ['open' => '☐', 'done' => '☑', 'overdue' => '☐ !'];
     @endphp
 
     <div class="kb-page-head">
@@ -56,6 +60,15 @@
             @endforeach
         </p>
     @endif
+
+    {{-- Todo states (US-013). Static, unlike the config-generated colour legend
+         above: the marker vocabulary is hardcoded and has no configuration. --}}
+    <p class="kb-legend">
+        <span>{{ __('Titles starting with a checkbox:') }}</span>
+        <span class="kb-inline"><span class="kb-legend__todo" aria-hidden="true">☐</span> {{ __('to do') }}</span>
+        <span class="kb-inline"><span class="kb-legend__todo kb-legend__todo--done" aria-hidden="true">☑</span> {{ __('done') }}</span>
+        <span class="kb-inline"><span class="kb-legend__todo kb-legend__todo--overdue" aria-hidden="true">☐ !</span> {{ __('overdue — still open past its end time') }}</span>
+    </p>
 
     @if ($totalMeetings === 0)
         <div class="kb-empty">
@@ -114,7 +127,7 @@
 
                             <li>
                                 <a
-                                    class="kb-row @if ($row->isCancelled) kb-row--cancelled @endif @if ($i === $nowIndex) kb-row--now @endif @if ($row->colourRule) kb-row--colour-{{ $row->colourRule->colour->value }} @endif"
+                                    class="kb-row @if ($row->isCancelled) kb-row--cancelled @endif @if ($i === $nowIndex) kb-row--now @endif @if ($row->colourRule) kb-row--colour-{{ $row->colourRule->colour->value }} @endif @if ($row->todo) kb-row--todo-{{ $row->todo->modifier() }} @endif"
                                     href="{{ route('meetings.show', $row->routeKey) }}"
                                     wire:navigate
                                 >
@@ -140,11 +153,19 @@
                                         @endif
                                     </span>
                                     <span>
-                                        <span class="kb-row__title">{{ $row->event->summary }}</span>
+                                        {{-- Glyph is decoration and lives outside .kb-row__title, so
+                                             the title element still contains exactly the title. The
+                                             .kb-sronly status below is what a screen reader gets
+                                             (US-013). A row that is not a todo renders neither, and
+                                             no reserved gutter, so existing layout does not shift. --}}
+                                        @if ($row->todo)<span class="kb-todo kb-todo--{{ $row->todo->modifier() }}" aria-hidden="true">{{ $todoGlyphs[$row->todo->modifier()] }}</span>@endif<span class="kb-row__title">{{ $row->displayTitle }}</span>
                                         {{-- The rule label rides the accessible name so the
                                              classification never rests on colour alone (US-012). --}}
                                         @if ($row->colourRule)
                                             <span class="kb-sronly">{{ $row->colourRule->label }}</span>
+                                        @endif
+                                        @if ($row->todo)
+                                            <span class="kb-sronly">{{ $row->todo->statusLabel() }}</span>
                                         @endif
                                         <span class="kb-row__meta">
                                             @if ($row->event->organizer)

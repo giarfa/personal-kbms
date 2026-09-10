@@ -28,6 +28,24 @@ final readonly class AgendaRow
     public MeetingCoverage $coverage;
 
     /**
+     * The todo this occurrence's summary declares, or `null` (US-013).
+     *
+     * Computed here rather than passed in — deliberately the mirror image of
+     * `$colourRule` above. Colouring is injected so the detail page can opt out
+     * by not passing it; todo status is wanted on all three surfaces, and
+     * MeetingController builds an AgendaRow too, so deriving it in the
+     * constructor is what makes the detail page get it for free.
+     */
+    public ?MeetingTodo $todo;
+
+    /**
+     * The title to render: the summary with any todo marker stripped, falling
+     * back to the raw summary. Centralised here so no view has to remember to
+     * strip it, and so the raw `summary` stays available for the mirror panel.
+     */
+    public string $displayTitle;
+
+    /**
      * The first colour rule this occurrence satisfies, or `null` (US-012).
      *
      * The default is load-bearing, not convenience: it is what keeps
@@ -53,6 +71,10 @@ final readonly class AgendaRow
         $this->isCancelled = $event->cancelled_at !== null;
         $this->routeKey = $event->occurrenceKey()->toRouteKey();
         $this->coverage = $coverage;
+        $this->todo = MeetingTodo::for($event);
+        // `->` rather than `?->`: ?? already handles the null todo, and
+        // Larastan rejects the nullsafe form on the left of ?? as redundant.
+        $this->displayTitle = $this->todo->displayTitle ?? (string) $event->summary;
 
         // Both kinds store an exclusive end, so an end landing exactly on midnight
         // belongs to the previous day. Timed occurrences span days too (an

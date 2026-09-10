@@ -218,11 +218,11 @@ tasks:
       8. `npm run build`; check `/` and `/calendar` in both themes, and confirm an overdue rule-coloured annotated event still shows all three signals.
 
       ## Completion Criteria
-      - [ ] `--kb-todo-overdue` defined in both themes, colliding with no rule-palette token
-      - [ ] Glyphs render on both surfaces in all three views
-      - [ ] No todo rule sets `background`, and none targets the chip or row element itself
-      - [ ] Done reads muted and struck; overdue reads in the alert treatment; open reads at normal weight
-      - [ ] `npm run build` succeeds
+      - [x] `--kb-todo-overdue` defined in both themes, colliding with no rule-palette token
+      - [x] Glyphs render on both surfaces in all three views
+      - [x] No todo rule sets `background`, and none targets the chip or row element itself
+      - [x] Done reads muted and struck; overdue reads in the alert treatment; open reads at normal weight
+      - [x] `npm run build` succeeds
 
       ## Test Data
       - N/A — stylesheet only
@@ -232,11 +232,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 2.5
     dependencies:
       - TASK-01
+    commit:
+      sha: 9155b1b2711522dded5a4ccb48a5211cd42460af
+      short_sha: 9155b1b
+      subject: 'feat(US-013): TASK-03 add todo glyphs, the overdue token and its treatments'
+      committed_at: '2026-09-11T01:54:24+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/9155b1b2711522dded5a4ccb48a5211cd42460af'
   -
     id: TASK-04
     title: 'Render todo status on the agenda'
@@ -447,4 +453,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-06
-updated_at: '2026-09-11T01:52:45+02:00'
+updated_at: '2026-09-11T01:54:25+02:00'
