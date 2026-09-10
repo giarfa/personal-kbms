@@ -179,8 +179,8 @@ tasks:
       4. `php artisan test --compact --filter=EventColourRulesTest`
 
       ## Completion Criteria
-      - [ ] Every bullet above is a named test
-      - [ ] Tests pass; Pint and Larastan clean
+      - [x] Every bullet above is a named test
+      - [x] Tests pass; Pint and Larastan clean
 
       ## Test Data
       - N/A — reuses `CalendarEventFactory` with explicit attribute overrides
@@ -190,11 +190,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 2
     dependencies:
       - TASK-01
+    commit:
+      sha: 1817d38acf10f105842982e48335edff3bb78fd2
+      short_sha: 1817d38
+      subject: 'test(US-012): TASK-02 cover the colour rule engine'
+      committed_at: '2026-09-11T01:39:58+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1817d38acf10f105842982e48335edff3bb78fd2'
   -
     id: TASK-03
     title: 'Palette tokens and the fill-only channel rules'
@@ -405,4 +411,4 @@ tasks:
     dependencies:
       - TASK-04
       - TASK-05
-updated_at: '2026-09-11T01:39:16+02:00'
+updated_at: '2026-09-11T01:39:59+02:00'

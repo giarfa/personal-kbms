@@ -41,6 +41,30 @@
     --kb-danger: var(--destructive);
     --kb-danger-bg: oklch(0.96 0.03 25);
 
+    /* --- Event colour rule palette (US-012) — closed set, never config-supplied ---
+     *
+     * Lightness is inherited, not re-chosen: every token uses the same L pair as
+     * the already AA-verified --kb-note / --kb-transcript tokens (0.45 on 0.955
+     * light, 0.80 on 0.28 dark), so contrast carries over by construction rather
+     * than by a fresh eyeball check. A new token MUST keep those L values.
+     *
+     * Hues steer clear of the two coverage hues — note is teal 205, transcript is
+     * indigo 285 — and of --kb-ok at 155, so a rule fill is never mistaken for a
+     * coverage signal. Red is deliberately absent: it belongs to --kb-danger.
+     */
+    --kb-rule-yellow: oklch(0.45 0.085 90);
+    --kb-rule-yellow-bg: oklch(0.955 0.045 90);
+    --kb-rule-purple: oklch(0.45 0.095 320);
+    --kb-rule-purple-bg: oklch(0.955 0.03 320);
+    --kb-rule-green: oklch(0.45 0.09 140);
+    --kb-rule-green-bg: oklch(0.955 0.03 140);
+    --kb-rule-blue: oklch(0.45 0.095 250);
+    --kb-rule-blue-bg: oklch(0.955 0.03 250);
+    --kb-rule-orange: oklch(0.45 0.1 55);
+    --kb-rule-orange-bg: oklch(0.955 0.04 55);
+    --kb-rule-grey: oklch(0.45 0 0);
+    --kb-rule-grey-bg: oklch(0.955 0 0);
+
     --kb-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
     --kb-frame-max: 88rem;
 }
@@ -63,6 +87,21 @@
         --kb-warn-bg: oklch(0.28 0.05 75);
         --kb-danger: oklch(0.75 0.14 25);
         --kb-danger-bg: oklch(0.28 0.06 25);
+
+        /* Same L pair as the dark coverage tokens (0.80 on 0.28) — see the
+           light-theme block above for why the lightness is inherited. */
+        --kb-rule-yellow: oklch(0.8 0.09 90);
+        --kb-rule-yellow-bg: oklch(0.28 0.05 90);
+        --kb-rule-purple: oklch(0.8 0.1 320);
+        --kb-rule-purple-bg: oklch(0.28 0.05 320);
+        --kb-rule-green: oklch(0.8 0.1 140);
+        --kb-rule-green-bg: oklch(0.28 0.05 140);
+        --kb-rule-blue: oklch(0.8 0.1 250);
+        --kb-rule-blue-bg: oklch(0.28 0.05 250);
+        --kb-rule-orange: oklch(0.8 0.11 55);
+        --kb-rule-orange-bg: oklch(0.28 0.055 55);
+        --kb-rule-grey: oklch(0.8 0 0);
+        --kb-rule-grey-bg: oklch(0.28 0 0);
     }
 }
 
@@ -336,6 +375,49 @@
     color: var(--muted-foreground);
 }
 
+/* Colour-rule legend swatch (US-012). Generated from config on both pages, so
+   adding a rule to the array makes it appear here with no view edit. Paints
+   the same --kb-rule-*-bg fill the matched events get, with a matching border
+   so a pale swatch is still visible against the page. */
+.kb-legend__swatch {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 0.1875rem;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.kb-legend__swatch--yellow {
+    background: var(--kb-rule-yellow-bg);
+    border-color: color-mix(in oklch, var(--kb-rule-yellow) 40%, transparent);
+}
+
+.kb-legend__swatch--purple {
+    background: var(--kb-rule-purple-bg);
+    border-color: color-mix(in oklch, var(--kb-rule-purple) 40%, transparent);
+}
+
+.kb-legend__swatch--green {
+    background: var(--kb-rule-green-bg);
+    border-color: color-mix(in oklch, var(--kb-rule-green) 40%, transparent);
+}
+
+.kb-legend__swatch--blue {
+    background: var(--kb-rule-blue-bg);
+    border-color: color-mix(in oklch, var(--kb-rule-blue) 40%, transparent);
+}
+
+.kb-legend__swatch--orange {
+    background: var(--kb-rule-orange-bg);
+    border-color: color-mix(in oklch, var(--kb-rule-orange) 40%, transparent);
+}
+
+.kb-legend__swatch--grey {
+    background: var(--kb-rule-grey-bg);
+    border-color: color-mix(in oklch, var(--kb-rule-grey) 40%, transparent);
+}
+
 .kb-daygroup + .kb-daygroup {
     margin-top: 1.5rem;
 }
@@ -452,6 +534,38 @@
 
 .kb-row--now {
     border-left: 3px solid var(--kb-transcript);
+}
+
+/* Rule colour (US-012) — fill only, same contract as the calendar chips above.
+   No border property here: kb-row--now's left rail and kb-row--cancelled's
+   dashed edge stay untouched, and cancelled wins by selector, not by order.
+   Unlike the calendar chip, the row does NOT recolour its text: the row's
+   three columns already carry their own colours, and tinting them would push
+   the already-marginal --muted-foreground meta line further down. The fill
+   alone carries the signal, and the legend plus the accessible name carry the
+   meaning. */
+.kb-row--colour-yellow:not(.kb-row--cancelled) {
+    background: var(--kb-rule-yellow-bg);
+}
+
+.kb-row--colour-purple:not(.kb-row--cancelled) {
+    background: var(--kb-rule-purple-bg);
+}
+
+.kb-row--colour-green:not(.kb-row--cancelled) {
+    background: var(--kb-rule-green-bg);
+}
+
+.kb-row--colour-blue:not(.kb-row--cancelled) {
+    background: var(--kb-rule-blue-bg);
+}
+
+.kb-row--colour-orange:not(.kb-row--cancelled) {
+    background: var(--kb-rule-orange-bg);
+}
+
+.kb-row--colour-grey:not(.kb-row--cancelled) {
+    background: var(--kb-rule-grey-bg);
 }
 
 .kb-row--cancelled {
@@ -1219,6 +1333,47 @@ select:focus[data-flux-control] {
     background: var(--kb-transcript-bg);
     border-color: color-mix(in oklch, var(--kb-transcript) 30%, transparent);
     color: var(--kb-transcript);
+}
+
+/* Rule colour (US-012) — the fill channel, and only the fill channel.
+ *
+ * These rules set `background` and `color` and nothing else. Borders belong to
+ * coverage (kb-ev--note / --transcript / --both) and to cancelled, so an
+ * annotated PING meeting reads as both at once. Do not add a border property
+ * here: that is what would make one channel eat another.
+ *
+ * `:not(.kb-ev--cancelled)` is written out rather than relying on source order,
+ * so reordering this stylesheet can never silently un-cancel an event. Placed
+ * after kb-ev--allday deliberately: a rule-coloured all-day event takes the
+ * rule's fill, and keeps its all-day signal from FullCalendar's separate lane. */
+.kb-cal .fc-event.kb-ev--colour-yellow:not(.kb-ev--cancelled) {
+    background: var(--kb-rule-yellow-bg);
+    color: var(--kb-rule-yellow);
+}
+
+.kb-cal .fc-event.kb-ev--colour-purple:not(.kb-ev--cancelled) {
+    background: var(--kb-rule-purple-bg);
+    color: var(--kb-rule-purple);
+}
+
+.kb-cal .fc-event.kb-ev--colour-green:not(.kb-ev--cancelled) {
+    background: var(--kb-rule-green-bg);
+    color: var(--kb-rule-green);
+}
+
+.kb-cal .fc-event.kb-ev--colour-blue:not(.kb-ev--cancelled) {
+    background: var(--kb-rule-blue-bg);
+    color: var(--kb-rule-blue);
+}
+
+.kb-cal .fc-event.kb-ev--colour-orange:not(.kb-ev--cancelled) {
+    background: var(--kb-rule-orange-bg);
+    color: var(--kb-rule-orange);
+}
+
+.kb-cal .fc-event.kb-ev--colour-grey:not(.kb-ev--cancelled) {
+    background: var(--kb-rule-grey-bg);
+    color: var(--kb-rule-grey);
 }
 
 .kb-cal .fc-event.kb-ev--cancelled {
