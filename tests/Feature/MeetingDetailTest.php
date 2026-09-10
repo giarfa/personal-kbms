@@ -170,6 +170,16 @@ class MeetingDetailTest extends TestCase
             ->assertSeeText('Transcript');
     }
 
+    public function test_the_ask_claude_panel_is_present_and_the_us_009_placeholder_is_gone(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+
+        $this->get(route('meetings.show', $event->occurrenceKey()->toRouteKey()))
+            ->assertOk()
+            ->assertSeeText('Ask Claude Code')
+            ->assertDontSee('The local Claude Code launch bridge arrives with US-009.');
+    }
+
     public function test_an_unknown_route_key_returns_404(): void
     {
         $unknownKey = (new OccurrenceKey('does-not-exist'))->toRouteKey();

@@ -11,7 +11,6 @@ use App\Meetings\OccurrenceKey;
 use App\Models\CalendarEvent;
 use App\Models\MeetingTranscript;
 use App\Models\PromptLaunch;
-use Closure;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -48,15 +47,11 @@ class AskClaude extends Component
     public function launch(): void
     {
         $this->validate([
-            'question' => [
-                'required',
-                function (string $attribute, mixed $value, Closure $fail): void {
-                    if (trim((string) $value) === '') {
-                        $fail('Type a question first — whitespace only is rejected before anything is dispatched.');
-                    }
-                },
-                'max:'.config('kbms.question_max_chars'),
-            ],
+            'question' => ['required', 'max:'.config('kbms.question_max_chars')],
+        ], [
+            // Laravel's `required` already treats a whitespace-only string as
+            // empty (trim($value) === '') — the mockup's exact wording for that.
+            'question.required' => 'Type a question first — whitespace only is rejected before anything is dispatched.',
         ]);
 
         $occurrence = $this->currentEvent();
