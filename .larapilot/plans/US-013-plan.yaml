@@ -78,8 +78,8 @@ tasks:
       4. Draft the internal PR title/body toward `develop` — keep it local
 
       ## Completion Criteria
-      - [ ] Branch exists locally, cut from a `develop` carrying US-011 and US-012
-      - [ ] PR title/body drafted (remote not opened)
+      - [x] Branch exists locally, cut from a `develop` carrying US-011 and US-012
+      - [x] PR title/body drafted (remote not opened)
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -89,10 +89,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
+    commit:
+      sha: 7ab49d4ff27d220e5ca7603b9dbfd878df257e79
+      short_sha: 7ab49d4
+      subject: 'chore(US-013): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-11T01:51:24+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7ab49d4ff27d220e5ca7603b9dbfd878df257e79'
   -
     id: TASK-01
     title: 'Todo parsing and time-aware status'
