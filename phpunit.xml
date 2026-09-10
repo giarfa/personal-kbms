@@ -26,6 +26,9 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
+        <env name="KBMS_CLAUDE_LAUNCHER" value=""/>
+        <env name="KBMS_ICS_URL" value=""/>
+        <env name="KBMS_OUTLOOK_URL_TEMPLATE" value=""/>
         <env name="KBMS_TRANSCRIPTS_PATH" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

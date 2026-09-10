@@ -1,0 +1,325 @@
+code: US-011
+plan_body: |
+  ## Technical Solution
+
+  Both scanning surfaces already re-derive everything they show from a single render pass — the agenda from `AgendaQuery` inside a Livewire `render()`, the calendar from `CalendarFeedQuery` behind the `calendar.events` JSON route. Nothing about the data layer has to change: this spec only has to make each surface run that pass again, on its own, roughly once a minute, without disturbing anything the operator is looking at.
+
+  **One shared cadence, two subscribers.** A new `resources/js/self-refresh.js` owns the interval and the visibility policy, and exposes it to both pages:
+
+  - `KB_REFRESH_MS = 60_000` — the cadence, hardcoded to match the `wire:poll.60s` the sync indicator already uses. No `KBMS_*` key, no `config/kbms.php` entry, no operator-facing control (spec: "deliberately hardcoded").
+  - `onRefreshTick(callback)` — registers `callback` on a single shared `setInterval`, so the agenda, the calendar and any later subscriber wake on the same tick rather than each owning a timer. Returns a teardown closure.
+  - **Hidden-tab policy:** a tick that fires while `document.hidden` is skipped outright, and a `visibilitychange` back to visible fires the callback once immediately when at least one tick was skipped. That is a deliberate departure from Livewire's own `wire:poll`, which *throttles* background polling to a 5% chance per tick rather than pausing it, and never catches up on return. The acceptance criterion asks for a pause plus a catch-up, so the cadence is ours rather than the directive's. Recorded as a plan note, not a silent deviation.
+  - **Alpine data component `kbSelfRefresh`** — registered in the same module on `alpine:init`, so a Livewire component can subscribe with a single `x-data` attribute and unsubscribe through `this.$cleanup()` (the same teardown idiom `calendar.js` already uses for its FullCalendar instance).
+
+  **Agenda (`/`).** The `Agenda` Livewire component root gains `x-data="kbSelfRefresh"`; the tick calls `$wire.$refresh()`. `$refresh` re-enters `render()`, which re-resolves `AgendaQuery::for($range)` and `SyncHealthReporter::current()` from scratch — so a meeting the background sync upserted appears, the coverage tags re-derive, the `Now` divider re-computes against the current clock, and `diffForHumans()` on the last successful sync stays accurate on a page left open for hours. No component state is touched: `mount()` does not re-run, so the `#[Url] date` anchor survives, and Livewire's morph patches the existing DOM in place rather than replacing it, so scroll position, the `Jump to` input's value, and its focus survive too. The `aria-live="polite"` range label is left exactly as it is: its content does not change across a refresh, so morph does not touch it and nothing is announced.
+
+  **Calendar (`/calendar`).** The `kbCalendar` Alpine component subscribes to the same tick and calls `this.calendar.refetchEvents()`, which re-runs the existing `events` function for the *currently visible* window only and re-renders the event layer. `refetchEvents()` does not change the view, the anchor date, or the day-cell DOM, so the current view, the URL state, and the roving-tabindex focus target all survive; a `eventsSet` callback re-runs `syncRovingTabindex()` after each event render as a cheap idempotent guard (it reassigns `tabindex` attributes and never moves focus). `datesSet` does not fire on a refetch, so the URL is not rewritten and no pending-focus machinery is disturbed.
+
+  **Quiet degradation** is handled once per surface, at the two places a refresh can fail:
+
+  - *Calendar* — the `events` function caches the last successful payload keyed by `from|to`. On a fetch rejection or a non-OK response for a range we have already rendered, it calls `successCallback(lastGoodEvents)` instead of `failureCallback`, so the grid keeps its last good render instead of blanking. Only a *first* fetch for a range still fails through to `failureCallback`, which is the pre-spec behaviour and leaves `hasEvents` at `null` so the empty-state block stays hidden.
+  - *Agenda* — a failed Livewire request would otherwise raise Livewire's own full-screen HTML error modal (or the 419 "page has expired" confirm). A `Livewire.interceptAction` registration calls `preventDefault()` on the error path for actions named `$refresh` **only** — the no-side-effect re-render, whether it came from our tick or from the sync indicator's existing `wire:poll`. Every user-initiated action keeps Livewire's default error surface untouched.
+
+  Sync failure itself keeps being reported only by `SyncStatus` and `SyncAlert` (FR-010). Neither component is edited by this spec.
+
+  **Out of scope, enforced:** the meeting detail page is untouched — no `x-data`, no tick subscription — so the notes editor and the prompt panel keep their current behaviour, including `AskClaude`'s short-lived launch poll. No websockets, no Echo, no change to sync scheduling.
+
+  ## Git & Branching
+  - Mode: `GITFLOW` (from `settings.git_mode`)
+  - Branch: `feature/US-011-self-refreshing-views` from `develop`
+  - TASK-00: bootstrap the branch and prepare the internal PR description locally
+  - Per task: one Conventional Commit `type(US-011): TASK-NN summary`; **no push**, no remote PR (push only on explicit request)
+  - Merge into `develop` after the review gate
+
+  ## Test Data Strategy
+  - No new or changed Eloquent model, migration, factory or seeder in this spec — it is a render-cadence change over data US-005 and US-008 already produce.
+  - Tests reuse `CalendarEventFactory` (`at()`, `allDay()`, `cancelled()`) and `MeetingNoteFactory` / `MeetingTranscriptFactory` exactly as `AgendaPageTest` already does.
+  - `migrate:fresh --seed` is unaffected; no seeder changes.
+
+  ## Test Strategy
+  - Bar: `NORMAL` (from `settings.testing`) — PHPUnit feature and unit tests only. **No** Playwright, Dusk, Pest browser, or viewport matrix.
+  - Agenda refresh is server-testable through the Livewire test harness: `Livewire::test(Agenda::class)->call('$refresh')` exercises exactly the path the tick triggers. Coverage: a meeting created after mount appears on refresh; the `#[Url] date` anchor is preserved across a refresh from a past range; the `Now` divider and the relative sync wording re-derive when the clock advances between renders; a coverage change (a note added after mount) shows up on refresh.
+  - The cadence module, the hidden-tab pause, the catch-up, the FullCalendar refetch, and the last-good fallback are browser behaviours with no server seam and no JS test runner in this project (`package.json` ships Vite only). They are covered by a **manual test handoff** at `.larapilot/docs/test-results/US-011-manual.md`, per Anne's NORMAL-bar allowance — with the exact steps, the expected observation, and the failure modes to look for.
+  - `larapilot:quality` (Pint + Larastan level 5) before each backend `task-done`; `npm run build` must succeed after every JS change.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and internal PR'
+    body: |
+      ## Description
+      Bootstrap Gitflow for US-011: create the feature branch from `develop` and prepare the internal PR description toward `develop`. Do **not** push.
+
+      The working tree already carries uncommitted Larapilot artifacts (backlog, PRD, config, decisions, ledger) and the three untracked spec files `US-011`/`US-012`/`US-013` produced by the preceding backlog session. They travel onto this branch and are committed here rather than left dangling on `develop`, which `GITFLOW` forbids committing to directly.
+
+      ## Files Involved
+      - (git only, plus the pre-existing `.larapilot/` artifact changes)
+
+      ## Steps
+      1. `git checkout -b feature/US-011-self-refreshing-views` from `develop`
+      2. Stage the pending `.larapilot/` artifacts and the plan file written by `spec-plan`
+      3. Commit `chore(US-011): TASK-00 bootstrap feature branch`
+      4. Draft the internal PR title/body toward `develop` — keep it local
+
+      ## Completion Criteria
+      - [x] Branch `feature/US-011-self-refreshing-views` exists locally
+      - [x] Pending backlog/spec/plan artifacts committed on the branch, `develop` left clean
+      - [x] PR title/body drafted for `develop` (remote not opened)
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-011): TASK-00 bootstrap feature branch`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally — open remote only if the user requests it
+    type: Impl
+    status: DONE
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+    commit:
+      sha: ce252776abefe5f37a2550161dfd34dfccd340c0
+      short_sha: ce25277
+      subject: 'chore(US-011): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-11T01:25:33+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ce252776abefe5f37a2550161dfd34dfccd340c0'
+  -
+    id: TASK-01
+    title: 'Shared 60s refresh cadence module and silent-failure interceptor'
+    body: |
+      ## Description
+      Add the single module that owns the refresh cadence for the whole application, and the Livewire interceptor that makes a failed `$refresh` silent. Nothing subscribes to it yet — TASK-02 and TASK-03 do.
+
+      ## Files Involved
+      - resources/js/self-refresh.js (new)
+      - resources/js/app.js
+
+      ## Steps
+      1. Create `resources/js/self-refresh.js` exporting:
+         - `export const KB_REFRESH_MS = 60000;` — the cadence, with a docblock stating it is deliberately hardcoded to match the sync indicator's `wire:poll.60s`, and that US-011 adds no `KBMS_*` key and no operator control
+         - `export function onRefreshTick(callback)` — registers `callback` against **one** shared `setInterval(KB_REFRESH_MS)` created lazily on first subscription and cleared when the last subscriber leaves; returns a teardown closure
+      2. Hidden-tab policy inside the module:
+         - a tick that fires while `document.hidden` is skipped and sets a "missed a tick" flag
+         - a single module-level `visibilitychange` listener fires every subscriber once, immediately, when the document becomes visible **and** the flag is set, then clears it
+         - document in a comment why this is hand-rolled rather than `wire:poll`: Livewire's poll directive throttles background ticks to a 5% chance instead of pausing, and never catches up on return (`vendor/livewire/livewire/dist/livewire.esm.js`, `throttleWhile(() => theTabIsInTheBackground() ...)`)
+      3. Register the Alpine data component in the same module, on `alpine:init`:
+         `Alpine.data('kbSelfRefresh', () => ({ init() { this.$cleanup(onRefreshTick(() => this.$wire.$refresh())) } }))`
+      4. Register the silent-failure interceptor in the same module, guarded on `Livewire` being present:
+         `Livewire.interceptAction(({ action, onError }) => { if (action.name !== '$refresh') return; onError(({ preventDefault }) => preventDefault()) })`
+         Comment why: `$refresh` is a no-side-effect re-render, so a failed one has nothing to report; suppressing it here keeps a request error, a stopped worker, or an expired session from raising Livewire's full-screen HTML modal or the 419 confirm over the last good render. Every user-initiated action keeps Livewire's default error surface.
+      5. Import the module from `resources/js/app.js` alongside `./calendar.js`
+      6. `npm run build`
+
+      ## Completion Criteria
+      - [x] `KB_REFRESH_MS` is 60000 and is the only place the cadence is written
+      - [x] One shared interval regardless of subscriber count; teardown clears it when empty
+      - [x] Ticks are skipped while `document.hidden`; a catch-up fires on return to visible only when a tick was missed
+      - [x] `$refresh` failures raise no visible Livewire error UI; non-`$refresh` actions are untouched
+      - [x] No new configuration key anywhere (`config/kbms.php` and `.env.example` unchanged)
+      - [x] `npm run build` succeeds
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-011): TASK-01 add shared self-refresh cadence and silent refresh failures`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-00
+    commit:
+      sha: 44466176763636ca63af3726bf93d479063ce81e
+      short_sha: '4446617'
+      subject: 'feat(US-011): TASK-01 add shared self-refresh cadence and silent refresh failures'
+      committed_at: '2026-09-11T01:26:13+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/44466176763636ca63af3726bf93d479063ce81e'
+  -
+    id: TASK-02
+    title: 'Subscribe the agenda to the refresh cadence'
+    body: |
+      ## Description
+      Make the agenda list at `/` bring itself up to date on the shared 60 second tick, silently, without disturbing the range anchor, the `Jump to` input, focus, or scroll position.
+
+      ## Files Involved
+      - resources/views/livewire/agenda.blade.php
+
+      ## Steps
+      1. Add `x-data="kbSelfRefresh"` to the component's root `<div>`. That is the whole wiring: the Alpine component from TASK-01 calls `$wire.$refresh()` on each tick.
+      2. Verify nothing else needs to move — `render()` already re-resolves `AgendaQuery::for($range)` and `SyncHealthReporter::current()` on every request, and the `Now` divider and `diffForHumans()` wording are computed in the Blade from `now()`, so they re-derive per render rather than freezing at first paint.
+      3. Leave `mount()` alone: it must keep running only on the initial request so a refresh cannot snap a past or future range back to today.
+      4. Leave the `aria-live="polite"` range label as-is. Its content is `$range->label()`, which does not change across a refresh, so Livewire's morph does not touch the node and nothing is announced.
+      5. Do **not** add a spinner, `wire:loading` indicator, toast, banner, or flash message anywhere in this view.
+      6. Smoke-check the layout at 375, 768 and 1280 px — the markup change is a single attribute, so this is a regression check, not a redesign.
+      7. `php artisan larapilot:quality` and `php artisan test --compact --filter=AgendaPageTest`
+
+      ## Completion Criteria
+      - [x] The agenda root subscribes to the shared cadence
+      - [x] A refresh preserves the `#[Url] date` anchor, the `Jump to` value, focus and scroll position
+      - [x] No toast, banner, flash, spinner, new `aria-live` region, or full-page reload is introduced
+      - [x] `Now` divider and last-successful-sync wording re-derive on each refresh
+      - [x] Existing agenda tests pass; Pint and Larastan clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-011): TASK-02 self-refresh the agenda view`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-01
+    commit:
+      sha: ef401a36e6a11e04ba737a835638287aacc42019
+      short_sha: ef401a3
+      subject: 'feat(US-011): TASK-02 self-refresh the agenda view'
+      committed_at: '2026-09-11T01:26:32+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ef401a36e6a11e04ba737a835638287aacc42019'
+  -
+    id: TASK-03
+    title: 'Refetch the calendar feed on the same cadence, with a last-good fallback'
+    body: |
+      ## Description
+      Make `/calendar` refetch `calendar.events` on the shared 60 second tick in month, week and day views, keeping view, anchor date and keyboard focus, and keeping the last good render on screen when a refetch fails.
+
+      ## Files Involved
+      - resources/js/calendar.js
+
+      ## Steps
+      1. Import `onRefreshTick` from `./self-refresh.js`.
+      2. Add a `lastFetch` field to the Alpine data (`{ key: null, events: [] }`). In the existing `events` function, build `key = from + '|' + to`; on success store `{ key, events }` before calling `successCallback`.
+      3. In the `events` function's `.catch`, degrade quietly: when `lastFetch.key === key`, call `successCallback(this.lastFetch.events)` so the grid keeps its last good render; otherwise fall through to `failureCallback(error)` — a first fetch for a range has nothing to fall back to, and `hasEvents` stays `null` so the empty-state block stays hidden rather than claiming an empty range.
+      4. In `init()`, after `this.calendar.render()`, subscribe: `this.$cleanup(onRefreshTick(() => this.calendar.refetchEvents()))`. `refetchEvents()` re-runs the `events` function for the visible window only — it does not change the view or the anchor date, and does not fire `datesSet`, so the URL state and the pending-focus machinery are untouched.
+      5. Add an `eventsSet` callback that calls `this.syncRovingTabindex()`. It only reassigns `tabindex` on day cells and never moves focus, so it is a safe idempotent guard that the keyboard-focused day cell survives an event re-render.
+      6. Do not add any loading indicator, toast, or banner; do not touch `datesSet`, `replaceUrlState`, or the keyboard navigation.
+      7. `npm run build`, then check `/calendar` in month, week and day views.
+
+      ## Completion Criteria
+      - [x] All three views refetch on the shared cadence and render newly synced meetings and changed coverage marks in place
+      - [x] Current view, anchor date, URL state and the keyboard-focused day cell survive a refetch
+      - [x] A failed refetch for an already-rendered range leaves the last good events on screen; no blanking, no empty state, no visible error
+      - [x] Scroll position is preserved (week/day time grid included)
+      - [x] No new UI affordance and no new configuration key
+      - [x] `npm run build` succeeds
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-011): TASK-03 self-refresh the calendar views`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-01
+    commit:
+      sha: 045adc981557cd96eb4aabd4eb9e24787c7fa3f4
+      short_sha: 045adc9
+      subject: 'feat(US-011): TASK-03 self-refresh the calendar views'
+      committed_at: '2026-09-11T01:27:12+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/045adc981557cd96eb4aabd4eb9e24787c7fa3f4'
+  -
+    id: TASK-04
+    title: 'Cover the agenda refresh and write the manual test handoff'
+    body: |
+      ## Description
+      Prove the server-side half of the self-refresh contract with PHPUnit, and hand the browser-only half to the operator as explicit manual steps.
+
+      ## Files Involved
+      - tests/Feature/AgendaSelfRefreshTest.php (new)
+      - .larapilot/docs/test-results/US-011-manual.md (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit AgendaSelfRefreshTest`
+      2. Reuse the `Carbon::setTestNow()` setUp/tearDown pattern and `CalendarEventFactory::at()` from `AgendaPageTest` — do not duplicate factory definitions.
+      3. Cover, through `Livewire::test(Agenda::class)` and `->call('$refresh')` (the exact path the tick triggers):
+         - a meeting created after mount appears on refresh, in its correct day group, with no manual reload
+         - a meeting whose summary changed upstream after mount renders its new title on refresh
+         - a note added after mount flips the row's coverage tag from `Not annotated` to `Notes` on refresh
+         - a refresh from a **past** anchor (`?date=` a week back) keeps that anchor and does not snap back to today
+         - the `Now` divider re-derives: render at a time before a meeting, advance `Carbon::setTestNow()` past it, refresh, and assert the divider's rendered clock label moved
+         - the relative last-successful-sync wording re-derives when the clock advances between renders
+      4. Assert the root element carries the self-refresh hook so the wiring cannot be silently dropped: `assertSee('kbSelfRefresh', false)` on `GET /`.
+      5. Assert the silence contract server-side: the refreshed render emits no flash message and no new `aria-live` region beyond the pre-existing range label.
+      6. Write `.larapilot/docs/test-results/US-011-manual.md` covering what has no server seam: the ~60s cadence on both pages; scroll position preserved; `Jump to` focus and value preserved mid-refresh; calendar view, anchor and keyboard-focused day cell preserved across a refetch; hidden-tab pause verified in devtools Network (no requests while backgrounded) and the catch-up request on return; quiet degradation with the app stopped (agenda keeps its last render with no Livewire error modal, calendar keeps its last good events); and the meeting detail page confirmed **not** refreshing while typing in the notes editor.
+      7. `php artisan test --compact --filter=AgendaSelfRefreshTest` then the full suite; `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] New feature test passes and covers every bullet above
+      - [x] Full suite green
+      - [x] Manual handoff document written with steps, expected observation, and failure modes
+      - [x] Pint and Larastan (level 5) clean
+
+      ## Test Data
+      - N/A — reuses existing factories; no factory or seeder changes
+
+      ## Git Deliverables
+      - Commit: `test(US-011): TASK-04 cover agenda self-refresh and document manual checks`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 3
+    dependencies:
+      - TASK-02
+      - TASK-03
+    commit:
+      sha: 82d574a4b30e133cc078843795d6f6c0b9a99986
+      short_sha: 82d574a
+      subject: 'test(US-011): TASK-04 cover agenda self-refresh and document manual checks'
+      committed_at: '2026-09-11T01:31:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/82d574a4b30e133cc078843795d6f6c0b9a99986'
+  -
+    id: TASK-05
+    title: 'Document the self-refresh behaviour in README and CHANGELOG'
+    body: |
+      ## Description
+      Baseline documentation for a behaviour the operator will notice but cannot configure: say the cadence out loud, and say that it is deliberately not tunable.
+
+      ## Files Involved
+      - README.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. README: in the section describing the agenda and calendar surfaces, add a short paragraph — both views bring themselves up to date about once a minute while the tab is visible, pause while it is hidden and catch up on return, and there is no setting for it. Name `resources/js/self-refresh.js` as the single place the cadence lives. State explicitly that no `KBMS_*` key controls it, so nobody goes looking for one.
+      2. README: note that the meeting detail page deliberately does **not** self-refresh, because it hosts the notes editor.
+      3. CHANGELOG: add the entry under `Unreleased` → `Added`, referencing US-011.
+      4. Do not restructure either document; this is an additive edit.
+
+      ## Completion Criteria
+      - [x] README describes the cadence, the visibility policy, the detail-page exclusion, and the absence of a config key
+      - [x] CHANGELOG `Unreleased` → `Added` carries the US-011 entry
+      - [x] No configuration surface documented that does not exist
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-011): TASK-05 document the self-refreshing views`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Albert
+    estimate_hours: 0.5
+    dependencies:
+      - TASK-02
+      - TASK-03
+    commit:
+      sha: 776fb7abaca4f35b73c1df197d9ff19e50dac9e8
+      short_sha: 776fb7a
+      subject: 'docs(US-011): TASK-05 document the self-refreshing views'
+      committed_at: '2026-09-11T01:31:52+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/776fb7abaca4f35b73c1df197d9ff19e50dac9e8'
+updated_at: '2026-09-11T01:31:53+02:00'
