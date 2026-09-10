@@ -492,13 +492,13 @@ tasks:
          `kbms.ics_url` env leak in `ConfigurationSurfaceTest`. Any other failure is yours.
 
       ## Completion Criteria
-      - [ ] `config('kbms.transcript_extensions')` is `['md']` and the comment explains why
-      - [ ] `TranscriptsDirectory` and `TranscriptReader` are unmodified
-      - [ ] Directory index test still proves case-insensitivity, now with `.txt` explicitly excluded
-      - [ ] Resolver ordering test still asserts 3 candidates in the same order
-      - [ ] Stray `US-010-plan.yaml.lock` gone; `.larapilot` artifacts committed
-      - [ ] Full suite green except the known `kbms.ics_url` env-leak failure
-      - [ ] Pint clean
+      - [x] `config('kbms.transcript_extensions')` is `['md']` and the comment explains why
+      - [x] `TranscriptsDirectory` and `TranscriptReader` are unmodified
+      - [x] Directory index test still proves case-insensitivity, now with `.txt` explicitly excluded
+      - [x] Resolver ordering test still asserts 3 candidates in the same order
+      - [x] Stray `US-010-plan.yaml.lock` gone; `.larapilot` artifacts committed
+      - [x] Full suite green except the known `kbms.ics_url` env-leak failure
+      - [x] Pint clean
 
       ## Test Data
       - N/A — no model, migration, column, or relationship change. Seeder impact is TASK-06.
@@ -508,11 +508,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes — no remote
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
       - TASK-04
+    commit:
+      sha: bc1bd78972127df30d099b39463bb3364e200e86
+      short_sha: bc1bd78
+      subject: 'fix(US-010): TASK-05 restrict transcript resolution to md files only'
+      committed_at: '2026-09-10T13:52:10+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/bc1bd78972127df30d099b39463bb3364e200e86'
   -
     id: TASK-06
     title: 'Re-route the plain-text panel state through a manual link'
@@ -693,4 +699,4 @@ tasks:
     estimate_hours: 0.5
     dependencies:
       - TASK-04
-updated_at: '2026-09-10T13:39:27+02:00'
+updated_at: '2026-09-10T13:52:12+02:00'

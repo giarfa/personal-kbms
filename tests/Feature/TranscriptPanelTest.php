@@ -301,11 +301,12 @@ class TranscriptPanelTest extends TestCase
             ->assertSee('Linked by convention');
     }
 
-    public function test_a_txt_transcript_renders_as_plain_text_not_markdown(): void
+    public function test_a_manually_linked_txt_transcript_renders_as_plain_text_not_markdown(): void
     {
         $this->configureDirectory();
-        $this->seedFile('20260909_0930_q4_roadmap_review', 'txt', 'plain text body');
+        $path = $this->seedFile('20260909_0930_q4_roadmap_review', 'txt', 'plain text body');
         $event = $this->eventAt('2026-09-09 09:30:00');
+        MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
 
         Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
             ->assertSee('.txt rendered as plain text');
