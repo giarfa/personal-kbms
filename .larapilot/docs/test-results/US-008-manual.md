@@ -15,6 +15,7 @@ For each of Month, Week and Day:
   - Page forward and back in Month view and confirm focus lands on a visible day cell with a focus ring, never on `<body>`. Press `Tab` afterwards: it should move to that day's event chips, not jump to the page's first control.
   - Page from a 31-day month into a shorter one — 31 October → November (30 days), and 31 January → February — and confirm the landing day is clamped to the last day of the target month rather than rolling over into the month after it.
   - Arrow onto a leading or trailing day belonging to a neighbouring month (e.g. focus 1 October while the September grid is on screen), then page. The calendar must advance exactly one month, never skip one.
+  - **Not a defect:** paging *backward* from a leading cell of the previous month keeps focus on the same date. With the September grid on screen and focus on 31 August, `PageUp` renders August and leaves the ring on 31 August — the grid moves, the focused date does not. That is the anchor rule working correctly, not a dropped step.
 - Moving past the edge of the visible range (e.g. arrowing right past the last visible day) navigates the calendar forward and lands focus on the correct day in the newly rendered range.
 - `Tab` from a focused day cell reaches its event chips in order; `Enter` on a chip opens the meeting detail page.
 - On a day with a `+N more` link: activate it with `Enter`/`Space`, confirm focus moves into the popover, `Esc` closes it and returns focus to the `+N more` control.

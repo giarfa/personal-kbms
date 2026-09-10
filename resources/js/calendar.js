@@ -2,25 +2,19 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 
+function formatIso(year, month, day) {
+    return [year, String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-');
+}
+
+function dayOfMonthFromIso(iso) {
+    return Number(iso.split('-')[2]);
+}
+
 function addDaysToIso(iso, delta) {
     const date = new Date(`${iso}T00:00:00`);
     date.setDate(date.getDate() + delta);
 
-    return [
-        date.getFullYear(),
-        String(date.getMonth() + 1).padStart(2, '0'),
-        String(date.getDate()).padStart(2, '0'),
-    ].join('-');
-}
-
-function isoParts(iso) {
-    const [year, month, day] = iso.split('-').map(Number);
-
-    return { year, month, day };
-}
-
-function formatIso(year, month, day) {
-    return [year, String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-');
+    return formatIso(date.getFullYear(), date.getMonth() + 1, date.getDate());
 }
 
 function daysInMonth(year, month) {
@@ -29,13 +23,16 @@ function daysInMonth(year, month) {
 }
 
 /**
- * Step an ISO date by whole months, landing on `dayOfMonth` clamped to the
- * target month's length. Pure: strings in, string out, no DOM and no calendar
- * state. The clamp is explicit because Date's own rollover turns 31 February
- * into 3 March, which would page the month grid past its own range.
+ * The ISO date `delta` whole months from the given (year, month), landing on
+ * `dayOfMonth` clamped to the target month's length. No DOM and no calendar
+ * state: numbers in, string out.
+ *
+ * The clamp is explicit because Date's own rollover turns 31 February into
+ * 3 March, which would page the month grid past its own range. It takes a
+ * year/month pair rather than an ISO date so no future caller can hand it a
+ * full date and silently lose the day component.
  */
-function addMonthsToIso(iso, delta, dayOfMonth) {
-    const { year, month } = isoParts(iso);
+function monthStepToIso(year, month, delta, dayOfMonth) {
     const zeroBased = (year * 12) + (month - 1) + delta;
     const targetYear = Math.floor(zeroBased / 12);
     const targetMonth = (zeroBased % 12) + 1;
@@ -288,9 +285,13 @@ document.addEventListener('alpine:init', () => {
             // cell belonging to a neighbouring month, and stepping from there
             // would target a month the grid is not about to render.
             const anchor = this.calendar.getDate();
-            const anchorIso = formatIso(anchor.getFullYear(), anchor.getMonth() + 1, 1);
 
-            return addMonthsToIso(anchorIso, direction, isoParts(this.focusedDate).day);
+            return monthStepToIso(
+                anchor.getFullYear(),
+                anchor.getMonth() + 1,
+                direction,
+                dayOfMonthFromIso(this.focusedDate),
+            );
         },
 
         onGridKeydown(event) {
