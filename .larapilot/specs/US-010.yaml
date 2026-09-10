@@ -1,0 +1,35 @@
+code: US-010
+title: 'Transcript filename convention: Ymd date, underscore slug, prefix match'
+epic:
+  code: EP-003
+  title: 'Meeting Workspace'
+priority: HIGH
+points: 2
+status: PLANNED
+body: |
+  #### US-010: Transcript filename convention: Ymd date, underscore slug, prefix match
+
+  **Epic:** EP-003 | **Priority:** HIGH | **Points:** 2 | **Status:** TODO
+  **Blocked by:** -
+  **Type:** Evolutiva
+  **Traces to:** FR-006 (MoSCoW: Must)
+
+  **User Story**
+  As the operator,
+  I want the transcript resolver to match the naming convention my transcription pipeline actually produces (`Ymd` date, underscore-separated slug, prefix-based slug ordering),
+  so that meetings auto-link to their transcript instead of silently falling through to "Missing" or "Ambiguous".
+
+  **Demonstrates**
+  After implementing this spec, a transcript file named `20260907_1430_standup.md` in the transcripts directory auto-links to a meeting starting 2026-09-07 14:30 on the meeting-detail page, and a file whose slug is a superset of the event's slug (e.g. event "Standup" / slug `standup`, file slug `standup_daily_team`) sorts ahead of an equally-timed candidate that shares no slug prefix.
+
+  **Acceptance Criteria**
+  - [ ] Default `KBMS_TRANSCRIPT_PATTERN` is `{date}_{time}_{slug}.md`; `{date}` renders/parses as `Ymd` (e.g. `20260907`), `{time}` stays `Hi`, `{slug}` is generated via `Str::slug($title, '_')` (lowercase, underscore-separated, special characters such as `|` and `#` stripped) — `20260907_1430_standup.md` resolves to a 2026-09-07 14:30 meeting
+  - [ ] Slug ordering uses prefix semantics: among candidates sharing the same drift, a candidate whose file-slug starts with the event's summary slug (`file_slug LIKE 'event_slug%'`) sorts ahead of one that doesn't, replacing today's exact-equality comparison; this is ordering-only — every file inside the date/time tolerance window still counts as a candidate regardless of slug
+  - [ ] The previous hyphenated convention (`{date}-{time}-{slug}`, `Y-m-d` dates) is a hard cutover and no longer recognized — old-format filenames parse to `null` and are excluded from the index, exactly like any other non-matching filename
+  - [ ] A custom `KBMS_TRANSCRIPT_PATTERN` still validates under the existing rule (contains `{date}`, ends with `{slug}`) and its render/parse round-trip is unaffected by this change
+  - [ ] Already-linked transcripts (an existing `meeting_transcripts` row with a stored `path`) are unaffected — this change only alters convention resolution for occurrences with no stored link
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-10T12:27:19+02:00'
+rework: false

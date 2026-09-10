@@ -610,4 +610,17 @@ decisions:
     source: chat
     spec: US-009
     supersedes: null
-updated_at: '2026-09-10T09:00:52+02:00'
+  -
+    id: da55147854b4096f
+    ts: '2026-09-10T12:19:43+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'transcript filename convention'
+    label: 'transcript filename convention'
+    value: "Ymd date, underscore-separated slug, pattern {date}_{time}_{slug}.md; slug ordering match uses file-slug-starts-with-event-slug prefix comparison (LIKE 'slug%' semantics), ordering-only (not a hard filter); hard cutover, old hyphenated format no longer recognized"
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: d0418cd210a42d9c
+updated_at: '2026-09-10T12:19:43+02:00'

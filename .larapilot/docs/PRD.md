@@ -77,6 +77,7 @@ Each meeting resolves to at most **one** context file — the single path handed
 - A **manual override** lets the operator pick or clear the file for a meeting; a manual link always wins over the convention.
 - Once linked, the path is persisted on the meeting, so convention changes don't silently break existing links.
 - Supports `.md` and `.txt`.
+- Default convention is `{date}_{time}_{slug}.md` with `{date}` as `Ymd` and an underscore-separated, special-character-stripped `{slug}`; ordering among same-drift candidates favors a file whose slug starts with the event's slug (`LIKE 'slug%'` semantics) over exact equality — a prefix bonus only, never a candidate filter.
 
 **Note:** the exact pipeline convention is not yet recorded in this PRD. The resolver is deliberately configuration-driven plus manually overridable so the MVP is correct under any convention; the concrete pattern is a configuration value, not a code change.
 
@@ -270,7 +271,7 @@ Every machine-specific assumption is a `.env` value, never a code constant:
 
 - `KBMS_ICS_URL`, `KBMS_ICS_SYNC_MINUTES` (default `15`)
 - `KBMS_ICS_WINDOW_PAST_DAYS` (default `90`), `KBMS_ICS_WINDOW_FUTURE_DAYS` (default `180`)
-- `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN` — placeholders `{date}` (`Y-m-d`), `{time}` (`Hi`, **no colon** — deliberately unlike `KBMS_OUTLOOK_URL_TEMPLATE` below, since a filename cannot portably carry `:`), `{slug}` (slugified title); the pattern must end with `{slug}`
+- `KBMS_TRANSCRIPTS_PATH`, `KBMS_TRANSCRIPT_PATTERN` — default `{date}_{time}_{slug}.md`; placeholders `{date}` (`Ymd`), `{time}` (`Hi`, **no colon** — deliberately unlike `KBMS_OUTLOOK_URL_TEMPLATE` below, since a filename cannot portably carry `:`), `{slug}` (`Str::slug($title, '_')` — underscore-separated, special characters stripped); the pattern must end with `{slug}`. The old hyphenated/`Y-m-d` convention is no longer recognized (hard cutover)
 - `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`) — minutes of start-time drift the transcript resolver tolerates either side of a meeting's start
 - `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`, 2 MiB) — bytes read from a transcript before the preview is truncated
 - `KBMS_CLAUDE_LAUNCHER`
@@ -356,3 +357,4 @@ Baseline set only, matching a personal project: a `README.md` covering Herd setu
 | 2026-09-08 | larapilot-plan US-005 | Recorded the `KBMS_OUTLOOK_URL_TEMPLATE` placeholder vocabulary |
 | 2026-09-09 | larapilot-plan US-007 | Added `KBMS_TRANSCRIPT_TOLERANCE_MINUTES` (default `10`) and `KBMS_TRANSCRIPT_PREVIEW_BYTES` (default `2097152`) to the configuration surface; documented the `KBMS_TRANSCRIPT_PATTERN` `{time}` = `Hi` grammar (deliberately unlike `KBMS_OUTLOOK_URL_TEMPLATE`'s `H:i`); marked `meeting_transcripts.path` nullable, carrying the manual-unlink tombstone |
 | 2026-09-10 | larapilot-plan US-009 | Added `KBMS_LAUNCH_TIMEOUT_SECONDS` (`30`) and `KBMS_QUESTION_MAX_CHARS` (`8000`) to the configuration surface; added `exit_code` to `prompt_launches`; recorded that the queued job waits for the launcher's exit code under a bounded timeout, superseding the inception "Process::start" detail |
+| 2026-09-10 | larapilot-feature US-010 | Changed default `KBMS_TRANSCRIPT_PATTERN` to `{date}_{time}_{slug}.md` with `{date}` as `Ymd` and underscore-separated, special-character-stripped `{slug}`; ordering now favors a file-slug-starts-with-event-slug prefix match over exact equality; hard cutover — the old hyphenated/`Y-m-d` convention is no longer recognized, superseding the 2026-09-07 convention decision |
