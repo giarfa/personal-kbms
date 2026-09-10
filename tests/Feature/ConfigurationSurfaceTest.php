@@ -16,7 +16,7 @@ class ConfigurationSurfaceTest extends TestCase
         $this->assertSame('{date}_{time}_{slug}', config('kbms.transcript_pattern'));
         $this->assertSame(10, config('kbms.transcript_tolerance_minutes'));
         $this->assertSame(2097152, config('kbms.transcript_preview_bytes'));
-        $this->assertSame(['md', 'txt'], config('kbms.transcript_extensions'));
+        $this->assertSame(['md'], config('kbms.transcript_extensions'));
         $this->assertNull(config('kbms.claude_launcher'));
         $this->assertNull(config('kbms.outlook_url_template'));
         $this->assertSame('Europe/Rome', config('kbms.timezone'));

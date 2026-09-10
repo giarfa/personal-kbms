@@ -42,8 +42,9 @@ return [
     // Bytes read from a transcript before truncating the preview (US-007). Default: 2 MiB.
     'transcript_preview_bytes' => (int) env('KBMS_TRANSCRIPT_PREVIEW_BYTES', 2097152),
 
-    // Fixed extension allow-list for the transcripts directory index — one place, not an env var (US-007).
-    'transcript_extensions' => ['md', 'txt'],
+    // md-only: the operator's pipeline emits a .md + .txt pair per recording, so indexing
+    // both made every meeting Ambiguous (decision journal 14f91842c55d2d7f).
+    'transcript_extensions' => ['md'],
 
     'claude_launcher' => env('KBMS_CLAUDE_LAUNCHER') ?: null,
 

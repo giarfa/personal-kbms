@@ -623,4 +623,30 @@ decisions:
     source: askquestion
     spec: null
     supersedes: d0418cd210a42d9c
-updated_at: '2026-09-10T12:19:43+02:00'
+  -
+    id: a1fe16dc96f207a4
+    ts: '2026-09-10T13:13:51+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'transcript file extensions'
+    label: 'transcript file extensions'
+    value: 'Convention resolution indexes .md only; .txt stays readable via existing links and manual override'
+    question: null
+    rationale: 'Operator pipeline emits .md + .txt for the same stem (61 of 62 recordings), so indexing both made every meeting Ambiguous'
+    source: askquestion
+    spec: US-010
+    supersedes: null
+  -
+    id: 14f91842c55d2d7f
+    ts: '2026-09-10T13:37:04+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-plan
+    topic: 'transcript file extensions'
+    label: 'transcript file extensions'
+    value: "Single list: config kbms.transcript_extensions = ['md'] — .md only for the resolver index AND the manual picker; already-linked .txt rows keep rendering as plain text, but no new .txt link can be created"
+    question: null
+    rationale: 'TranscriptsDirectory::files() feeds resolver, picker, and mtime lookup alike; operator chose one knob over a second convention-only config key. TranscriptReader gates rendering on the path extension, not the configured list, so persisted .txt links are unaffected.'
+    source: askquestion
+    spec: US-010
+    supersedes: a1fe16dc96f207a4
+updated_at: '2026-09-10T13:37:04+02:00'

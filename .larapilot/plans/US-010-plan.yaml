@@ -1,5 +1,5 @@
 code: US-010
-plan_body: |
+plan_body: |-
   ## Technical Solution
 
   A convention-only cutover inside `app/Transcripts`. No migration, no model, no new class, no change to the resolver's minute-keyed index or to the persisted-link read path.
@@ -98,6 +98,83 @@ plan_body: |
 
   - **Manual test handoff (Anne).** Automation cannot reach the operator's real pipeline directory, so the human verifies on their machine before approval — steps in TASK-04's completion criteria.
   - Quality gate before review: `php artisan larapilot:quality` (Pint + Larastan level 5+) must pass.
+
+  ## Rework Note (2026-09-10, after `/larapilot-review`)
+
+  TASK-00 → TASK-04 are **DONE and accepted**. The `Ymd` cutover, underscore slug rendering,
+  the rolled-over-date guard, and the prefix-ordering hint all stand — do not re-open
+  `TranscriptPattern` or `TranscriptResolver` behavior.
+
+  Review sent US-010 back to `TODO` for **one added requirement**, discovered by running the
+  manual handoff against the operator's real pipeline directory
+  (`/Users/excellence_innovation/Recordings/protocols`):
+
+  > **123 files across 62 distinct stems — 61 of them present as both `.md` and `.txt`.**
+
+  With `config/kbms.php` `transcript_extensions => ['md', 'txt']`, each recording indexes
+  **twice** under the same `Y-m-d H:i` key, producing 2 candidates and therefore
+  `TranscriptState::Ambiguous` for essentially every meeting. The convention cutover is
+  correct, but the user story's stated outcome — "auto-link instead of silently falling
+  through to Missing or **Ambiguous**" — is still not reached.
+
+  ### Added acceptance criterion
+
+  - [ ] Convention-based transcript resolution considers `.md` files only; a `.txt` sibling
+        sharing the same stem is not indexed and therefore never turns a single-transcript
+        meeting into `Ambiguous`. Transcripts already linked to a `.txt` path still open and
+        render as escaped plain text.
+
+  ### Decided scope — one knob, not two (`14f91842c55d2d7f`, supersedes `a1fe16dc96f207a4`)
+
+  `TranscriptsDirectory::files()` is the single source for **three** consumers: the resolver
+  index, the manual file-picker list (`TranscriptPanel::pickerFiles()`), and the mtime lookup
+  in `TranscriptPanel::link()`. The operator chose to narrow **all three** rather than
+  introduce a second convention-only config key:
+
+  | Surface | Before | After |
+  | --- | --- | --- |
+  | `config('kbms.transcript_extensions')` | `['md', 'txt']` | `['md']` |
+  | Resolver index | `.md` + `.txt` | `.md` only |
+  | Manual picker list | `.md` + `.txt` (123 entries) | `.md` only (62 entries) |
+  | Existing `.txt` link renders | ✅ | ✅ **unchanged** |
+  | New `.txt` link creatable | ✅ | ❌ **accepted loss** |
+
+  **Why the durability half is structurally safe** (Andrew, verified in review):
+  `TranscriptPanel::readerViewData()` calls `TranscriptReader::read($path)` on the stored path
+  directly — no `files()` lookup — and `TranscriptReader:74` decides the render mode from
+  `pathinfo($path, PATHINFO_EXTENSION) === 'md'`, never from the configured list. So a
+  persisted `.txt` row keeps rendering as escaped plain text, with live size/mtime, under the
+  narrowed config. **Do not add an extension check to the reader** to "enforce" md-only — that
+  would break AC5-style durability.
+
+  ### Consequence to handle deliberately
+
+  `MeetingTranscriptSeeder::seedTextTranscript()` and
+  `TranscriptPanelTest::test_a_txt_transcript_renders_as_plain_text_not_markdown()` both reach
+  the plain-text panel state *through convention resolution*, which is exactly what stops
+  working. Both must re-reach that state through a **manual link** — the same shape
+  `seedManualLink()` already uses, with `MeetingTranscript::factory()->manual()`. The panel
+  state itself is not being dropped; only its route changes.
+
+  ### Rework Git note
+
+  The feature branch `feature/US-010-transcript-filename-convention` already exists with 6
+  commits. **No TASK-00 for the rework** — no new branch, no rebase, no push. TASK-05 opens by
+  committing the `.larapilot` artifacts left uncommitted at review time
+  (`backlog.yaml`, `specs/US-010.yaml`, `plans/US-010-plan.yaml`, `decisions.yaml`,
+  `usage/ledger.jsonl`) and removing the stray `plans/US-010-plan.yaml.lock`.
+
+  ### Explicitly still out of scope
+
+  - The prefix hint misses titles whose separators collapse differently from the pipeline's
+    (event `M1 | Standup` → `m1_standup` vs. file slug `m1__standup__…`). Ordering-only,
+    harmless. **Note it, do not chase it.**
+  - `ConfigurationSurfaceTest::test_every_kbms_config_key_resolves_with_its_documented_default`
+    fails locally on `kbms.ics_url` because the operator's real `.env` leaks `KBMS_ICS_URL`
+    into the test environment. Byte-identical on `develop`. Pre-existing and unrelated — **do
+    not "fix" it inside US-010**; the `transcript_extensions` line in that same test IS in
+    scope.
+  - No migration, no model, no factory-column change, no new class.
 tasks:
   -
     id: TASK-00
@@ -121,10 +198,10 @@ tasks:
       5. Draft the internal PR title (`US-010: Transcript filename convention: Ymd date, underscore slug, prefix match`) and body (link the plan, list TASK-00..TASK-04) — keep local, no remote
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-010-transcript-filename-convention` exists locally, created from `develop`
-      - [ ] Spec, plan, backlog, decisions, and PRD changes are committed on the branch — `git status` clean
-      - [ ] PR title/body drafted toward `develop` (remote open deferred — only on explicit request)
-      - [ ] Nothing was pushed
+      - [x] Branch `feature/US-010-transcript-filename-convention` exists locally, created from `develop`
+      - [x] Spec, plan, backlog, decisions, and PRD changes are committed on the branch — `git status` clean
+      - [x] PR title/body drafted toward `develop` (remote open deferred — only on explicit request)
+      - [x] Nothing was pushed
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -134,10 +211,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally — open/update remote only if the user requests it
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.5
     dependencies: {}
+    commit:
+      sha: 9925c300ded59bcb056857a5b762dc01636b3717
+      short_sha: 9925c30
+      subject: 'chore(US-010): TASK-00 bootstrap feature branch with spec and plan'
+      committed_at: '2026-09-10T12:29:40+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/9925c300ded59bcb056857a5b762dc01636b3717'
   -
     id: TASK-01
     title: 'Cut TranscriptPattern over to Ymd dates and underscore slugs'
@@ -175,14 +258,14 @@ tasks:
       11. `php artisan test --compact` — the whole suite, not just the transcript tests
 
       ## Completion Criteria
-      - [ ] `20260907_1430_standup` parses to 2026-09-07 14:30 with slug `standup`
-      - [ ] `render()` on 2026-09-07 14:30 / "Q4 Roadmap Review" yields `20260907_1430_q4_roadmap_review` and round-trips through `parse()`
-      - [ ] `2026-09-07-1430-standup` parses to `null` — no legacy fallback branch was added
-      - [ ] `20261345_1430_x` parses to `null` instead of rolling over
-      - [ ] `isValid()` and the literal-chunk escaping in `toRegex()` are unchanged
-      - [ ] `config('kbms.transcript_pattern')`, `.env.example`, and `DEFAULT_PATTERN` agree
-      - [ ] Full suite green — no commit left red
-      - [ ] Pint clean
+      - [x] `20260907_1430_standup` parses to 2026-09-07 14:30 with slug `standup`
+      - [x] `render()` on 2026-09-07 14:30 / "Q4 Roadmap Review" yields `20260907_1430_q4_roadmap_review` and round-trips through `parse()`
+      - [x] `2026-09-07-1430-standup` parses to `null` — no legacy fallback branch was added
+      - [x] `20261345_1430_x` parses to `null` instead of rolling over
+      - [x] `isValid()` and the literal-chunk escaping in `toRegex()` are unchanged
+      - [x] `config('kbms.transcript_pattern')`, `.env.example`, and `DEFAULT_PATTERN` agree
+      - [x] Full suite green — no commit left red
+      - [x] Pint clean
 
       ## Test Data
       - N/A — no model, migration, or relationship changes. Seeders render through `TranscriptPattern::render()` and adapt automatically; verified in TASK-04
@@ -192,11 +275,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes — no remote
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 2.5
     dependencies:
       - TASK-00
+    commit:
+      sha: 661cad661c4ec8e77a2bd03e9656f05e75096458
+      short_sha: 661cad6
+      subject: 'feat(US-010): TASK-01 cut the transcript convention over to Ymd dates and underscore slugs'
+      committed_at: '2026-09-10T12:32:55+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/661cad661c4ec8e77a2bd03e9656f05e75096458'
   -
     id: TASK-02
     title: 'Order same-drift candidates by slug prefix instead of exact equality'
@@ -219,12 +308,12 @@ tasks:
       7. `php artisan test --compact tests/Unit/Transcripts tests/Feature/TranscriptPanelTest.php`, then the full suite
 
       ## Completion Criteria
-      - [ ] For event slug `standup`, a file slug `standup_daily_team` sorts ahead of an equally-drifted `weekly_ops`
-      - [ ] Both files remain candidates and the state is still `Ambiguous` — the prefix hint filtered nothing
-      - [ ] An exact datetime *and* slug match beside a second candidate still yields `Ambiguous`, never an auto-link
-      - [ ] A blank event summary flags no candidate as a match; ordering falls through to filename
-      - [ ] `stateFor()` thresholds (0 → Missing, 1 → Linked, >= 2 → Ambiguous) unchanged
-      - [ ] Full suite green, Pint clean
+      - [x] For event slug `standup`, a file slug `standup_daily_team` sorts ahead of an equally-drifted `weekly_ops`
+      - [x] Both files remain candidates and the state is still `Ambiguous` — the prefix hint filtered nothing
+      - [x] An exact datetime *and* slug match beside a second candidate still yields `Ambiguous`, never an auto-link
+      - [x] A blank event summary flags no candidate as a match; ordering falls through to filename
+      - [x] `stateFor()` thresholds (0 → Missing, 1 → Linked, >= 2 → Ambiguous) unchanged
+      - [x] Full suite green, Pint clean
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -234,11 +323,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes — no remote
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1
     dependencies:
       - TASK-01
+    commit:
+      sha: 3029986473525db5d737630d634e169324ae8a79
+      short_sha: '3029986'
+      subject: 'feat(US-010): TASK-02 order same-drift transcript candidates by slug prefix'
+      committed_at: '2026-09-10T12:32:59+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/3029986473525db5d737630d634e169324ae8a79'
   -
     id: TASK-03
     title: 'Add acceptance coverage for the new convention and prefix ordering'
@@ -269,22 +364,28 @@ tasks:
       6. `php artisan larapilot:quality` — Pint + Larastan level 5+
 
       ## Completion Criteria
-      - [ ] One test per acceptance criterion (AC1 x3, AC2 x4, AC3 x2, AC4 x2, AC5 x1) plus the rolled-over-date guard
-      - [ ] No Playwright, Dusk, Pest browser, or viewport suites were added
-      - [ ] Existing factories reused — no duplicated fixture scaffolding
-      - [ ] Full suite green
-      - [ ] `larapilot:quality` passes (Pint + Larastan level 5+)
+      - [x] One test per acceptance criterion (AC1 x3, AC2 x4, AC3 x2, AC4 x2, AC5 x1) plus the rolled-over-date guard
+      - [x] No Playwright, Dusk, Pest browser, or viewport suites were added
+      - [x] Existing factories reused — no duplicated fixture scaffolding
+      - [x] Full suite green
+      - [x] `larapilot:quality` passes (Pint + Larastan level 5+)
 
       ## Git Deliverables
       - Commit: `test(US-010): TASK-03 cover the Ymd/underscore convention and prefix ordering`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update the local PR notes — no remote
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1.5
     dependencies:
       - TASK-02
+    commit:
+      sha: 0ffa0082e9da17807f7d320ba5c83b55bb1b341c
+      short_sha: 0ffa008
+      subject: 'test(US-010): TASK-03 cover the Ymd/underscore convention and prefix ordering'
+      committed_at: '2026-09-10T12:33:54+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/0ffa0082e9da17807f7d320ba5c83b55bb1b341c'
   -
     id: TASK-04
     title: 'Update README, CHANGELOG, and the operator environment handoff'
@@ -313,12 +414,12 @@ tasks:
       6. `php artisan kbms:doctor` — transcripts-directory check still passes
 
       ## Completion Criteria
-      - [ ] README table and prose describe `Ymd` + underscore slug + prefix ordering, with the `20260907_1430_standup.md` example
-      - [ ] The `KBMS_OUTLOOK_URL_TEMPLATE` divergence warning and the "must end with `{slug}`" rule survive unchanged
-      - [ ] CHANGELOG Unreleased records the change and flags the hard cutover for unlinked files
-      - [ ] Operator `.env` no longer pins the retired pattern; `config:clear` run
-      - [ ] `migrate:fresh --seed` succeeds and produces underscore/`Ymd` fixture filenames; all panel states reachable
-      - [ ] **Manual test handoff (operator, before review approval):** point `KBMS_TRANSCRIPTS_PATH` at the real pipeline directory, open a meeting whose transcript the pipeline produced as `Ymd_Hi_slug.md`, and confirm it auto-links instead of showing Missing or Ambiguous; confirm one previously linked meeting still shows its transcript
+      - [x] README table and prose describe `Ymd` + underscore slug + prefix ordering, with the `20260907_1430_standup.md` example
+      - [x] The `KBMS_OUTLOOK_URL_TEMPLATE` divergence warning and the "must end with `{slug}`" rule survive unchanged
+      - [x] CHANGELOG Unreleased records the change and flags the hard cutover for unlinked files
+      - [x] Operator `.env` no longer pins the retired pattern; `config:clear` run
+      - [x] `migrate:fresh --seed` succeeds and produces underscore/`Ymd` fixture filenames; all panel states reachable
+      - [x] **Manual test handoff (operator, before review approval):** point `KBMS_TRANSCRIPTS_PATH` at the real pipeline directory, open a meeting whose transcript the pipeline produced as `Ymd_Hi_slug.md`, and confirm it auto-links instead of showing Missing or Ambiguous; confirm one previously linked meeting still shows its transcript
 
       ## Test Data
       - N/A — no model or schema changes; seeders adapt through `TranscriptPattern::render()` and are verified in step 5
@@ -329,9 +430,267 @@ tasks:
       - PR: update the local PR notes — no remote
       - Note: `.env` is gitignored and must not be staged
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 0.75
     dependencies:
       - TASK-00
-updated_at: '2026-09-10T12:27:19+02:00'
+    commit:
+      sha: 55af186ab3080a03771c75a336db3500271b7157
+      short_sha: 55af186
+      subject: 'docs(US-010): TASK-04 document the Ymd underscore transcript convention'
+      committed_at: '2026-09-10T12:34:55+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/55af186ab3080a03771c75a336db3500271b7157'
+  -
+    id: TASK-05
+    title: 'Narrow transcript_extensions to md-only and migrate the affected fixtures'
+    body: |-
+      ## Description
+      Fix: convention resolution (and the manual picker) must consider `.md` files only, so a
+      `.txt` sibling sharing a stem stops turning every single-transcript meeting into
+      `Ambiguous`. Config change plus the fixture migration it forces — **in one commit**, so no
+      commit is left red (same discipline TASK-01 used).
+
+      ## Files Involved
+      - config/kbms.php
+      - tests/Feature/ConfigurationSurfaceTest.php
+      - tests/Unit/Transcripts/TranscriptsDirectoryTest.php
+      - tests/Unit/Transcripts/TranscriptResolverTest.php
+      - .larapilot/ artifacts _(housekeeping — see step 1)_
+
+      ## Steps
+      1. **Housekeeping first.** Stage and commit the `.larapilot` artifacts left uncommitted at
+         review time (`backlog.yaml`, `specs/US-010.yaml`, `plans/US-010-plan.yaml`,
+         `decisions.yaml`, `usage/ledger.jsonl`) and delete the stray
+         `.larapilot/plans/US-010-plan.yaml.lock`. This may be folded into the TASK-05 commit.
+      2. `config/kbms.php:46` → `'transcript_extensions' => ['md'],`. Replace the adjacent comment
+         with one naming the reason: the operator's pipeline emits a `.md` + `.txt` pair per
+         recording, so indexing both made every meeting `Ambiguous` (decision journal
+         `14f91842c55d2d7f`). The `list<string>` shape in the config docblock at `config/kbms.php:13`
+         is **unchanged**.
+      3. **`app/Transcripts/TranscriptsDirectory.php` needs no code change** — the filter at
+         line 107 is already config-driven. Confirm by reading it; do **not** refactor it, and do
+         **not** add an extension check to `TranscriptReader`.
+      4. `tests/Feature/ConfigurationSurfaceTest.php:19` → `$this->assertSame(['md'], config('kbms.transcript_extensions'));`.
+         Leave every other assertion in that test alone — in particular the `kbms.ics_url` line,
+         which fails from a local `.env` leak and is not ours.
+      5. `tests/Unit/Transcripts/TranscriptsDirectoryTest.php:106`
+         (`test_the_index_lists_only_configured_extensions_case_insensitively`) currently writes
+         `a.md`, `b.TXT`, `c.pdf` and asserts **2** files. Case-insensitivity is still load-bearing
+         coverage, so keep it and re-express with the new list: write `a.md`, `b.MD`, `c.txt`,
+         `d.pdf`; assert **2** files, both `.md`/`.MD` present, and `.txt` **and** `.pdf` both
+         absent. Rename the test to say md-only (e.g.
+         `test_the_index_lists_only_md_files_case_insensitively`).
+      6. `tests/Unit/Transcripts/TranscriptResolverTest.php:102,112`
+         (`test_three_in_window_files_return_three_ordered_candidates_and_link_nothing`) seeds
+         `20260907_0933_untitled_call` as `.txt`. Change it to the default `.md` and update the
+         line 112 assertion to `20260907_0933_untitled_call.md`. Ordering is drift-driven here
+         (0, -2, +3), so the candidate order and the count of 3 do **not** change. The exclusion
+         case gets its own test in TASK-07 — do not overload this one.
+      7. `vendor/bin/pint --dirty --format agent`
+      8. `php artisan test --compact` — full suite. Expect exactly one failure: the pre-existing
+         `kbms.ics_url` env leak in `ConfigurationSurfaceTest`. Any other failure is yours.
+
+      ## Completion Criteria
+      - [ ] `config('kbms.transcript_extensions')` is `['md']` and the comment explains why
+      - [ ] `TranscriptsDirectory` and `TranscriptReader` are unmodified
+      - [ ] Directory index test still proves case-insensitivity, now with `.txt` explicitly excluded
+      - [ ] Resolver ordering test still asserts 3 candidates in the same order
+      - [ ] Stray `US-010-plan.yaml.lock` gone; `.larapilot` artifacts committed
+      - [ ] Full suite green except the known `kbms.ics_url` env-leak failure
+      - [ ] Pint clean
+
+      ## Test Data
+      - N/A — no model, migration, column, or relationship change. Seeder impact is TASK-06.
+
+      ## Git Deliverables
+      - Commit: `fix(US-010): TASK-05 restrict transcript resolution to md files only`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes — no remote
+    type: Fix
+    status: TODO
+    assignee: Alex
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-04
+  -
+    id: TASK-06
+    title: 'Re-route the plain-text panel state through a manual link'
+    body: |-
+      ## Description
+      Fix: the `.txt` plain-text rendering state is currently reached through convention
+      resolution, which TASK-05 removes. Keep the state fully demonstrable and covered by
+      re-reaching it the way the operator now must — a **manual link** — rather than deleting the
+      state or its test.
+
+      ## Files Involved
+      - database/seeders/MeetingTranscriptSeeder.php _(`seedTextTranscript()`, lines ~144-165)_
+      - tests/Feature/TranscriptPanelTest.php _(`test_a_txt_transcript_renders_as_plain_text_not_markdown`, lines ~304-311)_
+
+      ## Steps
+      1. `MeetingTranscriptSeeder::seedTextTranscript()` still **writes** the sprint-planning
+         `.txt` file — the file must exist on disk for the reader to open it. What changes is that
+         the convention will no longer find it, so the seeder must now also persist the link.
+         Follow the shape `seedManualLink()` (line ~171) already uses in this same class:
+         `MeetingTranscript::factory()->forOccurrence($event)->manual()` with the `.txt` path.
+         Reuse the existing factory states — do **not** add a new one.
+      2. Refresh that method's docblock: the `.txt` state now demonstrates plain-text rendering
+         **through a manual override**, since convention resolution is md-only.
+      3. `TranscriptPanelTest::test_a_txt_transcript_renders_as_plain_text_not_markdown()` seeds a
+         `.txt` at line 307 and expects the panel to resolve it. Rework it to link the file
+         explicitly (persisted `MeetingTranscript` row, or drive the component's `link()` action —
+         match whichever shape the neighbouring manual-override tests in this file already use) and
+         keep the `.txt rendered as plain text` assertion intact. Rename it to say the state is
+         reached manually.
+      4. `test_the_picker_lists_only_files_inside_the_base()` (line 212) — read it and check
+         whether any fixture it writes is a `.txt`; if so the expected list shrinks. Adjust only
+         what the extension change actually moved.
+      5. Re-seed end to end: clear `storage/app/transcripts`, run `php artisan migrate:fresh --seed`,
+         and confirm **every** panel state is still reachable — linked, ambiguous, `.txt` (now
+         manual), manual, broken.
+      6. `vendor/bin/pint --dirty --format agent`
+      7. `php artisan test --compact tests/Feature/TranscriptPanelTest.php`, then the full suite
+
+      ## Completion Criteria
+      - [ ] Sprint-planning `.txt` file is still written to disk by the seeder
+      - [ ] It is now linked via `MeetingTranscript::factory()->manual()`, not convention
+      - [ ] `migrate:fresh --seed` succeeds and all five panel states remain reachable
+      - [ ] The plain-text rendering assertion still runs and passes
+      - [ ] No new factory state was introduced
+      - [ ] Full suite green except the known `kbms.ics_url` env-leak failure; Pint clean
+
+      ## Test Data
+      - [ ] `MeetingTranscriptSeeder` updated to persist the `.txt` link manually
+      - [ ] `MeetingTranscriptFactory` **unchanged** — `manual()` and `forOccurrence()` already exist
+
+      ## Git Deliverables
+      - Commit: `fix(US-010): TASK-06 reach the plain-text panel state through a manual link`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes — no remote
+    type: Fix
+    status: TODO
+    assignee: Alex
+    estimate_hours: 1
+    dependencies:
+      - TASK-05
+  -
+    id: TASK-07
+    title: 'Cover the md-only acceptance criterion'
+    body: |-
+      ## Description
+      Add the PHPUnit coverage that pins the added acceptance criterion, beyond the fixture
+      migration TASK-05 and TASK-06 already carry. Bar is `NORMAL` — no browser, viewport, or E2E
+      suites.
+
+      ## Files Involved
+      - tests/Unit/Transcripts/TranscriptResolverTest.php
+      - tests/Feature/TranscriptPanelTest.php
+      - tests/Feature/TranscriptDurabilityTest.php
+
+      ## Steps
+      1. Reuse the existing helpers — `TranscriptResolverTest::file()` / `eventAt()`,
+         `MeetingTranscript::factory()->forOccurrence()->manual()`. Do not add a new temp-directory
+         helper or duplicate factory definitions.
+      2. `TranscriptResolverTest` — the headline case: write `20260907_0930_q4_roadmap_review.md`
+         **and** `20260907_0930_q4_roadmap_review.txt` (same stem, same minute) for an event at
+         2026-09-07 09:30, then assert **exactly one** candidate, that it is the `.md`, and that
+         `TranscriptState::Linked` — not `Ambiguous` — is the resolved state. Name it for the
+         regression it guards (the sibling `.txt` used to double every recording).
+      3. `TranscriptResolverTest` — a lone `.txt` inside the tolerance window with no `.md` sibling
+         produces **zero** candidates (`Missing`), proving `.txt` is not indexed at all rather than
+         merely deprioritised.
+      4. `TranscriptPanelTest` — the manual picker no longer offers a `.txt`: seed one `.md` and one
+         `.txt` in the base and assert the rendered picker list contains the `.md` and not the `.txt`.
+      5. `TranscriptDurabilityTest` — an existing `meeting_transcripts` row whose stored `path` is a
+         `.txt` still resolves as `Linked` and renders as escaped plain text under the md-only
+         config. This is the durability half of the AC and the one that would silently rot if
+         someone later "enforces" the extension in the reader.
+      6. `php artisan test --compact tests/Unit/Transcripts tests/Feature/TranscriptPanelTest.php tests/Feature/TranscriptDurabilityTest.php`, then the full suite
+      7. `php artisan larapilot:quality` — Pint + Larastan level 5+
+
+      ## Completion Criteria
+      - [ ] `.md` + `.txt` sibling pair yields 1 candidate and `Linked`, not `Ambiguous`
+      - [ ] A lone `.txt` in the window yields 0 candidates
+      - [ ] The picker list excludes `.txt`
+      - [ ] A persisted `.txt` link still renders as escaped plain text
+      - [ ] No Playwright, Dusk, Pest browser, or viewport suites were added
+      - [ ] Existing helpers and factory states reused
+      - [ ] `larapilot:quality` passes (Pint + Larastan level 5+)
+
+      ## Test Data
+      - N/A — no model or schema changes; existing factory states cover the persisted-link cases
+
+      ## Git Deliverables
+      - Commit: `test(US-010): TASK-07 cover md-only resolution and txt link durability`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes — no remote
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 1
+    dependencies:
+      - TASK-06
+  -
+    id: TASK-08
+    title: 'Document md-only resolution and fix the stale env comment'
+    body: |-
+      ## Description
+      Fix: bring the documented behavior in line with md-only resolution, and correct the
+      `.env.example` comment the review caught — TASK-04 updated the value and the README prose but
+      left the placeholder comment describing the retired `Y-m-d` date. Runs in parallel with
+      TASK-05/06/07 — no shared files.
+
+      ## Files Involved
+      - README.md _(lines ~109, ~113, ~115)_
+      - CHANGELOG.md _(Unreleased)_
+      - .env.example _(line 79)_
+
+      ## Steps
+      1. **`.env.example:79`** currently reads
+         `# Placeholders: {date} (Y-m-d), {time} (Hi — NO colon, ...), {slug} (slugified title).`
+         directly above `KBMS_TRANSCRIPT_PATTERN={date}_{time}_{slug}`. Change `{date}` to **`Ymd`**
+         and describe `{slug}` as underscore-separated. **Keep** the `NO colon, unlike
+         KBMS_OUTLOOK_URL_TEMPLATE` warning and the `must end with {slug}` line on 80 verbatim.
+         Note the unrelated `.env.example:96` placeholder comment belongs to
+         `KBMS_OUTLOOK_URL_TEMPLATE`, where `{date}` really is `Y-m-d` — **do not touch it**.
+      2. **README.md:113** — `` `.md` renders through the same hardened Markdown converter as notes;
+         `.txt` is shown as escaped plain text. `` Extend: only `.md` files are indexed and offered
+         by the picker; a `.txt` is reachable only through a link made before this change, and still
+         renders as escaped plain text. Explain the why in one clause — a pipeline that emits a
+         `.md` + `.txt` pair per recording would otherwise make every meeting ambiguous.
+      3. **README.md:109** — the manual-override sentence says the picker has no free-text path
+         field. Add that the picker lists `.md` files only.
+      4. **README.md:115** — the local-dev paragraph lists the seeded panel states as
+         "(linked, ambiguous, `.txt`, manual, broken)". The `.txt` state is now seeded as a manual
+         link; adjust the wording so it stays accurate after TASK-06.
+      5. **CHANGELOG.md** Unreleased → `### Changed`: transcript resolution now indexes `.md` only.
+         State plainly that this is **breaking** for anyone relying on `.txt` auto-linking or on
+         picking a `.txt` manually, and that transcripts already linked to a `.txt` are unaffected.
+         Fold it next to the existing US-010 convention entry rather than opening a second bullet
+         about the same feature.
+      6. Re-read the whole "Transcript linking" section end to end — after three passes of edits it
+         must still read as one coherent explanation, not a changelog of patches.
+
+      ## Completion Criteria
+      - [ ] `.env.example:79` says `Ymd` and underscore slug; the colon warning and the
+            `{slug}`-terminator rule survive verbatim
+      - [ ] `.env.example:96` (Outlook template) untouched
+      - [ ] README states md-only indexing + picker, and that a pre-existing `.txt` link still renders
+      - [ ] README's seeded-panel-state list matches what TASK-06 actually seeds
+      - [ ] CHANGELOG records the md-only restriction and flags it as breaking for unlinked `.txt`
+      - [ ] The "Transcript linking" section reads coherently start to finish
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-010): TASK-08 document md-only transcript resolution`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes — no remote
+    type: Fix
+    status: TODO
+    assignee: Albert
+    estimate_hours: 0.5
+    dependencies:
+      - TASK-04
+updated_at: '2026-09-10T13:39:27+02:00'

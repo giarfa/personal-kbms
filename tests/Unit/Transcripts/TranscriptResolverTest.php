@@ -99,7 +99,7 @@ class TranscriptResolverTest extends TestCase
         // Exact datetime AND slug match — still must not short-circuit to a link.
         $this->file('20260907_0930_q4_roadmap_review');
         $this->file('20260907_0928_roadmap');
-        $this->file('20260907_0933_untitled_call', 'txt');
+        $this->file('20260907_0933_untitled_call');
 
         $event = $this->eventAt('2026-09-07 09:30:00');
 
@@ -109,7 +109,7 @@ class TranscriptResolverTest extends TestCase
         $this->assertSame('20260907_0930_q4_roadmap_review.md', $candidates[0]->filename);
         $this->assertTrue($candidates[0]->slugMatches);
         $this->assertSame('20260907_0928_roadmap.md', $candidates[1]->filename);
-        $this->assertSame('20260907_0933_untitled_call.txt', $candidates[2]->filename);
+        $this->assertSame('20260907_0933_untitled_call.md', $candidates[2]->filename);
     }
 
     public function test_ordering_is_drift_then_slug_match_then_name(): void

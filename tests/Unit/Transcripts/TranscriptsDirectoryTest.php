@@ -103,11 +103,12 @@ class TranscriptsDirectoryTest extends TestCase
         $this->assertSame(realpath($this->tempDir), $this->directory()->base());
     }
 
-    public function test_the_index_lists_only_configured_extensions_case_insensitively(): void
+    public function test_the_index_lists_only_md_files_case_insensitively(): void
     {
         file_put_contents($this->tempDir.'/a.md', 'x');
-        file_put_contents($this->tempDir.'/b.TXT', 'x');
-        file_put_contents($this->tempDir.'/c.pdf', 'x');
+        file_put_contents($this->tempDir.'/b.MD', 'x');
+        file_put_contents($this->tempDir.'/c.txt', 'x');
+        file_put_contents($this->tempDir.'/d.pdf', 'x');
 
         config(['kbms.transcripts_path' => $this->tempDir]);
 
@@ -115,7 +116,9 @@ class TranscriptsDirectoryTest extends TestCase
 
         $this->assertCount(2, $files);
         $this->assertArrayHasKey($this->tempDir.'/a.md', $files);
-        $this->assertArrayHasKey($this->tempDir.'/b.TXT', $files);
+        $this->assertArrayHasKey($this->tempDir.'/b.MD', $files);
+        $this->assertArrayNotHasKey($this->tempDir.'/c.txt', $files);
+        $this->assertArrayNotHasKey($this->tempDir.'/d.pdf', $files);
     }
 
     public function test_the_index_does_not_recurse_into_a_subdirectory(): void
