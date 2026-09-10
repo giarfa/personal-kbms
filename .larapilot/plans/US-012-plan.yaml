@@ -1,0 +1,396 @@
+code: US-012
+plan_body: |
+  ## Technical Solution
+
+  A closed-vocabulary rule engine in `app/Meetings/`, evaluated in memory against fields the two existing queries already load. No table, no migration, no `.env` key, no UI.
+
+  **Vocabulary — three enums, all closed.** A rule that names anything outside them is not a rule at all: it is dropped at construction, so a bad colour, field, or condition can never reach the browser as markup.
+
+  - `EventColourField` — `summary`, `location`, `description`, `organizer`. All four are scalar string columns already selected by `AgendaQuery` and `CalendarFeedQuery`.
+  - `EventColourCondition` — `contains` and `empty`, and deliberately nothing else. `contains` is a **case-insensitive** substring match (`PING`, `Ping`, `ping` all hit). `empty` is true when the field is `null`, absent, or whitespace-only, so an ICS feed emitting `LOCATION:` with a single space counts as empty.
+  - `EventColour` — the closed palette: `yellow`, `purple`, `green`, `blue`, `orange`, `grey`. The enum value is only ever used to build a class-name suffix; the actual colour is resolved in the stylesheet. Configuration cannot supply a CSS value.
+
+  **Rules.** `EventColourRule` is a readonly value object with a `fromArray()` factory that returns `null` for anything malformed — unknown field, unknown condition, unknown colour, missing label, or a `contains` rule with no needle (which would otherwise match every occurrence, since `str_contains($x, '')` is always true). `EventColourRules::fromConfig()` maps `config('kbms.event_colour_rules')` through that factory, silently dropping the nulls, and exposes exactly two operations: `match(CalendarEvent): ?EventColourRule` (**top-down, first hit wins, later rules skipped**) and `all()` for the legend. An empty or absent list is valid and is the "off" state — no legend, no classes, both views render exactly as they do today.
+
+  `EventColourRules` is **not** container-bound. It is constructed once per query call, which costs a handful of array reads and keeps `config()` overrides in tests honest — a singleton would go stale the moment a test set a different rule list.
+
+  **Where matching happens — once per row, zero extra queries.** `AgendaQuery::for()` and `CalendarFeedQuery::for()` each build the rule set **once**, outside the row loop, and pass the matched rule (or `null`) into `AgendaRow` and `CalendarEventPayload`. Matching reads only `$event->summary` / `location` / `description` / `organizer`, all already hydrated. A dense month window issues exactly the same queries it does today — this is structural, not a benchmark claim.
+
+  `AgendaRow`'s new constructor parameter is optional and defaults to `null`, so `MeetingController` keeps building an uncoloured row for the detail page without a change. That is the mechanism enforcing "no colouring on `/meetings/{occurrence}`", not a rendering omission that could drift.
+
+  **Rendering — three channels that cannot consume each other.** The channel split is enforced by which CSS properties each one is allowed to touch:
+
+  | Channel | Owns | Never touches |
+  | --- | --- | --- |
+  | Rule colour (FR-023) | `background`, `color` — the fill | borders, marks, tags |
+  | Coverage (FR-002) | left/right edge borders, the dot/square marks, the agenda tags | fill |
+  | Cancelled | dashed border, transparent fill, strike-through, muted text | — (wins over fill) |
+
+  - *Calendar* — `CalendarEventPayload::classNames()` appends `kb-ev--colour-{token}`. The stylesheet rule sets only `background` and `color`, and is written `:not(.kb-ev--cancelled)` so cancelled wins **by selector rather than by source order** — a later refactor that reorders the stylesheet cannot silently un-cancel an event. Coverage's `border-left` / `border-right` are untouched, so an annotated PING meeting still shows its edge marks over a yellow fill.
+  - *Agenda* — `kb-row--colour-{token}` on the same terms. `kb-row--cancelled` and `kb-row--now` keep their own borders.
+  - *All-day* — `kb-ev--allday` currently supplies its own indigo tint. A rule-coloured all-day event now takes the rule's fill instead; the all-day signal survives in FullCalendar's separate all-day lane and in the agenda's `All-day` tag. Noted as a deliberate, minor precedence choice rather than a regression.
+
+  **Palette — inherited contrast, not re-guessed.** Each token gets `--kb-rule-{token}` (text) and `--kb-rule-{token}-bg` (fill), defined with the **same oklch lightness pairs the already-verified `--kb-note` / `--kb-transcript` tokens use**: `L 0.45` on `L 0.955` in light, `L 0.80` on `L 0.28` in dark. Identical lightness means identical contrast ratio, so AA carries over by construction (≈4.8:1 light, ≈5.9:1 dark) instead of resting on a fresh eyeball check. Hues are chosen to stay clear of the two existing coverage hues — note is teal `205`, transcript is indigo `285` — so `blue` sits at `250`, `purple` at `320`, `green` at `140` (clear of `--kb-ok` at `155`), `yellow` at `90`, `orange` at `55`, and `grey` at chroma `0`.
+
+  **Accessibility.** The rule label rides the accessible name on both surfaces: appended to `CalendarEventPayload::accessibleName()` alongside the coverage words, and added to the agenda row as a `.kb-sronly` span so the visible link text stays natural. Colour is never the only carrier. Both legends are generated from `EventColourRules::all()` — adding a third rule to the config array makes it appear in both pages with no view edit, which is itself an acceptance criterion and is tested as one.
+
+  **Defaults shipped.** `config/kbms.php` gains `event_colour_rules` with exactly the two rules the operator asked for, in this order: `summary contains PING` → `yellow` / "Ping", then `location empty` → `purple` / "No location". Order is the priority, so a meeting that is both renders yellow.
+
+  ## Git & Branching
+  - Mode: `GITFLOW` (from `settings.git_mode`)
+  - Branch: `feature/US-012-event-colour-rules` from `develop`
+  - TASK-00: bootstrap the branch and prepare the internal PR description locally
+  - Per task: one Conventional Commit `type(US-012): TASK-NN summary`; **no push**, no remote PR
+  - Merge into `develop` after the review gate
+
+  ## Test Data Strategy
+  - No new or changed Eloquent model, migration, factory or seeder. Rules are configuration over existing columns.
+  - Tests reuse `CalendarEventFactory` (`at()`, `allDay()`, `cancelled()`) and set rule lists with `config(['kbms.event_colour_rules' => …])` per case.
+  - One factory gap to close: the default factory gives `location` a 50% chance of being `null`, which would make an `empty`-rule test flaky. Tests set `location` explicitly rather than relying on the factory's coin flip — no factory change needed.
+  - `migrate:fresh --seed` unaffected.
+
+  ## Test Strategy
+  - Bar: `NORMAL` (from `settings.testing`) — PHPUnit feature and unit tests. **No** Playwright, Dusk, Pest browser, or viewport matrix.
+  - **Unit** (`tests/Unit/Meetings/EventColourRulesTest.php`): case-insensitive `contains`; `empty` across `null` / absent / `''` / whitespace-only; first-match-wins with a two-rule overlap; every malformed shape dropped (unknown field, unknown condition, unknown colour, missing label, `contains` with no needle, non-array entry, non-array config); empty list is the off state; a `null` summary matches no `contains` rule and throws nothing.
+  - **Feature — agenda** (`tests/Feature/AgendaColourTest.php`): a PING meeting carries its class and its `.kb-sronly` label; an empty-location meeting carries the purple class; a meeting matching both renders yellow only; a cancelled match keeps `kb-row--cancelled`; an annotated match still shows its coverage tags; the legend lists every configured rule and nothing when the list is empty; a third rule added to config appears in the legend with no view edit; a malformed rule leaves the page rendering and the event uncoloured.
+  - **Feature — calendar** (`tests/Feature/CalendarColourTest.php`): the same matrix through `GET /calendar/events`, asserting `classNames` and `accessibleName` on the JSON payload, plus the legend on `GET /calendar`.
+  - **Query count**: assert with `DB::listen` that a window of many occurrences issues the same number of queries with rules configured as with none — the no-per-occurrence-query criterion, proven rather than asserted in prose.
+  - Contrast is verified by construction (identical lightness pairs to the existing AA-verified tokens) and recorded in the manual handoff for a visual confirmation in both themes.
+  - `larapilot:quality` (Pint + Larastan level 5) before each backend `task-done`; `npm run build` after CSS changes.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and internal PR'
+    body: |
+      ## Description
+      Bootstrap Gitflow for US-012: create the feature branch from `develop` and prepare the internal PR description toward `develop`. Do **not** push.
+
+      ## Files Involved
+      - (git only)
+
+      ## Steps
+      1. `git checkout develop`
+      2. `git checkout -b feature/US-012-event-colour-rules`
+      3. Commit the plan file written by `spec-plan`
+      4. Draft the internal PR title/body toward `develop` — keep it local
+
+      ## Completion Criteria
+      - [ ] Branch `feature/US-012-event-colour-rules` exists locally, cut from a `develop` that already carries US-011
+      - [ ] PR title/body drafted for `develop` (remote not opened)
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-012): TASK-00 bootstrap feature branch`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally
+    type: Impl
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+  -
+    id: TASK-01
+    title: 'Colour rule engine: closed vocabulary, first-match-wins, shipped defaults'
+    body: |
+      ## Description
+      Add the rule engine and the two default rules. Nothing renders yet — TASK-04 and TASK-05 consume it.
+
+      ## Files Involved
+      - app/Meetings/EventColour.php (new)
+      - app/Meetings/EventColourField.php (new)
+      - app/Meetings/EventColourCondition.php (new)
+      - app/Meetings/EventColourRule.php (new)
+      - app/Meetings/EventColourRules.php (new)
+      - config/kbms.php
+
+      ## Steps
+      1. `php artisan make:class` for each of the five classes (backed enums written by hand where the generator does not fit).
+      2. `EventColour: string` — `Yellow`, `Purple`, `Green`, `Blue`, `Orange`, `Grey` (TitleCase keys, lowercase values). Docblock: values are class-name suffixes only; the colour itself is resolved in `resources/css/app.css`, never supplied by configuration.
+      3. `EventColourField: string` — `Summary`, `Location`, `Description`, `Organizer`. Add `valueFor(CalendarEvent $event): ?string`.
+      4. `EventColourCondition: string` — `Contains`, `Empty`. Add `matches(?string $fieldValue, ?string $needle): bool`:
+         - `Contains` → `$needle !== null && $needle !== '' && str_contains(Str::lower((string) $fieldValue), Str::lower($needle))`
+         - `Empty` → `trim((string) $fieldValue) === ''`
+      5. `EventColourRule` — `final readonly`, promoted constructor (`EventColourField $field`, `EventColourCondition $condition`, `?string $value`, `EventColour $colour`, `string $label`), a `matches(CalendarEvent $event): bool`, and `public static function fromArray(mixed $rule): ?self`. `fromArray` returns **null** for: a non-array entry; an unknown or missing `field` / `condition` / `colour`; a missing or blank `label`; a `contains` rule whose `value` is missing or empty. Document why the last one matters — `str_contains($x, '')` is always true, so an empty needle would paint every occurrence.
+      6. `EventColourRules` — `final readonly`, holds `list<EventColourRule>`; `fromConfig(): self` (tolerating a non-array config value), `match(CalendarEvent $event): ?EventColourRule` (**top-down, returns the first hit, skips the rest**), `all(): list<EventColourRule>`. Docblock: not container-bound on purpose, so a `config()` override in a test is always honoured.
+      7. `config/kbms.php` — add `event_colour_rules` with the two shipped defaults, **in this order**: `['field' => 'summary', 'condition' => 'contains', 'value' => 'PING', 'colour' => 'yellow', 'label' => 'Ping']` then `['field' => 'location', 'condition' => 'empty', 'colour' => 'purple', 'label' => 'No location']`. Extend the file's array-shape PHPDoc to cover the new key. Comment that order is the priority and that reordering the array is the only reprioritising mechanism.
+      8. **No** `env()` call for this key and no `.env.example` entry — rules are product shape, not machine shape.
+      9. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Five classes in place with explicit return types and array-shape PHPDoc
+      - [ ] Every malformed rule shape yields `null` from `fromArray` and is dropped from the set
+      - [ ] `match()` returns the first hit in array order and evaluates nothing after it
+      - [ ] An absent, empty, or non-array config value yields an empty rule set rather than an error
+      - [ ] `config/kbms.php` carries the two defaults in the right order, with its PHPDoc updated
+      - [ ] No new `KBMS_*` env key anywhere
+      - [ ] Pint and Larastan (level 5) clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-012): TASK-01 add the event colour rule engine and shipped defaults`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 3
+    dependencies:
+      - TASK-00
+  -
+    id: TASK-02
+    title: 'Unit-test the rule engine'
+    body: |
+      ## Description
+      Pin the rule engine's semantics before anything renders them, so a later rendering change cannot quietly redefine what a match means.
+
+      ## Files Involved
+      - tests/Unit/Meetings/EventColourRulesTest.php (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit EventColourRulesTest` and move it under `tests/Unit/Meetings/` to match the existing layout.
+      2. Use `CalendarEventFactory` with explicit field values — never the factory's 50/50 `location` coin flip.
+      3. Cover:
+         - `contains` matches case-insensitively: `PING`, `Ping`, `ping`, and mid-title occurrences
+         - `contains` does not match when the needle is absent
+         - `empty` is true for `null`, for `''`, and for whitespace-only (`' '`, `"\t"`) — the `LOCATION:` single-space case named in the spec
+         - `empty` is false for a real value
+         - first match wins: a `PING` meeting with no location, against `[ping-rule, no-location-rule]`, resolves to the ping rule; reversing the array reverses the outcome
+         - every rule after the first hit is skipped (assert the returned rule identity, not just the colour)
+         - a `null` summary matches no `contains` rule and raises nothing
+         - malformed rules are dropped and do not shift a valid rule's own behaviour: unknown field, unknown condition, unknown colour, missing label, blank label, `contains` with a missing or empty `value`, a non-array entry
+         - a non-array or absent `kbms.event_colour_rules` yields an empty set
+         - an empty set matches nothing and reports `all() === []`
+      4. `php artisan test --compact --filter=EventColourRulesTest`
+
+      ## Completion Criteria
+      - [ ] Every bullet above is a named test
+      - [ ] Tests pass; Pint and Larastan clean
+
+      ## Test Data
+      - N/A — reuses `CalendarEventFactory` with explicit attribute overrides
+
+      ## Git Deliverables
+      - Commit: `test(US-012): TASK-02 cover the colour rule engine`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 2
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-03
+    title: 'Palette tokens and the fill-only channel rules'
+    body: |
+      ## Description
+      Define the six closed palette tokens in both themes and the CSS that lets rule colour fill an event without touching coverage or cancelled styling.
+
+      ## Files Involved
+      - resources/css/app.css
+
+      ## Steps
+      1. In the `@theme` block, add `--kb-rule-{token}` and `--kb-rule-{token}-bg` for `yellow`, `purple`, `green`, `blue`, `orange`, `grey`, using the **same oklch lightness pairs the existing coverage tokens use** — `oklch(0.45 C H)` text on `oklch(0.955 C' H)` fill. Mirror them in the `.dark` block at `oklch(0.80 C H)` on `oklch(0.28 C' H)`.
+      2. Hues, chosen to stay clear of the coverage hues (note `205`, transcript `285`) and of `--kb-ok` (`155`): yellow `90`, orange `55`, green `140`, blue `250`, purple `320`, grey chroma `0`.
+      3. Comment the block: lightness is inherited from the AA-verified `--kb-note` / `--kb-transcript` pair on purpose, so contrast carries over by construction rather than by a fresh eyeball check; a future token must keep the same L values.
+      4. Calendar fill — for each token, `.kb-cal .fc-event.kb-ev--colour-{token}:not(.kb-ev--cancelled) { background: …-bg; color: …; }`. **Only** `background` and `color`. Never `border`, never `border-left`, never `border-color` — those belong to coverage.
+      5. Write the `:not(.kb-ev--cancelled)` guard explicitly rather than relying on source order, so reordering the stylesheet cannot un-cancel an event.
+      6. Agenda fill — `.kb-row--colour-{token}:not(.kb-row--cancelled)` on the same terms.
+      7. Legend swatch — `.kb-legend__swatch` reusing the existing `.kb-inline` legend idiom, with a `--colour-{token}` modifier painting the swatch.
+      8. Place the new rules **after** `.kb-ev--allday` so a rule-coloured all-day event takes the rule's fill; leave a comment saying so, since it is a deliberate precedence choice.
+      9. `npm run build`, then eyeball `/` and `/calendar` in light and dark.
+
+      ## Completion Criteria
+      - [ ] Twelve tokens (six colours × text/fill) defined in both themes, on the inherited lightness pairs
+      - [ ] Fill rules set only `background` and `color`; no border property anywhere in them
+      - [ ] Cancelled wins by selector, not by source order, on both surfaces
+      - [ ] Legend swatch style in place
+      - [ ] `npm run build` succeeds; both themes render sanely
+
+      ## Test Data
+      - N/A — stylesheet only
+
+      ## Git Deliverables
+      - Commit: `feat(US-012): TASK-03 add the closed colour palette and fill-only channel rules`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Joe
+    estimate_hours: 2
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-04
+    title: 'Colour the agenda rows and generate its legend'
+    body: |
+      ## Description
+      Carry the matched rule onto agenda rows and build the legend from configuration.
+
+      ## Files Involved
+      - app/Meetings/AgendaRow.php
+      - app/Meetings/AgendaQuery.php
+      - app/Livewire/Agenda.php
+      - resources/views/livewire/agenda.blade.php
+
+      ## Steps
+      1. `AgendaRow`: add a third constructor parameter `?EventColourRule $colourRule = null`, promoted to a public readonly property. **The default is load-bearing** — it is what keeps `MeetingController`'s detail-page row uncoloured without a second code path. Say so in the docblock.
+      2. `AgendaQuery::for()`: build `EventColourRules::fromConfig()` **once, before the row loop**, and pass `$rules->match($event)` into each `AgendaRow`. Extend the existing query-count docblock to state that colouring adds no query.
+      3. `Agenda::render()`: pass `'colourRules' => EventColourRules::fromConfig()->all()` to the view.
+      4. Blade: add `kb-row--colour-{{ $row->colourRule->colour->value }}` to the row's class list when a rule matched. Leave `kb-row--cancelled` and `kb-row--now` exactly as they are.
+      5. Blade: after the title, add `@if ($row->colourRule)<span class="kb-sronly">{{ $row->colourRule->label }}</span>@endif` so the classification is in the accessible name alongside the coverage words already carried by the visible tags.
+      6. Blade: extend the existing `.kb-legend` paragraph with one swatch-plus-label per configured rule, looped from `$colourRules`. Render nothing extra when the list is empty — that is the documented "off" state.
+      7. Do not touch the coverage tags, the cancelled treatment, or the `All-day` tag.
+      8. `php artisan larapilot:quality` and `php artisan test --compact --filter=Agenda`
+
+      ## Completion Criteria
+      - [ ] A matched agenda row carries its colour class and its screen-reader label
+      - [ ] An unmatched row renders byte-identically to before this spec
+      - [ ] Cancelled and coverage rendering unchanged on a coloured row
+      - [ ] The legend is generated from config — a third rule appears with no view edit; an empty list yields no extra legend entries
+      - [ ] The meeting detail page is still uncoloured, via the constructor default
+      - [ ] Existing agenda tests pass; Pint and Larastan clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-012): TASK-04 colour agenda rows and generate the legend from config`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-02
+      - TASK-03
+  -
+    id: TASK-05
+    title: 'Colour the calendar events and generate its legend'
+    body: |
+      ## Description
+      Carry the matched rule into the FullCalendar payload — class name and accessible name — and build the calendar legend from the same configuration.
+
+      ## Files Involved
+      - app/Meetings/CalendarEventPayload.php
+      - app/Meetings/CalendarFeedQuery.php
+      - routes/web.php
+      - resources/views/pages/calendar.blade.php
+
+      ## Steps
+      1. `CalendarEventPayload`: add a `?string $colourLabel` property and accept `?EventColourRule $colourRule = null` in `from()`. Append `kb-ev--colour-{token}` in `classNames()` and the rule label to `accessibleName()`, placed after the coverage words and before the `cancelled` suffix so the existing wording order is preserved. Extend the `toArray()` array-shape PHPDoc.
+      2. `CalendarFeedQuery::for()`: build `EventColourRules::fromConfig()` **once, before the map**, and pass `$rules->match($event)` into each payload. Extend the query-count docblock.
+      3. `routes/web.php` calendar route: pass `'colourRules' => EventColourRules::fromConfig()->all()` to the view.
+      4. `resources/views/pages/calendar.blade.php`: extend the existing `.kb-legend` paragraph with one swatch-plus-label per rule, looped from `$colourRules`, alongside the coverage entries already there. Nothing extra when the list is empty.
+      5. No change to `resources/js/calendar.js` — the class name arrives through FullCalendar's own `classNames`, and `eventDidMount` already writes `accessibleName` onto the element. Confirm this rather than assuming it, and note it in the commit body.
+      6. `php artisan larapilot:quality`; `php artisan test --compact --filter=Calendar`; `npm run build` and check month, week and day.
+
+      ## Completion Criteria
+      - [ ] A matched occurrence's JSON payload carries its colour class and its label in the accessible name
+      - [ ] The colour renders in month, week **and** day views
+      - [ ] Coverage marks and edge borders still render on a coloured event; a cancelled match stays dashed, struck and muted
+      - [ ] The calendar legend is generated from config and matches the agenda's
+      - [ ] `calendar.js` needed no change
+      - [ ] Existing calendar tests pass; Pint and Larastan clean; build clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-012): TASK-05 colour calendar events and generate the legend from config`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-02
+      - TASK-03
+  -
+    id: TASK-06
+    title: 'Feature-test both surfaces and prove the query count'
+    body: |
+      ## Description
+      Cover the rendered contract on the agenda and the calendar feed, including the two criteria most likely to rot: the config-generated legend and the no-extra-queries promise.
+
+      ## Files Involved
+      - tests/Feature/AgendaColourTest.php (new)
+      - tests/Feature/CalendarColourTest.php (new)
+      - .larapilot/docs/test-results/US-012-manual.md (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit AgendaColourTest` and `CalendarColourTest`.
+      2. Set rule lists per test with `config(['kbms.event_colour_rules' => …])`; set `location` explicitly on every factory call so the factory's 50/50 null never decides an outcome.
+      3. **Agenda:** a `PING weekly` meeting carries `kb-row--colour-yellow` and its `Ping` label in a `.kb-sronly` span; a meeting with no location carries `kb-row--colour-purple`; a meeting that is **both** carries yellow and **not** purple; a cancelled match keeps `kb-row--cancelled`; an annotated match still shows its `Notes` / `Transcript` tags; an unmatched meeting carries no colour class; the legend lists every configured rule; a **third** rule added to config appears in the legend with no view edit; an empty rule list produces no legend entries and no colour classes; a malformed rule leaves the page `200` with the event uncoloured.
+      4. **Calendar:** the same matrix against `GET /calendar/events`, asserting `classNames` and `accessibleName` on the JSON, plus the legend on `GET /calendar`. Assert the accessible name keeps its existing coverage wording **and** gains the label, and that a cancelled coloured event still ends with `cancelled`.
+      5. **Query count:** create ~30 occurrences across a window, count queries with `DB::listen` for `GET /calendar/events` with no rules configured and with two rules configured, and assert the two counts are equal. Repeat for the agenda render. This is the "no per-occurrence queries" criterion — assert it, do not describe it.
+      6. `.larapilot/docs/test-results/US-012-manual.md`: the visual half — both fills legible in light **and** dark, each distinguishable from the note teal and the transcript indigo, coverage marks still visible over a fill, cancelled still unmistakable, and the legend swatches matching the rendered fills on both pages.
+      7. `php artisan test --compact` (full suite) and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [ ] Every bullet above is a named test and passes
+      - [ ] Query-count equality proven for both surfaces
+      - [ ] Full suite green
+      - [ ] Manual handoff written
+      - [ ] Pint and Larastan clean
+
+      ## Test Data
+      - N/A — reuses existing factories with explicit attribute overrides
+
+      ## Git Deliverables
+      - Commit: `test(US-012): TASK-06 cover colour rendering on both surfaces and the query count`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 3.5
+    dependencies:
+      - TASK-04
+      - TASK-05
+  -
+    id: TASK-07
+    title: 'Document the rule vocabulary in README and CHANGELOG'
+    body: |
+      ## Description
+      The rule list is the operator's only control surface for this feature, so it has to be written down exhaustively — every field, every condition, every colour.
+
+      ## Files Involved
+      - README.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. README: a `## Event colour rules` section covering — where rules live (`config/kbms.php`, **not** `.env`, and why); the rule shape; the four allowed `field` values; the two `condition` values with their exact semantics (case-insensitive substring; null/absent/whitespace-only); the six palette colours; that array order is the priority and the first match wins; that an invalid rule is dropped and its event renders uncoloured; that an empty list is the supported "off" state.
+      2. README: state that rule colour, note/transcript coverage, and cancelled styling are independent channels that render together, and that the meeting detail page is deliberately excluded.
+      3. README: add the shipped two-rule default as a copyable snippet.
+      4. README: note explicitly that no `KBMS_*` key controls this, so nobody adds one to `.env` expecting it to work.
+      5. CHANGELOG: entry under `Unreleased` → `Added`, referencing US-012 and FR-023.
+      6. Additive edits only — do not restructure either document.
+
+      ## Completion Criteria
+      - [ ] README documents the full closed vocabulary, precedence, invalid-rule behaviour, and the off state
+      - [ ] The shipped defaults appear as a copyable snippet
+      - [ ] The absence of an env key is stated
+      - [ ] CHANGELOG `Unreleased` → `Added` carries the US-012 entry
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-012): TASK-07 document the event colour rule vocabulary`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: TODO
+    assignee: Albert
+    estimate_hours: 1
+    dependencies:
+      - TASK-04
+      - TASK-05
+updated_at: '2026-09-11T01:38:10+02:00'

@@ -733,7 +733,7 @@ specs:
       title: 'Meeting Workspace'
     priority: HIGH
     points: 3
-    status: TODO
+    status: 'IN PROGRESS'
     body: |
       #### US-012: Rule-based event colouring on the calendar and agenda
 
@@ -780,6 +780,10 @@ specs:
       - No filtering, hiding, or searching by rule — this spec colours, it does not query. Tag-driven filtering remains FR-017
       - No colouring on the meeting detail page at `/meetings/{occurrence}`; the two scanning surfaces are where the signal pays for itself
       - No multi-match rendering (split or striped fills): first match wins, deliberately
+    status_history:
+      - { status: PLANNED, at: '2026-09-11T01:38:10+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-11T01:38:11+02:00' }
+    rework: false
   -
     code: US-013
     title: 'Calendar-as-todo: checkbox title convention with time-aware status'
