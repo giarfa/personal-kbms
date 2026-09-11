@@ -942,7 +942,7 @@ specs:
       title: Maintenance
     priority: HIGH
     points: 3
-    status: 'IN PROGRESS'
+    status: DONE
     body: |
       #### US-015: Fix — the `.txt` context sibling is handed to the launcher unverified
 
@@ -1005,30 +1005,38 @@ specs:
       - Reversing decision `14f91842c55d2d7f` to index `.txt` in the resolver or the manual picker.
 
       **Acceptance Criteria**
-      - [ ] The `.txt` sibling handed to the launcher is checked for containment
+      - [x] The `.txt` sibling handed to the launcher is checked for containment
         (`TranscriptsDirectory::contains()`) and readability, with the same rigour already applied to
         the resolved `.md` path
-      - [ ] A missing or unreadable sibling returns a new, distinct `LaunchBlock` case with its own
+      - [x] A missing or unreadable sibling returns a new, distinct `LaunchBlock` case with its own
         sentence naming the expected path and the action that fixes it — never collapsed into
         `NoTranscript` or `TranscriptUnreadable`, and never a dispatched launch
-      - [ ] The new block reason renders on the meeting detail page like every other blocked state, and
+      - [x] The new block reason renders on the meeting detail page like every other blocked state, and
         disables the "Launch session" button with the same live re-evaluation US-014 established
-      - [ ] The extension swap happens in one named place, and the checks run **after** it — no code
+      - [x] The extension swap happens in one named place, and the checks run **after** it — no code
         path can validate one file and hand over another
-      - [ ] The job's second preflight pass refuses the same way, so a sibling deleted between dispatch
+      - [x] The job's second preflight pass refuses the same way, so a sibling deleted between dispatch
         and execution is caught rather than invoked (`LaunchPreflight` is deliberately re-run inside the
         job — that contract is preserved)
-      - [ ] The 14 failing tests above are green, asserting the `.txt` path deliberately rather than
+      - [x] The 14 failing tests above are green, asserting the `.txt` path deliberately rather than
         incidentally (Anne)
-      - [ ] Regression test covers: sibling present → launch proceeds with the `.txt` path; sibling
+      - [x] Regression test covers: sibling present → launch proceeds with the `.txt` path; sibling
         absent → new block reason, no job dispatched; sibling present but unreadable → same block
         (Anne)
-      - [ ] No regression to shell-argument safety — the argument array stays the single construction
+      - [x] No regression to shell-argument safety — the argument array stays the single construction
         site and the adversarial-question datasets still pass intact (Lars)
-      - [ ] `README.md`'s launcher-script contract section reflects the verified-sibling behavior
+      - [x] `README.md`'s launcher-script contract section reflects the verified-sibling behavior
         (Albert)
-      - [ ] Full suite green; Pint and Larastan clean
+      - [x] Full suite green; Pint and Larastan clean
     status_history:
       - { status: PLANNED, at: '2026-09-11T12:19:52+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-11T12:20:00+02:00' }
+      - { status: REVIEW, at: '2026-09-11T12:29:15+02:00' }
+      - { status: DONE, at: '2026-09-11T12:29:21+02:00' }
     rework: false
+    merge_commit:
+      sha: 55c7aa52c1a52199eb815ddf9b7d0bed095715a5
+      short_sha: 55c7aa5
+      subject: 'docs(US-015): record Robert + Lars review notes'
+      committed_at: '2026-09-11T12:29:14+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/55c7aa52c1a52199eb815ddf9b7d0bed095715a5'
