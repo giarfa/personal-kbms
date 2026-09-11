@@ -73,10 +73,10 @@ tasks:
       4. `php artisan test --filter=AskClaudePanelTest`
 
       ## Completion Criteria
-      - [ ] Typing a non-whitespace question makes the "Launch session" button clickable without any other action
-      - [ ] Button's enabled/disabled state stays in sync with the server-side block reason as the user edits the question
-      - [ ] No regression to `LaunchPreflight`/`LaunchCommand` argument handling
-      - [ ] Tests pass
+      - [x] Typing a non-whitespace question makes the "Launch session" button clickable without any other action
+      - [x] Button's enabled/disabled state stays in sync with the server-side block reason as the user edits the question
+      - [x] No regression to `LaunchPreflight`/`LaunchCommand` argument handling
+      - [x] Tests pass
 
       ## Test Data
       - N/A — no model/schema changes in this task
@@ -86,11 +86,17 @@ tasks:
       - Push: skip (`git_mode: GITFLOW`)
       - PR: update local PR notes only
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1
     dependencies:
       - TASK-00
+    commit:
+      sha: 35e509ab3c066c8c562c70ea66cbd4e5a25a70c4
+      short_sha: 35e509a
+      subject: 'fix(US-014): TASK-01 sync question input live so launch button re-evaluates'
+      committed_at: '2026-09-11T10:28:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/35e509ab3c066c8c562c70ea66cbd4e5a25a70c4'
   -
     id: TASK-02
     title: "Regression coverage for the launch button's disabled state and the live binding"
@@ -109,18 +115,24 @@ tasks:
       5. `php artisan test --filter=AskClaudePanelTest`
 
       ## Completion Criteria
-      - [ ] New tests pass locally alongside the existing `AskClaudePanelTest` suite
-      - [ ] Regression guard on the `.live` modifier is in place
-      - [ ] Manual test handoff note recorded for human browser verification
+      - [x] New tests pass locally alongside the existing `AskClaudePanelTest` suite
+      - [x] Regression guard on the `.live` modifier is in place
+      - [x] Manual test handoff note recorded for human browser verification
 
       ## Git Deliverables
       - Commit: `test(US-014): TASK-02 cover launch button disabled state and live binding regression`
       - Push: skip (`git_mode: GITFLOW`)
       - PR: update local PR notes only
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies:
       - TASK-01
-updated_at: '2026-09-11T10:26:07+02:00'
+    commit:
+      sha: b6a4a901ba1dc8ed628eaab7f92c573bbb130d4e
+      short_sha: b6a4a90
+      subject: 'test(US-014): TASK-02 cover launch button disabled state and live binding regression'
+      committed_at: '2026-09-11T10:28:44+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b6a4a901ba1dc8ed628eaab7f92c573bbb130d4e'
+updated_at: '2026-09-11T10:28:45+02:00'

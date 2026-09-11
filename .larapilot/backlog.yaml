@@ -881,7 +881,7 @@ specs:
       title: Maintenance
     priority: HIGH
     points: 2
-    status: 'IN PROGRESS'
+    status: REVIEW
     body: |
       #### US-014: Fix — Launch session button stays disabled after typing a question
 
@@ -925,4 +925,5 @@ specs:
     status_history:
       - { status: PLANNED, at: '2026-09-11T10:23:48+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-11T10:25:49+02:00' }
+      - { status: REVIEW, at: '2026-09-11T10:30:29+02:00' }
     rework: false

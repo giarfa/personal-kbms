@@ -5,7 +5,7 @@ epic:
   title: Maintenance
 priority: HIGH
 points: 2
-status: 'IN PROGRESS'
+status: REVIEW
 body: |
   #### US-014: Fix — Launch session button stays disabled after typing a question
 
@@ -53,4 +53,7 @@ status_history:
   -
     status: 'IN PROGRESS'
     at: '2026-09-11T10:25:49+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-11T10:30:29+02:00'
 rework: false
