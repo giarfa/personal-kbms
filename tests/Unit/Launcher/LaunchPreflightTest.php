@@ -202,8 +202,26 @@ class LaunchPreflightTest extends TestCase
 
         $this->assertInstanceOf(LaunchCommand::class, $result);
         $this->assertSame($this->launcherFile, $result->script);
-        $this->assertSame($path, $result->contextPath);
+        $this->assertSame("{$this->transcriptsDir}/transcript.txt", $result->contextPath);
         $this->assertSame('What did we decide?', $result->question);
+    }
+
+    /**
+     * The launcher contract requires `.txt` regardless of the transcript's
+     * real extension on disk — the checks above still read the `.md` file,
+     * but the argument the script receives is forced to `.txt`.
+     */
+    public function test_forces_the_context_path_extension_to_txt(): void
+    {
+        $path = "{$this->transcriptsDir}/transcript.notes.md";
+        file_put_contents($path, '# Transcript');
+        $event = CalendarEvent::factory()->create();
+        MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
+
+        $result = $this->preflight()->for($event, 'What did we decide?');
+
+        $this->assertInstanceOf(LaunchCommand::class, $result);
+        $this->assertSame("{$this->transcriptsDir}/transcript.notes.txt", $result->contextPath);
     }
 
     /**
