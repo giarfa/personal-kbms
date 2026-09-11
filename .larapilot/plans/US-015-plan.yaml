@@ -92,12 +92,12 @@ tasks:
       8. `php artisan migrate:fresh --seed` — confirm seeded launch-ready meetings still show "Launcher ready" on the meeting detail page.
 
       ## Completion Criteria
-      - [ ] `.txt` sibling is checked for containment and readability with the same rigour as the `.md` path
-      - [ ] A missing/unreadable sibling returns its own distinct `LaunchBlock` case, message names the expected path and the fix action
-      - [ ] The extension swap exists in exactly one named place; checks run after it in both `for()` and `LaunchBlockDetail`
-      - [ ] `LaunchClaudeSession`'s second preflight pass refuses the same way when the sibling is deleted between dispatch and execution
-      - [ ] Seeded demo data still demonstrates a real, launchable meeting after `migrate:fresh --seed`
-      - [ ] README launcher-script contract section and CHANGELOG updated
+      - [x] `.txt` sibling is checked for containment and readability with the same rigour as the `.md` path
+      - [x] A missing/unreadable sibling returns its own distinct `LaunchBlock` case, message names the expected path and the fix action
+      - [x] The extension swap exists in exactly one named place; checks run after it in both `for()` and `LaunchBlockDetail`
+      - [x] `LaunchClaudeSession`'s second preflight pass refuses the same way when the sibling is deleted between dispatch and execution
+      - [x] Seeded demo data still demonstrates a real, launchable meeting after `migrate:fresh --seed`
+      - [x] README launcher-script contract section and CHANGELOG updated
 
       ## Test Data
       - N/A — no Eloquent model/migration changes; `MeetingTranscriptSeeder` fixture files updated per Steps 5 (not a factory/seeder schema change)
@@ -107,11 +107,17 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes only
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 3
     dependencies:
       - TASK-00
+    commit:
+      sha: 432ce25d62d844a1e9932cda3973fca61ef90d77
+      short_sha: 432ce25
+      subject: 'fix(US-015): TASK-01 verify txt context sibling before launch'
+      committed_at: '2026-09-11T12:24:47+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/432ce25d62d844a1e9932cda3973fca61ef90d77'
   -
     id: TASK-02
     title: 'Fix stale .md-path test expectations and add sibling regression coverage'
@@ -147,4 +153,4 @@ tasks:
     estimate_hours: 2.5
     dependencies:
       - TASK-01
-updated_at: '2026-09-11T12:20:24+02:00'
+updated_at: '2026-09-11T12:24:49+02:00'
