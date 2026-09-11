@@ -78,6 +78,23 @@ final readonly class MeetingTodo
     }
 
     /**
+     * The title to render for an occurrence, todo or not.
+     *
+     * Lives here because the marker-stripping rule does, and because the
+     * empty-title fallback has to hold on both paths: a summary that is only a
+     * marker, and a feed occurrence whose `summary` is genuinely `null`. The
+     * latter used to reach `CalendarEventPayload`'s `string $title` and throw a
+     * TypeError on the whole calendar feed — a blank chip is bad, but a 500 on
+     * the grid because one occurrence had no title is worse.
+     */
+    public static function displayTitleFor(CalendarEvent $event, ?self $todo): string
+    {
+        $title = $todo->displayTitle ?? (string) $event->summary;
+
+        return trim($title) === '' ? __('Untitled') : $title;
+    }
+
+    /**
      * The status in words, for the accessible name and the visible tag.
      */
     public function statusLabel(): string

@@ -460,9 +460,9 @@ tasks:
       7. Additive edits only.
 
       ## Completion Criteria
-      - [ ] README documents the marker set, the anchoring rule, overdue semantics, the read-only derivation, and the absence of configuration
-      - [ ] The deliberate omissions (no filtering, no badge, no notification, no write-back) are stated
-      - [ ] CHANGELOG `Unreleased` → `Added` carries the US-013 entry
+      - [x] README documents the marker set, the anchoring rule, overdue semantics, the read-only derivation, and the absence of configuration
+      - [x] The deliberate omissions (no filtering, no badge, no notification, no write-back) are stated
+      - [x] CHANGELOG `Unreleased` → `Added` carries the US-013 entry
 
       ## Test Data
       - N/A — documentation only
@@ -472,9 +472,15 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 1
     dependencies:
       - TASK-06
-updated_at: '2026-09-11T01:59:10+02:00'
+    commit:
+      sha: 1f9380665ad074567436d518f70c95e9f6dccd88
+      short_sha: 1f93806
+      subject: 'docs(US-013): TASK-08 document the calendar-as-todo convention'
+      committed_at: '2026-09-11T01:59:33+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1f9380665ad074567436d518f70c95e9f6dccd88'
+updated_at: '2026-09-11T01:59:33+02:00'

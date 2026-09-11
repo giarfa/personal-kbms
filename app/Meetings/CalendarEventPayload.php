@@ -37,12 +37,13 @@ final readonly class CalendarEventPayload
         $isAllDay = (bool) $event->is_all_day;
         $isCancelled = $event->cancelled_at !== null;
         $todo = MeetingTodo::for($event);
+        $displayTitle = MeetingTodo::displayTitleFor($event, $todo);
 
         return new self(
             id: $event->occurrenceKey()->toRouteKey(),
             // The marker is stripped from what the grid shows; the raw summary
             // is still rendered verbatim on the meeting detail page (US-013).
-            title: $todo->displayTitle ?? $event->summary,
+            title: $displayTitle,
             start: $isAllDay ? $start->format('Y-m-d') : $start->format('Y-m-d\TH:i:s'),
             end: $isAllDay ? $end->format('Y-m-d') : $end->format('Y-m-d\TH:i:s'),
             allDay: $isAllDay,
@@ -51,7 +52,7 @@ final readonly class CalendarEventPayload
             hasNotes: $coverage->hasNotes,
             hasTranscript: $coverage->hasTranscript,
             cancelled: $isCancelled,
-            accessibleName: self::accessibleName($todo->displayTitle ?? $event->summary, $start, $isAllDay, $coverage, $isCancelled, $colourRule, $todo),
+            accessibleName: self::accessibleName($displayTitle, $start, $isAllDay, $coverage, $isCancelled, $colourRule, $todo),
             todoStatus: $todo?->modifier(),
         );
     }

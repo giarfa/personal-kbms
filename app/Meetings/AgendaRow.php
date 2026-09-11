@@ -72,9 +72,7 @@ final readonly class AgendaRow
         $this->routeKey = $event->occurrenceKey()->toRouteKey();
         $this->coverage = $coverage;
         $this->todo = MeetingTodo::for($event);
-        // `->` rather than `?->`: ?? already handles the null todo, and
-        // Larastan rejects the nullsafe form on the left of ?? as redundant.
-        $this->displayTitle = $this->todo->displayTitle ?? (string) $event->summary;
+        $this->displayTitle = MeetingTodo::displayTitleFor($event, $this->todo);
 
         // Both kinds store an exclusive end, so an end landing exactly on midnight
         // belongs to the previous day. Timed occurrences span days too (an

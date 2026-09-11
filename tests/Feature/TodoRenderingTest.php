@@ -207,6 +207,33 @@ class TodoRenderingTest extends TestCase
         $this->assertStringNotContainsString('kb-todo kb-todo--', $html);
     }
 
+    // --- Null and empty summaries ----------------------------------------
+
+    public function test_a_null_summary_errors_nothing_on_the_feed_the_agenda_or_the_detail_page(): void
+    {
+        // Regression: CalendarEventPayload's `string $title` used to receive a
+        // null summary straight from the model and TypeError, taking the whole
+        // calendar feed down over one untitled occurrence.
+        $event = $this->meeting('placeholder', 9, ['summary' => null]);
+        $key = $event->occurrenceKey()->toRouteKey();
+
+        $this->getJson('/calendar/events?from=2026-09-01&to=2026-09-30')->assertOk();
+        $this->get('/')->assertOk();
+        $this->get("/meetings/{$key}")->assertOk();
+    }
+
+    public function test_a_null_summary_renders_untitled_rather_than_a_blank_chip(): void
+    {
+        $this->meeting('placeholder', 9, ['summary' => null]);
+
+        $payload = $this->payloadFor('Untitled');
+
+        $this->assertSame('Untitled', $payload['title']);
+        $this->assertNull($payload['extendedProps']['todoStatus']);
+
+        Livewire::test(Agenda::class)->assertSee('Untitled');
+    }
+
     // --- Channel independence --------------------------------------------
 
     public function test_an_overdue_rule_coloured_annotated_occurrence_renders_all_three_channels(): void
