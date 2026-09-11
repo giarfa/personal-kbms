@@ -139,18 +139,24 @@ tasks:
       6. `php artisan test` — confirm the full suite is green, including `tests/Unit/Launcher/LaunchCommandTest.php`'s adversarial-question datasets (unaffected by this change, re-run to confirm no regression).
 
       ## Completion Criteria
-      - [ ] All 14 previously-failing tests pass, asserting the `.txt` path deliberately
-      - [ ] New regression tests cover: sibling present (proceeds), sibling absent (new block, nothing dispatched), sibling unreadable (same block)
-      - [ ] Full suite green
+      - [x] All 14 previously-failing tests pass, asserting the `.txt` path deliberately
+      - [x] New regression tests cover: sibling present (proceeds), sibling absent (new block, nothing dispatched), sibling unreadable (same block)
+      - [x] Full suite green
 
       ## Git Deliverables
       - Commit: `test(US-015): TASK-02 fix stale txt-path expectations and cover sibling verification`
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: update local PR notes only
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 2.5
     dependencies:
       - TASK-01
-updated_at: '2026-09-11T12:24:49+02:00'
+    commit:
+      sha: 555fbdcc5e58736790f57c234d172df7e62ae8c9
+      short_sha: 555fbdc
+      subject: 'test(US-015): TASK-02 fix stale txt-path expectations and cover sibling verification'
+      committed_at: '2026-09-11T12:24:53+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/555fbdcc5e58736790f57c234d172df7e62ae8c9'
+updated_at: '2026-09-11T12:24:55+02:00'

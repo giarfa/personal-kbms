@@ -26,12 +26,12 @@ use Illuminate\Support\Carbon;
  * alone — a manual link, and a broken link whose file the seeder
  * deliberately does not create.
  *
- * Every `.md` fixture meant to reach a real "linked" state also gets a
- * `.txt` sibling (`LaunchPreflight::txtSiblingPath()`), mirroring the
- * operator's pipeline — otherwise the Ask Claude panel would show every
- * seeded meeting as blocked once the sibling is verified (US-015). The
- * deliberately broken link and the still-ambiguous candidates are exempt:
- * neither resolves to a launchable `meeting_transcripts` row on seed.
+ * Every `.md` fixture that can end up linked — including either ambiguous
+ * Design review candidate, once the operator picks one — also gets a `.txt`
+ * sibling (`LaunchPreflight::txtSiblingPath()`), mirroring the operator's
+ * pipeline; otherwise the Ask Claude panel would show a blocked meeting once
+ * the sibling is verified (US-015). Only the deliberately broken link is
+ * exempt: its file is never created, on purpose.
  */
 class MeetingTranscriptSeeder extends Seeder
 {
@@ -138,18 +138,22 @@ class MeetingTranscriptSeeder extends Seeder
         $start = Carbon::parse($event->starts_at);
 
         $exactStem = $pattern->render($start, $event->summary);
-        file_put_contents("{$directory}/{$exactStem}.md", <<<'MD'
+        $exactPath = "{$directory}/{$exactStem}.md";
+        file_put_contents($exactPath, <<<'MD'
             # Design review — transcript (candidate A)
 
             **Luca:** Let's walk through the component states doc first.
             MD);
+        file_put_contents(LaunchPreflight::txtSiblingPath($exactPath), "Design review -- raw transcript export (candidate A)\n");
 
         $driftStem = $pattern->render($start->clone()->addMinutes(4), 'design sync recording');
-        file_put_contents("{$directory}/{$driftStem}.md", <<<'MD'
+        $driftPath = "{$directory}/{$driftStem}.md";
+        file_put_contents($driftPath, <<<'MD'
             # Untitled recording (candidate B)
 
             **Unknown speaker:** ...still setting up screen share...
             MD);
+        file_put_contents(LaunchPreflight::txtSiblingPath($driftPath), "Untitled recording -- raw transcript export (candidate B)\n");
     }
 
     /**

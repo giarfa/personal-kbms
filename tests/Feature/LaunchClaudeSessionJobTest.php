@@ -183,6 +183,9 @@ class LaunchClaudeSessionJobTest extends TestCase
         $fresh = $launch->fresh();
         $this->assertSame(PromptLaunchStatus::Blocked, $fresh->status);
         $this->assertStringContainsString('missing or unreadable', $fresh->error);
+        // The path detail must not be dropped — a blanked detail would still
+        // contain "missing or unreadable" but with an empty quoted path.
+        $this->assertStringContainsString($launch->context_path, $fresh->error);
     }
 
     public function test_launcher_deleted_after_dispatch_blocks_and_runs_nothing(): void
