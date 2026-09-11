@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Launcher\LaunchPreflight;
 use App\Models\CalendarEvent;
 use App\Models\MeetingTranscript;
 use App\Transcripts\TranscriptLinkSource;
@@ -24,6 +25,13 @@ use Illuminate\Support\Carbon;
  * A row is written directly only where the state cannot arise from files
  * alone — a manual link, and a broken link whose file the seeder
  * deliberately does not create.
+ *
+ * Every `.md` fixture meant to reach a real "linked" state also gets a
+ * `.txt` sibling (`LaunchPreflight::txtSiblingPath()`), mirroring the
+ * operator's pipeline — otherwise the Ask Claude panel would show every
+ * seeded meeting as blocked once the sibling is verified (US-015). The
+ * deliberately broken link and the still-ambiguous candidates are exempt:
+ * neither resolves to a launchable `meeting_transcripts` row on seed.
  */
 class MeetingTranscriptSeeder extends Seeder
 {
@@ -78,6 +86,8 @@ class MeetingTranscriptSeeder extends Seeder
 
             **10:26 — Chiara:** Recap: ingestion slips two weeks, Q1 scope held, hiring sign-off Friday. Thanks everyone.
             MD);
+
+        file_put_contents(LaunchPreflight::txtSiblingPath("{$directory}/{$stem}.md"), "Client kickoff -- raw transcript export\n");
     }
 
     /**
@@ -109,6 +119,8 @@ class MeetingTranscriptSeeder extends Seeder
 
             **Chiara:** Good. Keep Q1 scope held until that's four.
             MD);
+
+        file_put_contents(LaunchPreflight::txtSiblingPath("{$directory}/{$stem}.md"), "Weekly sync -- raw transcript export\n");
     }
 
     /**
@@ -195,6 +207,8 @@ class MeetingTranscriptSeeder extends Seeder
 
             **Chiara:** Let's settle on the tenancy pattern before Friday.
             MD);
+
+        file_put_contents(LaunchPreflight::txtSiblingPath($path), "Architecture discussion -- raw transcript export\n");
 
         MeetingTranscript::factory()->forOccurrence($event)->manual()->create([
             'path' => $path,

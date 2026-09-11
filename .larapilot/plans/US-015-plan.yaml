@@ -48,18 +48,24 @@ tasks:
       4. Optional empty commit for branch anchor: `chore(US-015): TASK-00 bootstrap feature branch`
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-015-verify-txt-sibling` exists locally
-      - [ ] PR title/body drafted for `develop` (remote open optional — only if user requested push)
+      - [x] Branch `feature/US-015-verify-txt-sibling` exists locally
+      - [x] PR title/body drafted for `develop` (remote open optional — only if user requested push)
 
       ## Git Deliverables
       - Commit: `chore(US-015): TASK-00 bootstrap feature branch` (empty commit allowed)
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally — open/update remote only if user requests
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 0.5
     dependencies: {}
+    commit:
+      sha: 1d2c89ea3e6b63f97c6ed7ade78e730fb24efa3e
+      short_sha: 1d2c89e
+      subject: 'chore(US-015): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-11T12:20:22+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1d2c89ea3e6b63f97c6ed7ade78e730fb24efa3e'
   -
     id: TASK-01
     title: 'Verify the .txt context sibling before it is handed to the launcher'
@@ -141,4 +147,4 @@ tasks:
     estimate_hours: 2.5
     dependencies:
       - TASK-01
-updated_at: '2026-09-11T12:19:52+02:00'
+updated_at: '2026-09-11T12:20:24+02:00'

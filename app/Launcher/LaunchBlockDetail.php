@@ -4,10 +4,11 @@ namespace App\Launcher;
 
 /**
  * Computes the caller-supplied interpolation a LaunchBlock::message() needs
- * — the configured launcher path, the persisted transcript path, or the
- * composed over-length/null-byte sentence. Shared by the Livewire panel and
- * the job's second-pass block so neither path can silently drop it (a
- * dropped QuestionTooLong detail would persist an empty error string).
+ * — the configured launcher path, the persisted transcript path, the
+ * expected `.txt` sibling path, or the composed over-length/null-byte
+ * sentence. Shared by the Livewire panel and the job's second-pass block so
+ * neither path can silently drop it (a dropped QuestionTooLong detail would
+ * persist an empty error string).
  */
 final class LaunchBlockDetail
 {
@@ -16,6 +17,9 @@ final class LaunchBlockDetail
         return match ($block) {
             LaunchBlock::LauncherMissing, LaunchBlock::LauncherNotExecutable => (string) config('kbms.claude_launcher'),
             LaunchBlock::TranscriptUnreadable => $transcriptPath,
+            LaunchBlock::TranscriptSiblingUnreadable => $transcriptPath !== null
+                ? LaunchPreflight::txtSiblingPath($transcriptPath)
+                : null,
             LaunchBlock::QuestionTooLong => str_contains($question, "\0")
                 ? 'A question cannot contain a null byte.'
                 : 'Question is '.mb_strlen($question).' characters; the bound is '.config('kbms.question_max_chars').'.',
