@@ -934,3 +934,109 @@ specs:
       subject: 'chore(US-014): move spec to REVIEW'
       committed_at: '2026-09-11T10:30:43+02:00'
       url: 'https://github.com/giarfa/personal-kbms/commit/60d6a905120b23c1981220e70def04cf7b041571'
+  -
+    code: US-015
+    title: 'Fix: the .txt context sibling is handed to the launcher unverified'
+    epic:
+      code: EP-005
+      title: Maintenance
+    priority: HIGH
+    points: 3
+    status: DONE
+    body: |
+      #### US-015: Fix — the `.txt` context sibling is handed to the launcher unverified
+
+      **Epic:** EP-005 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+      **Type:** Fix
+      **Severity:** High
+      **Security:** Lars/Oliver — no (containment is not bypassed; the gap is silent failure)
+      **Related:** US-009 (FR-008 launch bridge), US-014 (merged alongside the introducing commit `d6d8ea5`)
+      **Traces to:** FR-006, FR-008
+
+      **User Story**
+      As the operator,
+      I want the launcher to be refused with a named reason when the `.txt` context sibling is
+      missing or unreadable,
+      so that I never watch a launch "succeed" while the script opens a path to nothing.
+
+      **Demonstrates**
+      Unlinking or deleting the `.txt` sibling of a linked transcript blocks the launch with its own
+      distinct sentence on the meeting detail page — like every other blocked state — instead of
+      dispatching a job that hands the script a nonexistent path. The full suite is green again.
+
+      **Background**
+      `LaunchPreflight::for()` validates the resolved transcript (`TranscriptsDirectory::contains()`
+      plus `is_readable()`), then calls `withTxtExtension()` to rewrite the extension **after** every
+      check has run (`app/Launcher/LaunchPreflight.php:65-80`). The swap exists because the operator's
+      launcher script requires plain text and the recording pipeline emits a `.md` + `.txt` pair per
+      recording; `config/kbms.php:47` narrows `transcript_extensions` to `['md']` so indexing both does
+      not make every meeting Ambiguous (decision journal `14f91842c55d2d7f`, 2026-09-10).
+
+      The sibling therefore resolves to a real file today — verified against the live transcripts
+      directory: 68 `.md`, 70 `.txt`, zero `.md` lacking a sibling. The defect is the **missing
+      guarantee**, not a missing file: FR-006 promises the path handed to the launcher "is verified to
+      exist and be readable", and that promise is now applied to a file the script never opens. A
+      pipeline hiccup, a manual cleanup, or an operator-picked `.md` without a pair produces a
+      `LaunchCommand` with no corresponding `LaunchBlock` — a silent failure with no operator-facing
+      reason, in a codebase whose stated rule is that "every error and blocked state names the
+      configuration key or the action that fixes it" (`app/Launcher/LaunchBlock.php`).
+
+      **Steps to Reproduce**
+      1. Link a meeting to a transcript whose `.md` exists under `KBMS_TRANSCRIPTS_PATH` but which has
+         no `.txt` sibling (delete the sibling to reproduce).
+      2. Open the meeting detail page and type a valid question.
+      3. Observe the "Launch session" button is enabled and the exact-invocation preview shows a `.txt`
+         path that does not exist on disk.
+      4. Launch — the job dispatches and the script is invoked with a path to nothing; no block reason
+         is ever shown.
+
+      **Current test failures (must be resolved by this spec)**
+      `develop` at `fca3fd4` is red — 518 passed / 14 failed:
+      - `Tests\Feature\LaunchClaudeSessionJobTest::test_every_adversarial_question_reaches_the_process_as_a_single_intact_argument` — all 13 datasets
+      - `Tests\Feature\AskClaudePanelTest::test_the_rendered_invocation_matches_launch_command_display_for_an_adversarial_question`
+
+      Both still assert the `.md` path. These are stale expectations from before `d6d8ea5`, not a
+      second defect — but the suite gates nothing until they are corrected.
+
+      **Out of Scope**
+      - **Generating** a `.txt` when the sibling is absent. The PRD's standing constraint is that the
+        tool "never produces calendar entries or transcripts"; this spec verifies and refuses, it does
+        not write into the transcripts directory.
+      - Reversing decision `14f91842c55d2d7f` to index `.txt` in the resolver or the manual picker.
+
+      **Acceptance Criteria**
+      - [x] The `.txt` sibling handed to the launcher is checked for containment
+        (`TranscriptsDirectory::contains()`) and readability, with the same rigour already applied to
+        the resolved `.md` path
+      - [x] A missing or unreadable sibling returns a new, distinct `LaunchBlock` case with its own
+        sentence naming the expected path and the action that fixes it — never collapsed into
+        `NoTranscript` or `TranscriptUnreadable`, and never a dispatched launch
+      - [x] The new block reason renders on the meeting detail page like every other blocked state, and
+        disables the "Launch session" button with the same live re-evaluation US-014 established
+      - [x] The extension swap happens in one named place, and the checks run **after** it — no code
+        path can validate one file and hand over another
+      - [x] The job's second preflight pass refuses the same way, so a sibling deleted between dispatch
+        and execution is caught rather than invoked (`LaunchPreflight` is deliberately re-run inside the
+        job — that contract is preserved)
+      - [x] The 14 failing tests above are green, asserting the `.txt` path deliberately rather than
+        incidentally (Anne)
+      - [x] Regression test covers: sibling present → launch proceeds with the `.txt` path; sibling
+        absent → new block reason, no job dispatched; sibling present but unreadable → same block
+        (Anne)
+      - [x] No regression to shell-argument safety — the argument array stays the single construction
+        site and the adversarial-question datasets still pass intact (Lars)
+      - [x] `README.md`'s launcher-script contract section reflects the verified-sibling behavior
+        (Albert)
+      - [x] Full suite green; Pint and Larastan clean
+    status_history:
+      - { status: PLANNED, at: '2026-09-11T12:19:52+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-11T12:20:00+02:00' }
+      - { status: REVIEW, at: '2026-09-11T12:29:15+02:00' }
+      - { status: DONE, at: '2026-09-11T12:29:21+02:00' }
+    rework: false
+    merge_commit:
+      sha: 55c7aa52c1a52199eb815ddf9b7d0bed095715a5
+      short_sha: 55c7aa5
+      subject: 'docs(US-015): record Robert + Lars review notes'
+      committed_at: '2026-09-11T12:29:14+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/55c7aa52c1a52199eb815ddf9b7d0bed095715a5'

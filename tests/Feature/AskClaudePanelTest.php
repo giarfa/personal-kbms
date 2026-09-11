@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\LaunchClaudeSession;
 use App\Launcher\LaunchCommand;
+use App\Launcher\LaunchPreflight;
 use App\Livewire\AskClaude;
 use App\Models\CalendarEvent;
 use App\Models\MeetingTranscript;
@@ -68,6 +69,7 @@ class AskClaudePanelTest extends TestCase
     {
         $path = "{$this->transcriptsDir}/transcript.md";
         file_put_contents($path, '# Transcript');
+        file_put_contents(LaunchPreflight::txtSiblingPath($path), 'Transcript');
 
         return $path;
     }
@@ -190,6 +192,25 @@ class AskClaudePanelTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_blocked_when_the_txt_sibling_is_missing(): void
+    {
+        $path = "{$this->transcriptsDir}/transcript.md";
+        file_put_contents($path, '# Transcript');
+        // Deliberately no .txt sibling written.
+        $event = CalendarEvent::factory()->create();
+        MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
+
+        Queue::fake();
+
+        Livewire::test(AskClaude::class, ['occurrence' => $event])
+            ->set('question', 'a valid question')
+            ->call('launch')
+            ->assertSee('missing or unreadable');
+
+        Queue::assertNothingPushed();
+        $this->assertDatabaseCount('prompt_launches', 0);
+    }
+
     public function test_an_empty_question_is_rejected_before_dispatch(): void
     {
         $event = $this->readyEvent();
@@ -300,7 +321,7 @@ class AskClaudePanelTest extends TestCase
         MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
 
         $question = "What did $(whoami) decide; also `rm -rf ~`, and \"why\"?\nInclude the second line too.";
-        $command = new LaunchCommand($this->launcherFile, $path, $question);
+        $command = new LaunchCommand($this->launcherFile, LaunchPreflight::txtSiblingPath($path), $question);
         [$scriptLine, $contextLine, $questionLine] = explode("\n", $command->display());
 
         Livewire::test(AskClaude::class, ['occurrence' => $event])

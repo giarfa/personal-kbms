@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\LaunchClaudeSession;
 use App\Launcher\LaunchBlock;
 use App\Launcher\LaunchBlockDetail;
+use App\Launcher\LaunchPreflight;
 use App\Launcher\PromptLaunchStatus;
 use App\Models\CalendarEvent;
 use App\Models\MeetingTranscript;
@@ -68,6 +69,7 @@ class LaunchClaudeSessionJobTest extends TestCase
     {
         $path = "{$this->transcriptsDir}/transcript.md";
         file_put_contents($path, '# Transcript');
+        file_put_contents(LaunchPreflight::txtSiblingPath($path), 'Transcript');
 
         return $path;
     }
@@ -78,10 +80,12 @@ class LaunchClaudeSessionJobTest extends TestCase
         $event = CalendarEvent::factory()->create();
         MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $contextPath]);
 
+        $txtPath = LaunchPreflight::txtSiblingPath($contextPath);
+
         return PromptLaunch::factory()->forOccurrence($event)->queued()->create([
-            'context_path' => $contextPath,
+            'context_path' => $txtPath,
             'question' => $question,
-            'command' => [$this->launcherFile, $contextPath, $question],
+            'command' => [$this->launcherFile, $txtPath, $question],
         ]);
     }
 
@@ -147,8 +151,9 @@ class LaunchClaudeSessionJobTest extends TestCase
     public function test_a_second_pass_preflight_failure_blocks_and_runs_nothing(): void
     {
         $launch = $this->queuedLaunch('a question');
-        // The transcript file disappears between dispatch and execution.
-        unlink($launch->context_path);
+        // The .md transcript itself disappears between dispatch and execution.
+        $mdPath = MeetingTranscript::query()->forOccurrence($launch->occurrenceKey())->first()->path;
+        unlink($mdPath);
 
         Process::fake();
 
@@ -160,6 +165,26 @@ class LaunchClaudeSessionJobTest extends TestCase
         $this->assertStringContainsString('no longer readable', $fresh->error);
         // The path detail must not be dropped — a blanked detail would still
         // contain "no longer readable" but with an empty quoted path.
+        $this->assertStringContainsString($mdPath, $fresh->error);
+    }
+
+    public function test_a_second_pass_finds_the_txt_sibling_deleted_and_blocks_without_running(): void
+    {
+        $launch = $this->queuedLaunch('a question');
+        // The .txt sibling disappears between dispatch and execution, while
+        // the .md transcript itself stays intact.
+        unlink($launch->context_path);
+
+        Process::fake();
+
+        LaunchClaudeSession::dispatchSync($launch->id);
+
+        Process::assertNothingRan();
+        $fresh = $launch->fresh();
+        $this->assertSame(PromptLaunchStatus::Blocked, $fresh->status);
+        $this->assertStringContainsString('missing or unreadable', $fresh->error);
+        // The path detail must not be dropped — a blanked detail would still
+        // contain "missing or unreadable" but with an empty quoted path.
         $this->assertStringContainsString($launch->context_path, $fresh->error);
     }
 

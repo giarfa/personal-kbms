@@ -50,6 +50,21 @@ final class LaunchPreflight
             return LaunchBlock::TranscriptUnreadable;
         }
 
+        // The launcher script's contract requires a `.txt` context file
+        // regardless of the transcript's actual extension on disk (`.md`
+        // today) — swapped here, in the one place the argument the script
+        // receives is derived, and verified with the same rigour as the
+        // `.md` path above before it is ever handed over.
+        $txtPath = self::txtSiblingPath($contextPath);
+
+        if (! $this->transcriptsDirectory->contains($txtPath)) {
+            return LaunchBlock::TranscriptSiblingUnreadable;
+        }
+
+        if (! is_readable($txtPath)) {
+            return LaunchBlock::TranscriptSiblingUnreadable;
+        }
+
         if (trim($question) === '') {
             return LaunchBlock::QuestionEmpty;
         }
@@ -62,19 +77,18 @@ final class LaunchPreflight
             return LaunchBlock::QuestionTooLong;
         }
 
-        return new LaunchCommand($script, self::withTxtExtension($contextPath), $question);
+        return new LaunchCommand($script, $txtPath, $question);
     }
 
     /**
-     * The launcher script's contract requires a `.txt` context file
-     * regardless of the transcript's actual extension on disk (`.md`
-     * today) — swapped only for the argument the script receives; every
-     * check above still reads the real file.
+     * The single named place the `.txt` sibling path is derived — reused by
+     * `LaunchBlockDetail` so the block message names the same path this
+     * method just verified, never a re-derived one.
      */
-    private static function withTxtExtension(string $path): string
+    public static function txtSiblingPath(string $mdPath): string
     {
-        $directory = pathinfo($path, PATHINFO_DIRNAME);
-        $filename = pathinfo($path, PATHINFO_FILENAME);
+        $directory = pathinfo($mdPath, PATHINFO_DIRNAME);
+        $filename = pathinfo($mdPath, PATHINFO_FILENAME);
 
         return $directory.'/'.$filename.'.txt';
     }

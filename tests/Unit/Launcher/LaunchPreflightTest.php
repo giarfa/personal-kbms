@@ -67,6 +67,7 @@ class LaunchPreflightTest extends TestCase
     {
         $path = "{$this->transcriptsDir}/transcript.md";
         file_put_contents($path, '# Transcript');
+        file_put_contents(LaunchPreflight::txtSiblingPath($path), 'Transcript');
 
         return $path;
     }
@@ -215,6 +216,7 @@ class LaunchPreflightTest extends TestCase
     {
         $path = "{$this->transcriptsDir}/transcript.notes.md";
         file_put_contents($path, '# Transcript');
+        file_put_contents("{$this->transcriptsDir}/transcript.notes.txt", 'Transcript');
         $event = CalendarEvent::factory()->create();
         MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
 
@@ -222,6 +224,35 @@ class LaunchPreflightTest extends TestCase
 
         $this->assertInstanceOf(LaunchCommand::class, $result);
         $this->assertSame("{$this->transcriptsDir}/transcript.notes.txt", $result->contextPath);
+    }
+
+    public function test_blocked_when_the_txt_sibling_is_missing(): void
+    {
+        $path = "{$this->transcriptsDir}/transcript.md";
+        file_put_contents($path, '# Transcript');
+        // Deliberately no .txt sibling written.
+        $event = CalendarEvent::factory()->create();
+        MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
+
+        $result = $this->preflight()->for($event, 'What did we decide?');
+
+        $this->assertSame(LaunchBlock::TranscriptSiblingUnreadable, $result);
+    }
+
+    public function test_blocked_when_the_txt_sibling_is_unreadable(): void
+    {
+        if (posix_geteuid() === 0) {
+            $this->markTestSkipped('Cannot test unreadable permissions running as root.');
+        }
+
+        $path = $this->readableTranscriptPath();
+        chmod(LaunchPreflight::txtSiblingPath($path), 0000);
+        $event = CalendarEvent::factory()->create();
+        MeetingTranscript::factory()->forOccurrence($event)->manual()->create(['path' => $path]);
+
+        $result = $this->preflight()->for($event, 'What did we decide?');
+
+        $this->assertSame(LaunchBlock::TranscriptSiblingUnreadable, $result);
     }
 
     /**

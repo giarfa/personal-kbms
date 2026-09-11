@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - `TranscriptPattern::parse()` no longer silently rolls an impossible calendar date (e.g. `20261345`) forward into the following month — such a name now parses to `null`, the same as any other name the convention does not claim.
+- The `.txt` context file handed to the launcher script is now verified for containment and readability before a launch proceeds, closing a gap where the extension swap happened after every check had already run. A missing or unreadable `.txt` sibling now blocks the launch with its own named reason instead of dispatching a job that opens a path to nothing.
 
 ### Removed
 

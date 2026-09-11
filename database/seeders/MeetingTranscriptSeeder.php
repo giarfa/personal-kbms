@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Launcher\LaunchPreflight;
 use App\Models\CalendarEvent;
 use App\Models\MeetingTranscript;
 use App\Transcripts\TranscriptLinkSource;
@@ -24,6 +25,13 @@ use Illuminate\Support\Carbon;
  * A row is written directly only where the state cannot arise from files
  * alone — a manual link, and a broken link whose file the seeder
  * deliberately does not create.
+ *
+ * Every `.md` fixture that can end up linked — including either ambiguous
+ * Design review candidate, once the operator picks one — also gets a `.txt`
+ * sibling (`LaunchPreflight::txtSiblingPath()`), mirroring the operator's
+ * pipeline; otherwise the Ask Claude panel would show a blocked meeting once
+ * the sibling is verified (US-015). Only the deliberately broken link is
+ * exempt: its file is never created, on purpose.
  */
 class MeetingTranscriptSeeder extends Seeder
 {
@@ -78,6 +86,8 @@ class MeetingTranscriptSeeder extends Seeder
 
             **10:26 — Chiara:** Recap: ingestion slips two weeks, Q1 scope held, hiring sign-off Friday. Thanks everyone.
             MD);
+
+        file_put_contents(LaunchPreflight::txtSiblingPath("{$directory}/{$stem}.md"), "Client kickoff -- raw transcript export\n");
     }
 
     /**
@@ -109,6 +119,8 @@ class MeetingTranscriptSeeder extends Seeder
 
             **Chiara:** Good. Keep Q1 scope held until that's four.
             MD);
+
+        file_put_contents(LaunchPreflight::txtSiblingPath("{$directory}/{$stem}.md"), "Weekly sync -- raw transcript export\n");
     }
 
     /**
@@ -126,18 +138,22 @@ class MeetingTranscriptSeeder extends Seeder
         $start = Carbon::parse($event->starts_at);
 
         $exactStem = $pattern->render($start, $event->summary);
-        file_put_contents("{$directory}/{$exactStem}.md", <<<'MD'
+        $exactPath = "{$directory}/{$exactStem}.md";
+        file_put_contents($exactPath, <<<'MD'
             # Design review — transcript (candidate A)
 
             **Luca:** Let's walk through the component states doc first.
             MD);
+        file_put_contents(LaunchPreflight::txtSiblingPath($exactPath), "Design review -- raw transcript export (candidate A)\n");
 
         $driftStem = $pattern->render($start->clone()->addMinutes(4), 'design sync recording');
-        file_put_contents("{$directory}/{$driftStem}.md", <<<'MD'
+        $driftPath = "{$directory}/{$driftStem}.md";
+        file_put_contents($driftPath, <<<'MD'
             # Untitled recording (candidate B)
 
             **Unknown speaker:** ...still setting up screen share...
             MD);
+        file_put_contents(LaunchPreflight::txtSiblingPath($driftPath), "Untitled recording -- raw transcript export (candidate B)\n");
     }
 
     /**
@@ -195,6 +211,8 @@ class MeetingTranscriptSeeder extends Seeder
 
             **Chiara:** Let's settle on the tenancy pattern before Friday.
             MD);
+
+        file_put_contents(LaunchPreflight::txtSiblingPath($path), "Architecture discussion -- raw transcript export\n");
 
         MeetingTranscript::factory()->forOccurrence($event)->manual()->create([
             'path' => $path,

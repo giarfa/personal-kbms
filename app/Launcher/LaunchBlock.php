@@ -16,6 +16,7 @@ enum LaunchBlock
     case NoTranscript;
     case TranscriptRejected;
     case TranscriptUnreadable;
+    case TranscriptSiblingUnreadable;
     case QuestionEmpty;
     case QuestionTooLong;
 
@@ -23,7 +24,8 @@ enum LaunchBlock
      * `$detail` carries case-specific, caller-supplied interpolation:
      * the configured launcher path for `LauncherMissing` /
      * `LauncherNotExecutable`, the persisted transcript path for
-     * `TranscriptUnreadable`, and the fully composed sentence for
+     * `TranscriptUnreadable`, the expected `.txt` sibling path for
+     * `TranscriptSiblingUnreadable`, and the fully composed sentence for
      * `QuestionTooLong` (it has two distinct wordings — over-length vs.
      * null byte — decided by the caller, not by this enum).
      */
@@ -36,6 +38,7 @@ enum LaunchBlock
             self::NoTranscript => 'No transcript linked — there would be no context file to pass as argument one.',
             self::TranscriptRejected => 'The linked path escapes `KBMS_TRANSCRIPTS_PATH` and is refused outright.',
             self::TranscriptUnreadable => "The linked transcript is no longer readable at \"{$detail}\".",
+            self::TranscriptSiblingUnreadable => "The launcher's required `.txt` context file is missing or unreadable at \"{$detail}\" — the recording pipeline must write it alongside the linked transcript before this meeting can launch.",
             self::QuestionEmpty => 'Type a question first — whitespace only is rejected before anything is dispatched.',
             self::QuestionTooLong => (string) $detail,
         };

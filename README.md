@@ -187,7 +187,7 @@ For local development, point `KBMS_TRANSCRIPTS_PATH` at `storage/app/transcripts
 
 `KBMS_CLAUDE_LAUNCHER` points at an operator-owned shell script, invoked with **exactly two positional arguments, in order**:
 
-1. The resolved context file path (the transcript), with its extension forced to `.txt` regardless of the file's actual extension on disk (`.md` today) — the file itself is not renamed or converted, only the path string handed to the script.
+1. The resolved context file path (the transcript), with its extension forced to `.txt` regardless of the file's actual extension on disk (`.md` today) — the file itself is not renamed or converted, only the path string handed to the script. The `.txt` sibling is verified for containment under `KBMS_TRANSCRIPTS_PATH` and readability, with the same rigour applied to the resolved file itself, before the launch is allowed to proceed — a missing or unreadable sibling blocks the launch with its own named reason rather than handing the script a path to nothing.
 2. The question text.
 
 Arguments are passed as an argument array, never an interpolated shell string — the question is arbitrary operator input and must never be able to alter the command. The script opens its own terminal window; **the application never captures Claude's reply**.
