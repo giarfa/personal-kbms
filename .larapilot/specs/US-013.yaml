@@ -5,7 +5,7 @@ epic:
   title: 'Meeting Workspace'
 priority: MEDIUM
 points: 3
-status: TODO
+status: DONE
 body: |
   #### US-013: Calendar-as-todo: checkbox title convention with time-aware status
 
@@ -25,39 +25,39 @@ body: |
   **Acceptance Criteria**
 
   *Parsing — read-only and derived*
-  - [ ] Todo status is derived from the mirrored `summary` at read time. **No migration, no new column, no write-back to the ICS feed**, and no change to `kbms:sync-calendar`: the mirror stays a mirror and Outlook stays the only mutation surface
-  - [ ] The marker is recognised **only at the very start** of the summary, with leading whitespace forgiven. `[] Call the vendor`, `  [ ] Call the vendor` and `[x]Call the vendor` are todos; `Review [x] doc` and `Sprint [] planning` are ordinary meetings
-  - [ ] The accepted marker set is hardcoded and tolerant: `[]` and `[ ]` (one or more spaces) mean **open**; `[x]` and `[X]` mean **done**. This spec adds **no** configuration key and **no** `KBMS_*` env var for the marker vocabulary
-  - [ ] The displayed title is the summary with the marker and the whitespace immediately after it removed. The raw feed `summary` is never mutated in storage
-  - [ ] A summary that is *only* a marker (`[]`, `[x]`) yields the status plus the application's existing untitled/empty-title treatment — it must not render as a blank row or a blank event body
-  - [ ] A `null` summary parses to "not a todo" and errors nothing on the feed, the agenda, or the detail page
+  - [x] Todo status is derived from the mirrored `summary` at read time. **No migration, no new column, no write-back to the ICS feed**, and no change to `kbms:sync-calendar`: the mirror stays a mirror and Outlook stays the only mutation surface
+  - [x] The marker is recognised **only at the very start** of the summary, with leading whitespace forgiven. `[] Call the vendor`, `  [ ] Call the vendor` and `[x]Call the vendor` are todos; `Review [x] doc` and `Sprint [] planning` are ordinary meetings
+  - [x] The accepted marker set is hardcoded and tolerant: `[]` and `[ ]` (one or more spaces) mean **open**; `[x]` and `[X]` mean **done**. This spec adds **no** configuration key and **no** `KBMS_*` env var for the marker vocabulary
+  - [x] The displayed title is the summary with the marker and the whitespace immediately after it removed. The raw feed `summary` is never mutated in storage
+  - [x] A summary that is *only* a marker (`[]`, `[x]`) yields the status plus the application's existing untitled/empty-title treatment — it must not render as a blank row or a blank event body
+  - [x] A `null` summary parses to "not a todo" and errors nothing on the feed, the agenda, or the detail page
 
   *Time-aware status*
-  - [ ] An occurrence is **overdue** when it is **open** and its `ends_at` is strictly in the past relative to the current time in the configured timezone. Open-and-not-yet-ended, and every **done** item, are not overdue
-  - [ ] A **done** item is never overdue and never carries the alert treatment, regardless of how far in the past it sits
-  - [ ] "Now" is re-derived on every render rather than captured once: on a page left open, an open item crosses into overdue on the next self-refresh (US-011, ~60s) with no operator action and no manual reload
-  - [ ] An **all-day** open item is overdue once its day has ended, which falls out of the `ends_at` comparison — it must not read as overdue for the whole of the day it belongs to
-  - [ ] A **cancelled** occurrence keeps its existing cancelled styling and is **not** treated as overdue: cancelled wins over late
+  - [x] An occurrence is **overdue** when it is **open** and its `ends_at` is strictly in the past relative to the current time in the configured timezone. Open-and-not-yet-ended, and every **done** item, are not overdue
+  - [x] A **done** item is never overdue and never carries the alert treatment, regardless of how far in the past it sits
+  - [x] "Now" is re-derived on every render rather than captured once: on a page left open, an open item crosses into overdue on the next self-refresh (US-011, ~60s) with no operator action and no manual reload
+  - [x] An **all-day** open item is overdue once its day has ended, which falls out of the `ends_at` comparison — it must not read as overdue for the whole of the day it belongs to
+  - [x] A **cancelled** occurrence keeps its existing cancelled styling and is **not** treated as overdue: cancelled wins over late
 
   *Rendering — three surfaces*
-  - [ ] Agenda rows at `/` render an unticked (`open`) or ticked (`done`) checkbox glyph before the stripped title
-  - [ ] Calendar events at `/calendar` render the same glyph in the event body in **month, week and day** views
-  - [ ] The meeting detail page at `/meetings/{occurrence}` shows the status alongside the title **and** still presents the raw feed summary verbatim among the mirrored fields, preserving the FR-004 rule that feed data is shown as it arrived
-  - [ ] **Done** items read muted and struck through so they recede from the scan; **open** items read at normal weight; **open + overdue** items read in the alert treatment
-  - [ ] The alert treatment resolves from the same closed, named colour-token palette US-012 introduces — never a raw CSS value, and never a token that collides with a configured rule colour
+  - [x] Agenda rows at `/` render an unticked (`open`) or ticked (`done`) checkbox glyph before the stripped title
+  - [x] Calendar events at `/calendar` render the same glyph in the event body in **month, week and day** views
+  - [x] The meeting detail page at `/meetings/{occurrence}` shows the status alongside the title **and** still presents the raw feed summary verbatim among the mirrored fields, preserving the FR-004 rule that feed data is shown as it arrived
+  - [x] **Done** items read muted and struck through so they recede from the scan; **open** items read at normal weight; **open + overdue** items read in the alert treatment
+  - [x] The alert treatment resolves from the same closed, named colour-token palette US-012 introduces — never a raw CSS value, and never a token that collides with a configured rule colour
 
   *Channel independence*
-  - [ ] Todo status is a **third independent channel**. It must not consume, replace, or suppress the FR-002 note/transcript coverage marks or the FR-023 rule colour. An overdue, rule-coloured, annotated occurrence renders all three simultaneously and each remains identifiable
-  - [ ] An occurrence that is not a todo renders exactly as it does before this spec — no glyph, no reserved gutter that shifts existing layout, no change to its coverage or colour rendering
-  - [ ] The legend on both scanning pages gains entries for the todo states (open, done, overdue) beside the existing coverage and rule-colour entries
+  - [x] Todo status is a **third independent channel**. It must not consume, replace, or suppress the FR-002 note/transcript coverage marks or the FR-023 rule colour. An overdue, rule-coloured, annotated occurrence renders all three simultaneously and each remains identifiable
+  - [x] An occurrence that is not a todo renders exactly as it does before this spec — no glyph, no reserved gutter that shifts existing layout, no change to its coverage or colour rendering
+  - [x] The legend on both scanning pages gains entries for the todo states (open, done, overdue) beside the existing coverage and rule-colour entries
 
   *Accessibility*
-  - [ ] The accessible name of a todo occurrence gains its status wording — "to do", "done", or "to do, overdue" — alongside the coverage words and the FR-023 rule label already present, so the classification survives without sight of the treatment
-  - [ ] Overdue is never signalled by colour alone: the glyph and the accessible name carry it independently
-  - [ ] Every todo treatment meets WCAG AA text contrast in **light and dark** themes, and the overdue treatment stays distinguishable from the existing cancelled, note, and transcript treatments
+  - [x] The accessible name of a todo occurrence gains its status wording — "to do", "done", or "to do, overdue" — alongside the coverage words and the FR-023 rule label already present, so the classification survives without sight of the treatment
+  - [x] Overdue is never signalled by colour alone: the glyph and the accessible name carry it independently
+  - [x] Every todo treatment meets WCAG AA text contrast in **light and dark** themes, and the overdue treatment stays distinguishable from the existing cancelled, note, and transcript treatments
 
   *Performance*
-  - [ ] Parsing adds **no per-occurrence queries**: it runs on `summary` and `ends_at`, already loaded by `AgendaQuery` and `CalendarFeedQuery`. A dense month window issues the same number of queries as it does today
+  - [x] Parsing adds **no per-occurrence queries**: it runs on `summary` and `ends_at`, already loaded by `AgendaQuery` and `CalendarFeedQuery`. A dense month window issues the same number of queries as it does today
 
   **Out of scope**
   - No toggling a todo from the application — ticking a box in the UI would require calendar write-back, which FR-021 places outside this product. Status changes happen in Outlook
@@ -66,3 +66,23 @@ body: |
   - No configurable marker vocabulary and no new `KBMS_*` key — the convention is stable and personal
   - No new database column, migration, or index
   - No due-date semantics beyond the event's own end time, and no notification, digest, or reminder of any kind
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-11T01:51:24+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-11T01:51:24+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-11T02:01:50+02:00'
+  -
+    status: DONE
+    at: '2026-09-11T02:01:50+02:00'
+rework: false
+merge_commit:
+  sha: 82030da620de5a87acb407df9d8b76ec47d59f70
+  short_sha: 82030da
+  subject: 'docs(US-013): record Robert + Lars inline review notes'
+  committed_at: '2026-09-11T02:01:49+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/82030da620de5a87acb407df9d8b76ec47d59f70'

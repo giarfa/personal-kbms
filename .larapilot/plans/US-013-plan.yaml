@@ -1,0 +1,486 @@
+code: US-013
+plan_body: |
+  ## Technical Solution
+
+  A read-time parse of the mirrored `summary`, folded against `ends_at` and the current clock. **No migration, no column, no write-back, no change to `kbms:sync-calendar`** — the mirror stays a mirror and Outlook stays the only mutation surface.
+
+  **Two small types.**
+
+  - `TodoState` — a backed enum with `Open` and `Done`, and nothing else. It is what the *title* says.
+  - `MeetingTodo` — a `final readonly` value object carrying `TodoState $state`, `string $displayTitle`, and `bool $isOverdue`, built by `MeetingTodo::for(CalendarEvent): ?self`. Returns `null` when the summary is not a todo, which is the single source of "renders exactly as it does today".
+
+  **Parsing — anchored, tolerant, hardcoded.** The marker is recognised only at the very start, with leading whitespace forgiven: `/^\s*\[(?:\s*|x|X)\]\s*/`. The alternation sits *inside* the brackets so it must consume everything up to `]` — which is what makes `[ x ]` an ordinary title rather than a sloppy todo. `[]` and `[ ]` (one or more spaces) are open; `[x]` and `[X]` are done. `Review [x] doc` and `Sprint [] planning` are ordinary meetings, because the marker is not at position zero. The vocabulary is hardcoded: **no configuration key and no `KBMS_*` env var**, per the recorded decision (`calendar todo marker parsing strictness`).
+
+  `displayTitle` is the summary with the marker and the whitespace after it removed. A summary that is *only* a marker strips to nothing, so `displayTitle` falls back to `__('Untitled')` rather than producing a blank row or a blank event body — the acceptance criterion names this case, and the application has no prior empty-title treatment to inherit. The raw `summary` is never mutated in storage and is still rendered verbatim in the meeting detail page's mirror panel.
+
+  A `null` summary parses to "not a todo" and raises nothing, on every surface.
+
+  **Time — re-derived, never captured.** `MeetingTodo::for()` compares `ends_at` against `CarbonImmutable::now(config('kbms.timezone'))` **on every call**, and it is called once per row per render. That is the whole mechanism behind "an open item crosses into overdue on the next self-refresh (US-011) with no operator action": there is no cached timestamp to go stale. An occurrence is overdue when it is **open**, its `ends_at` is strictly in the past, and it is **not cancelled**. A **done** item is never overdue however old. An **all-day** item's `ends_at` is the exclusive midnight boundary, so it becomes overdue once its day has ended rather than reading as late all day — that falls out of the same comparison, with no special case. **Cancelled wins over late**, by an explicit guard rather than by CSS.
+
+  **Where it is computed.** Inside `AgendaRow`'s constructor, from the event it already holds. This is deliberately the mirror image of US-012: there, an optional constructor argument defaulting to `null` was what *excluded* the detail page; here, computing it unconditionally in the constructor is what *includes* all three surfaces, since `MeetingController` builds an `AgendaRow` too. `AgendaRow` also gains a `displayTitle` property so no view has to remember to strip the marker itself. `CalendarEventPayload::from()` calls `MeetingTodo::for()` on the same terms.
+
+  **Rendering — a third channel that consumes neither of the other two.** The channel contract from US-012 is extended, not renegotiated:
+
+  | Channel | Owns |
+  | --- | --- |
+  | Rule colour (FR-023) | the event/row `background` fill |
+  | Coverage (FR-002) | edge borders, the dot/square marks, the agenda tags |
+  | **Todo (FR-024)** | **a checkbox glyph, the title's weight and strike, and `color` on the glyph and status tag only** |
+  | Cancelled | dashed border, transparent fill, strike, muted — and wins over late |
+
+  Todo never sets a `background`, so a rule fill survives underneath it, and it colours only its own glyph and tag rather than the whole chip, so it does not fight the rule colour's `color` on a calendar chip. An overdue, rule-coloured, annotated occurrence therefore renders all three at once, which is an acceptance criterion and is tested as one.
+
+  **Glyphs, shape-first.** `☐` for open, `☑` for done, and `☐ !` for overdue — overdue is distinguished by an added shape, not only by the alert colour, so the AC's "never signalled by colour alone" holds for a reader who cannot see the treatment *and* for one who cannot distinguish the hue. Glyphs are `aria-hidden` decoration on the agenda and CSS `::before` content on the calendar chip; the authoritative wording rides the accessible name in both cases. An occurrence that is not a todo renders **no glyph and no reserved gutter**, so existing layout does not shift.
+
+  **The overdue token.** The spec forbids an alert treatment that collides with a configured rule colour, so overdue gets its **own** token — `--kb-todo-overdue` at hue `40`, sitting clear of `--kb-danger` (`25`, cancelled and failure), `--kb-warn` (`70`/`80`, stale), and both shipped rule defaults (`yellow` `90`, `purple` `320`). Same inherited lightness pairs as every other `--kb-*` token, so AA carries over by construction. Done items use `--muted-foreground` and a strike, so they recede.
+
+  **Accessible names.** The status wording — "to do", "done", or "to do, overdue" — is appended alongside the coverage words and the FR-023 rule label already there: on the calendar through `CalendarEventPayload::accessibleName()`, on the agenda through a `.kb-sronly` span beside the existing rule-label span.
+
+  **Legends.** Both scanning pages gain open / done / overdue entries beside the coverage and rule-colour entries already present.
+
+  **Performance.** Parsing reads `summary`, `ends_at` and `cancelled_at`, all already hydrated by `AgendaQuery` and `CalendarFeedQuery`. No per-occurrence query is added — proven with `DB::listen`, the same way US-012 proved it, not asserted in prose.
+
+  ## Git & Branching
+  - Mode: `GITFLOW` (from `settings.git_mode`)
+  - Branch: `feature/US-013-calendar-as-todo` from `develop`
+  - TASK-00: bootstrap the branch and prepare the internal PR description locally
+  - Per task: one Conventional Commit `type(US-013): TASK-NN summary`; **no push**, no remote PR
+  - Merge into `develop` after the review gate
+
+  ## Test Data Strategy
+  - **No new database column, migration, index, model, factory or seeder** — that is an explicit out-of-scope item, and the absence is itself part of the deliverable.
+  - Tests reuse `CalendarEventFactory` (`at()`, `allDay()`, `cancelled()`, `spanning()`), setting `summary` and `location` explicitly. `location` must be set on every fixture for the same reason as US-012: the factory's 50/50 null would otherwise let the shipped "location is empty" colour rule decide an unrelated assertion.
+  - `migrate:fresh --seed` unaffected.
+
+  ## Test Strategy
+  - Bar: `NORMAL` (from `settings.testing`) — PHPUnit feature and unit tests. **No** Playwright, Dusk, Pest browser, or viewport matrix.
+  - **Unit** (`tests/Unit/Meetings/MeetingTodoTest.php`): the full accepted marker set and its boundaries (`[]`, `[ ]`, `[   ]`, `[x]`, `[X]`, `[x]Call` with no space); rejection of a mid-title marker, `[ x ]`, `[y]`, and a bare `[`; leading-whitespace tolerance; marker stripping including the whitespace after it; the marker-only summary falling back to `Untitled`; a `null` summary; the overdue boundary at exactly `ends_at` (strictly past, so equality is **not** overdue); done never overdue however old; all-day overdue only once its day has ended, and **not** during it; cancelled never overdue; and "now" re-derived — the same event returning not-overdue then overdue as `Carbon::setTestNow()` advances, with no new object.
+  - **Feature** — agenda, calendar feed, and meeting detail: glyph and stripped title on each surface; all three views on the calendar; done muted and struck; overdue alert treatment; the three-channel case (overdue + rule-coloured + annotated) rendering all three; a non-todo unchanged; the detail page showing status **and** the raw summary verbatim in the mirror panel; legends carrying the three states; accessible names carrying the status wording alongside coverage and rule label.
+  - **Self-refresh integration**: an open item rendered before its end time, then `$refresh`ed after the clock passes it, must come back overdue — the US-011 seam, asserted end to end.
+  - **Query count**: `DB::listen` equality across a dense window with and without todo-marked summaries, on both surfaces.
+  - Visual confirmation (both themes, glyph legibility, overdue distinguishable from cancelled) goes to a manual handoff at `.larapilot/docs/test-results/US-013-manual.md`.
+  - `larapilot:quality` before each backend `task-done`; `npm run build` after CSS changes.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and internal PR'
+    body: |
+      ## Description
+      Bootstrap Gitflow for US-013: branch from `develop` (which now carries US-011 and US-012) and prepare the internal PR description locally. Do **not** push.
+
+      ## Files Involved
+      - (git only)
+
+      ## Steps
+      1. `git checkout develop`
+      2. `git checkout -b feature/US-013-calendar-as-todo`
+      3. Commit the plan file written by `spec-plan`
+      4. Draft the internal PR title/body toward `develop` — keep it local
+
+      ## Completion Criteria
+      - [x] Branch exists locally, cut from a `develop` carrying US-011 and US-012
+      - [x] PR title/body drafted (remote not opened)
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-013): TASK-00 bootstrap feature branch`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally
+    type: Impl
+    status: DONE
+    assignee: Sarah
+    estimate_hours: 0.5
+    dependencies: {}
+    commit:
+      sha: 7ab49d4ff27d220e5ca7603b9dbfd878df257e79
+      short_sha: 7ab49d4
+      subject: 'chore(US-013): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-11T01:51:24+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7ab49d4ff27d220e5ca7603b9dbfd878df257e79'
+  -
+    id: TASK-01
+    title: 'Todo parsing and time-aware status'
+    body: |
+      ## Description
+      Add the read-time parse and the overdue derivation. Nothing renders yet.
+
+      ## Files Involved
+      - app/Meetings/TodoState.php (new)
+      - app/Meetings/MeetingTodo.php (new)
+
+      ## Steps
+      1. `TodoState: string` — `Open`, `Done` (TitleCase keys). This is what the *title* says, before time is considered.
+      2. `MeetingTodo` — `final readonly`, promoted constructor (`TodoState $state`, `string $displayTitle`, `bool $isOverdue`), plus `public static function for(CalendarEvent $event): ?self`.
+      3. Parsing, in `for()`: match `/^\s*\[(?:\s*|x|X)\]\s*/` against `$event->summary`. Return `null` on no match, on a `null` summary, and on a marker that is not at position zero. Document why the alternation lives **inside** the brackets: it must consume everything up to `]`, which is what makes `[ x ]` an ordinary title rather than a sloppy todo.
+      4. `displayTitle` = the summary with the matched prefix removed. When that leaves an empty string, fall back to `__('Untitled')` — the acceptance criterion forbids a blank row or a blank event body, and the application has no prior empty-title treatment. Never mutate `$event->summary`.
+      5. Overdue: `state === Open && $event->cancelled_at === null && $event->ends_at < CarbonImmutable::now(config('kbms.timezone'))`. Strictly past, so an occurrence sitting exactly on its end time is **not** yet overdue.
+      6. Docblock the two rules that are easiest to break later: **cancelled wins over late** (guarded here, not in CSS), and **now is re-derived on every call** — there is no cached timestamp, which is what lets an item cross into overdue on a US-011 self-refresh.
+      7. Note in the docblock that all-day needs no special case: `ends_at` is the exclusive midnight boundary, so the same comparison makes an all-day item overdue once its day has ended rather than during it.
+      8. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Only `[]`, `[ ]` (one or more spaces), `[x]`, `[X]` are accepted, only at the start, with leading whitespace forgiven
+      - [x] A mid-title marker, `[ x ]`, `[y]` and a bare `[` are all ordinary titles
+      - [x] `displayTitle` strips the marker and the whitespace after it; a marker-only summary yields `Untitled`
+      - [x] A `null` summary returns `null` and raises nothing
+      - [x] Overdue is open **and** strictly past **and** not cancelled; done is never overdue
+      - [x] No configuration key and no `KBMS_*` env var added
+      - [x] No migration, column, model, factory or seeder touched
+      - [x] Pint and Larastan (level 5) clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task, by design
+
+      ## Git Deliverables
+      - Commit: `feat(US-013): TASK-01 parse todo markers and derive time-aware status`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-00
+    commit:
+      sha: b4fcd11ab79062b34d41ebf29080da412fe5a0d4
+      short_sha: b4fcd11
+      subject: 'feat(US-013): TASK-01 parse todo markers and derive time-aware status'
+      committed_at: '2026-09-11T01:51:59+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/b4fcd11ab79062b34d41ebf29080da412fe5a0d4'
+  -
+    id: TASK-02
+    title: 'Unit-test parsing and the overdue boundary'
+    body: |
+      ## Description
+      Pin the marker vocabulary and the time comparison before anything renders them.
+
+      ## Files Involved
+      - tests/Unit/Meetings/MeetingTodoTest.php (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit MeetingTodoTest`, moved under `tests/Unit/Meetings/`.
+      2. Use the `Carbon::setTestNow()` setUp/tearDown pattern from the existing tests, and `CalendarEventFactory` with explicit `summary` / `location`.
+      3. Accepted markers: `[] Call the vendor`, `[ ] Call the vendor`, `[   ] Call the vendor`, `  [ ] Call the vendor`, `[x]Call the vendor` (no space), `[X] Call the vendor`.
+      4. Rejected: `Review [x] doc`, `Sprint [] planning`, `[ x ] Call`, `[y] Call`, `[ Call`, `Call []`.
+      5. Stripping: every accepted form yields `Call the vendor`; the raw `summary` on the model is unchanged after parsing.
+      6. Marker-only: `[]` and `[x]` yield their state plus the `Untitled` fallback, never an empty string.
+      7. `null` summary → `null`, no error.
+      8. Overdue boundary: an open item whose `ends_at` is exactly now is **not** overdue; one second later it is. Assert both sides.
+      9. A done item ten days past its end is **not** overdue.
+      10. All-day: an open all-day item is **not** overdue during its own day, and **is** overdue once the day has ended (its exclusive `ends_at` midnight has passed).
+      11. Cancelled: an open, long-past, cancelled occurrence is **not** overdue — cancelled wins over late.
+      12. Re-derivation: build the event, assert not overdue, advance `Carbon::setTestNow()` past `ends_at`, call `MeetingTodo::for()` again on the **same** event, assert overdue. This is the US-011 seam.
+      13. `php artisan test --compact --filter=MeetingTodoTest`
+
+      ## Completion Criteria
+      - [x] Every bullet above is a named test and passes
+      - [x] Pint and Larastan clean
+
+      ## Test Data
+      - N/A — reuses `CalendarEventFactory` with explicit overrides
+
+      ## Git Deliverables
+      - Commit: `test(US-013): TASK-02 cover todo parsing and the overdue boundary`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-01
+    commit:
+      sha: 09033394e4f8ca503bc605ae9129d71b746d4c88
+      short_sha: '0903339'
+      subject: 'test(US-013): TASK-02 cover todo parsing and the overdue boundary'
+      committed_at: '2026-09-11T01:52:44+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/09033394e4f8ca503bc605ae9129d71b746d4c88'
+  -
+    id: TASK-03
+    title: 'Todo treatments: glyphs, the overdue token, and the third channel'
+    body: |
+      ## Description
+      Style the three states without letting them touch the fill or the borders the other two channels own.
+
+      ## Files Involved
+      - resources/css/app.css
+
+      ## Steps
+      1. Add `--kb-todo-overdue` and `--kb-todo-overdue-bg` at hue `40`, on the same inherited lightness pairs as every other `--kb-*` token (`0.45`/`0.955` light, `0.80`/`0.28` dark). Comment why hue 40: the spec forbids an alert treatment that collides with a configured rule colour, and 40 sits clear of `--kb-danger` (`25`), `--kb-warn` (`70`/`80`), and both shipped rule defaults (`yellow` `90`, `purple` `320`).
+      2. Agenda glyph — `.kb-todo` inline span: monospace box, `aria-hidden` in the markup, `flex-shrink: 0`. Modifiers `--open`, `--done`, `--overdue`.
+      3. Agenda states — `.kb-row--todo-done .kb-row__title { color: var(--muted-foreground); text-decoration: line-through; }` and `.kb-row--todo-overdue .kb-row__title { color: var(--kb-todo-overdue); font-weight: 600; }`. Open stays at normal weight and is styled only by its glyph.
+      4. Calendar glyphs — `.kb-cal .fc-event.kb-ev--todo-open .fc-event-title::before { content: '☐ '; }`, `--todo-done` `'☑ '`, `--todo-overdue` `'☐ ! '`. Generated content is presentational, and the chip's `aria-label` replaces the whole subtree name, so the wording is never doubled up.
+      5. Calendar states — done: muted `color` and `line-through` on `.fc-event-title` only; overdue: `color: var(--kb-todo-overdue)` and `font-weight: 600` on `.fc-event-title` only.
+      6. **Scope every todo rule to the glyph or to `.fc-event-title` / `.kb-row__title` — never to the chip or row itself.** That is what keeps the US-012 rule fill (`background`, and `color` at chip level) intact underneath. Do not add a `background` to any todo rule.
+      7. Add a `.kb-todo-legend` swatch style reusing the existing legend idiom.
+      8. `npm run build`; check `/` and `/calendar` in both themes, and confirm an overdue rule-coloured annotated event still shows all three signals.
+
+      ## Completion Criteria
+      - [x] `--kb-todo-overdue` defined in both themes, colliding with no rule-palette token
+      - [x] Glyphs render on both surfaces in all three views
+      - [x] No todo rule sets `background`, and none targets the chip or row element itself
+      - [x] Done reads muted and struck; overdue reads in the alert treatment; open reads at normal weight
+      - [x] `npm run build` succeeds
+
+      ## Test Data
+      - N/A — stylesheet only
+
+      ## Git Deliverables
+      - Commit: `feat(US-013): TASK-03 add todo glyphs, the overdue token and its treatments`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Joe
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-01
+    commit:
+      sha: 9155b1b2711522dded5a4ccb48a5211cd42460af
+      short_sha: 9155b1b
+      subject: 'feat(US-013): TASK-03 add todo glyphs, the overdue token and its treatments'
+      committed_at: '2026-09-11T01:54:24+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/9155b1b2711522dded5a4ccb48a5211cd42460af'
+  -
+    id: TASK-04
+    title: 'Render todo status on the agenda'
+    body: |
+      ## Description
+      Carry the parsed status onto agenda rows, strip the marker from the displayed title, and extend the legend.
+
+      ## Files Involved
+      - app/Meetings/AgendaRow.php
+      - app/Livewire/Agenda.php
+      - resources/views/livewire/agenda.blade.php
+
+      ## Steps
+      1. `AgendaRow`: compute `public MeetingTodo|null $todo` and `public string $displayTitle` in the constructor from the event it already holds. `displayTitle` is `$todo?->displayTitle ?? (string) $event->summary`. Docblock the contrast with US-012's colour rule: colouring is passed **in** so the detail page can opt out, todo is computed **here** so all three surfaces — including `MeetingController`'s row — get it automatically.
+      2. `Agenda::render()`: nothing new to pass; the legend states are static, unlike the config-generated colour legend.
+      3. Blade: render the glyph before the title when `$row->todo` is set — `<span class="kb-todo kb-todo--{state}" aria-hidden="true">` with `☐`, `☑`, or `☐ !`.
+      4. Blade: use `$row->displayTitle` in `.kb-row__title` instead of `$row->event->summary`.
+      5. Blade: add `kb-row--todo-open` / `--todo-done` / `--todo-overdue` to the row class list, beside the existing cancelled, now and colour classes.
+      6. Blade: add a `.kb-sronly` span carrying the status wording — `To do`, `Done`, or `To do, overdue` — beside the existing rule-label span, so the accessible name carries coverage, rule label **and** status.
+      7. Blade: extend the legend with the three todo states and their glyphs.
+      8. A non-todo row must render **byte-identically** to before: no glyph, no reserved gutter, no class.
+      9. `php artisan larapilot:quality`; `php artisan test --compact --filter=Agenda`
+
+      ## Completion Criteria
+      - [x] Glyph and stripped title render for each state
+      - [x] A non-todo row is unchanged, with no layout shift
+      - [x] Status wording is in the accessible name alongside coverage and the rule label
+      - [x] Coverage tags and rule colour still render on a todo row
+      - [x] Legend carries open, done and overdue
+      - [x] Existing agenda tests pass; Pint and Larastan clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-013): TASK-04 render todo status on the agenda`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-02
+      - TASK-03
+    commit:
+      sha: 7c7a08e6bfe6eac3c9f914d31e439f5f725e4c1f
+      short_sha: 7c7a08e
+      subject: 'feat(US-013): TASK-04 render todo status on the agenda'
+      committed_at: '2026-09-11T01:56:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/7c7a08e6bfe6eac3c9f914d31e439f5f725e4c1f'
+  -
+    id: TASK-05
+    title: 'Render todo status on the calendar'
+    body: |
+      ## Description
+      Put the stripped title, the state class and the status wording into the FullCalendar payload, and extend the calendar legend.
+
+      ## Files Involved
+      - app/Meetings/CalendarEventPayload.php
+      - resources/views/pages/calendar.blade.php
+
+      ## Steps
+      1. `CalendarEventPayload::from()`: call `MeetingTodo::for($event)`; set `title` to the todo's `displayTitle` when present (falling back to the raw summary otherwise), append `kb-ev--todo-{state}` to `classNames`, and append the status wording to `accessibleName` after the coverage words and the rule label but **before** the `cancelled` suffix.
+      2. Add a `?string $todoStatus` property so the state is inspectable in tests and in `extendedProps`; extend the `toArray()` array-shape PHPDoc.
+      3. Overdue takes the `kb-ev--todo-overdue` class in place of `--todo-open`, not in addition, so the glyph is chosen by one class.
+      4. No change to `resources/js/calendar.js`: the class arrives through FullCalendar's own `classNames`, the glyph is CSS `::before`, and `eventDidMount` already writes `accessibleName`. Verify this rather than assuming it.
+      5. `resources/views/pages/calendar.blade.php`: extend the legend with the three todo states beside the coverage and rule-colour entries.
+      6. `php artisan larapilot:quality`; `php artisan test --compact --filter=Calendar`; `npm run build` and check month, week and day.
+
+      ## Completion Criteria
+      - [x] Glyph and stripped title render in month, week **and** day views
+      - [x] The accessible name carries coverage, rule label and status, in that order, with `cancelled` last
+      - [x] A coloured, annotated, overdue event shows all three channels at once
+      - [x] Cancelled styling still wins and a cancelled occurrence is never overdue
+      - [x] `calendar.js` needed no change
+      - [x] Existing calendar tests pass; Pint and Larastan clean; build clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-013): TASK-05 render todo status on the calendar`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-02
+      - TASK-03
+    commit:
+      sha: 212877c5e04e63bef33c6c3386586d96a40b5b10
+      short_sha: 212877c
+      subject: 'feat(US-013): TASK-05 render todo status on the calendar'
+      committed_at: '2026-09-11T01:56:55+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/212877c5e04e63bef33c6c3386586d96a40b5b10'
+  -
+    id: TASK-06
+    title: 'Show status on the meeting detail page without hiding the raw summary'
+    body: |
+      ## Description
+      The detail page is the one surface where both truths have to coexist: the parsed status, and the feed summary exactly as it arrived (FR-004).
+
+      ## Files Involved
+      - resources/views/pages/meeting.blade.php
+
+      ## Steps
+      1. Page `<title>` and breadcrumb: use `$row->displayTitle`, so a browser tab does not read `[] Call the vendor`.
+      2. `<h1>`: render the glyph, then `$row->displayTitle`, then a visible status tag — `To do`, `Done`, or `Overdue` — using the existing `.kb-tag` idiom with a todo modifier. Add the same `.kb-sronly` status wording so the heading's accessible name carries it too.
+      3. **Leave `resources/views/components/meeting/mirror-panel.blade.php` completely untouched.** Its `<h2>{{ $event->summary }}</h2>` already renders the raw feed summary verbatim, marker and all, inside the `Mirrored from the feed · read-only` surface — which is exactly what the acceptance criterion asks for. Do not add a duplicate `Summary` row: the point is that the raw value is visible among the mirrored fields, and it already is.
+      4. Record that reasoning in the commit body, so a later reader does not "fix" the apparent inconsistency between a stripped `<h1>` and a raw `<h2>` — the difference is the deliverable.
+      5. Do not colour the detail page: US-012's rule colour stays excluded there, and `AgendaRow`'s `$colourRule` default keeps it that way.
+      6. `php artisan larapilot:quality`; `php artisan test --compact --filter=MeetingDetail`
+
+      ## Completion Criteria
+      - [x] The heading shows glyph, stripped title and a visible status tag
+      - [x] The mirror panel still shows the raw summary verbatim, including the marker
+      - [x] Page title and breadcrumb use the stripped title
+      - [x] The detail page carries no rule colour
+      - [x] A non-todo meeting's detail page is unchanged
+      - [x] Existing detail tests pass; Pint and Larastan clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-013): TASK-06 show todo status on the meeting detail page`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-04
+      - TASK-05
+    commit:
+      sha: 69ee360d674eb8a629ee97f3cb1fac6fbf9017cf
+      short_sha: 69ee360
+      subject: 'feat(US-013): TASK-06 show todo status on the meeting detail page'
+      committed_at: '2026-09-11T01:57:32+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/69ee360d674eb8a629ee97f3cb1fac6fbf9017cf'
+  -
+    id: TASK-07
+    title: 'Feature-test the three surfaces, the channels, the self-refresh seam and the query count'
+    body: |
+      ## Description
+      Cover the rendered contract everywhere it lands, plus the two integration promises that only show up across seams.
+
+      ## Files Involved
+      - tests/Feature/TodoRenderingTest.php (new)
+      - .larapilot/docs/test-results/US-013-manual.md (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit TodoRenderingTest`. Set `location` explicitly on every fixture, for the same reason as US-012.
+      2. **Agenda:** `[] Call the vendor` renders the open glyph and the stripped title; `[x] …` renders done, muted and struck (assert the class); an open item past its end renders overdue; `Review [x] doc` renders as an ordinary meeting with no glyph and no todo class; a marker-only summary renders `Untitled` rather than a blank row.
+      3. **Calendar feed:** the same matrix on the JSON payload — `title`, `classNames`, and `accessibleName`.
+      4. **All three views:** assert the overdue class is present in the month, week and day windows.
+      5. **Detail page:** the heading shows the stripped title and the status tag; the mirror panel still contains the raw `[] Call the vendor` verbatim.
+      6. **Three channels at once:** `[] PING sync` with notes and no location must render, simultaneously and each identifiably — the overdue todo treatment, the FR-023 rule colour class, and the FR-002 coverage tag/marks. Assert all three on both surfaces, and assert the accessible name carries coverage words, rule label **and** status wording.
+      7. **Cancelled wins:** a cancelled, long-past `[] …` occurrence keeps its cancelled treatment and is **not** overdue.
+      8. **All-day:** an open all-day item is not overdue during its day and is once it has ended.
+      9. **US-011 seam:** render the agenda with an open item before its end time, advance `Carbon::setTestNow()` past it, `->call('$refresh')`, and assert the row comes back overdue — no reload, no new mount.
+      10. **Query count:** `DB::listen` equality across a dense window of todo-marked and ordinary summaries, on both surfaces.
+      11. `.larapilot/docs/test-results/US-013-manual.md`: the visual half — glyphs legible at agenda and chip sizes in both themes; overdue clearly distinguishable from cancelled, from the note teal and from the transcript indigo; done receding without becoming unreadable; all three channels legible together; no layout shift on rows that are not todos; and the overdue flip observed live on a page left open across an item's end time.
+      12. `php artisan test --compact` (full suite); `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Every bullet above is a named test and passes
+      - [x] The three-channel case and the cancelled-wins case are both explicit tests
+      - [x] The self-refresh overdue flip is asserted end to end
+      - [x] Query-count equality proven on both surfaces
+      - [x] Full suite green; Pint and Larastan clean
+      - [x] Manual handoff written
+
+      ## Test Data
+      - N/A — reuses existing factories with explicit overrides; no factory or seeder change, by design
+
+      ## Git Deliverables
+      - Commit: `test(US-013): TASK-07 cover todo rendering, channel independence and the refresh seam`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 4
+    dependencies:
+      - TASK-06
+    commit:
+      sha: 831491e390bf1fbe3171af267c0d29d08a022f39
+      short_sha: 831491e
+      subject: 'test(US-013): TASK-07 cover todo rendering, channel independence and the refresh seam'
+      committed_at: '2026-09-11T01:59:10+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/831491e390bf1fbe3171af267c0d29d08a022f39'
+  -
+    id: TASK-08
+    title: 'Document the todo convention in README and CHANGELOG'
+    body: |
+      ## Description
+      The convention is typed into Outlook, not into this application, so the README is the only place it can be written down.
+
+      ## Files Involved
+      - README.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. README: a `## Calendar as todo` section covering — the accepted markers (`[]`, `[ ]`, `[x]`, `[X]`), that they are recognised **only** at the start with leading whitespace forgiven, and that a marker elsewhere is ordinary text; that the marker is stripped from the display while the raw summary stays visible on the detail page.
+      2. README: what **overdue** means (open **and** past `ends_at`), that done is never overdue, that cancelled wins over late, and that all-day items turn overdue only once their day has ended.
+      3. README: that status is **derived at read time** — no column, no migration, no write-back — and that status changes happen in Outlook, because this product cannot write to the calendar (FR-021).
+      4. README: that the marker vocabulary is hardcoded, with **no `KBMS_*` key and no configuration**, so nobody goes looking for one.
+      5. README: that todo is a third independent channel alongside coverage and rule colour, and that there is deliberately no filtering, no overdue badge, no pinned strip, and no notification of any kind.
+      6. CHANGELOG: entry under `Unreleased` → `Added`, referencing US-013 and FR-024.
+      7. Additive edits only.
+
+      ## Completion Criteria
+      - [x] README documents the marker set, the anchoring rule, overdue semantics, the read-only derivation, and the absence of configuration
+      - [x] The deliberate omissions (no filtering, no badge, no notification, no write-back) are stated
+      - [x] CHANGELOG `Unreleased` → `Added` carries the US-013 entry
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-013): TASK-08 document the calendar-as-todo convention`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes
+    type: Impl
+    status: DONE
+    assignee: Albert
+    estimate_hours: 1
+    dependencies:
+      - TASK-06
+    commit:
+      sha: 1f9380665ad074567436d518f70c95e9f6dccd88
+      short_sha: 1f93806
+      subject: 'docs(US-013): TASK-08 document the calendar-as-todo convention'
+      committed_at: '2026-09-11T01:59:33+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1f9380665ad074567436d518f70c95e9f6dccd88'
+updated_at: '2026-09-11T01:59:33+02:00'

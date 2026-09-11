@@ -27,6 +27,7 @@ final readonly class CalendarEventPayload
         public bool $hasTranscript,
         public bool $cancelled,
         public string $accessibleName,
+        public ?string $todoStatus = null,
     ) {}
 
     public static function from(CalendarEvent $event, MeetingCoverage $coverage, ?EventColourRule $colourRule = null): self
@@ -35,26 +36,31 @@ final readonly class CalendarEventPayload
         $end = CarbonImmutable::instance($event->ends_at);
         $isAllDay = (bool) $event->is_all_day;
         $isCancelled = $event->cancelled_at !== null;
+        $todo = MeetingTodo::for($event);
+        $displayTitle = MeetingTodo::displayTitleFor($event, $todo);
 
         return new self(
             id: $event->occurrenceKey()->toRouteKey(),
-            title: $event->summary,
+            // The marker is stripped from what the grid shows; the raw summary
+            // is still rendered verbatim on the meeting detail page (US-013).
+            title: $displayTitle,
             start: $isAllDay ? $start->format('Y-m-d') : $start->format('Y-m-d\TH:i:s'),
             end: $isAllDay ? $end->format('Y-m-d') : $end->format('Y-m-d\TH:i:s'),
             allDay: $isAllDay,
             url: route('meetings.show', $event->occurrenceKey()->toRouteKey()),
-            classNames: self::classNames($coverage, $isAllDay, $isCancelled, $colourRule),
+            classNames: self::classNames($coverage, $isAllDay, $isCancelled, $colourRule, $todo),
             hasNotes: $coverage->hasNotes,
             hasTranscript: $coverage->hasTranscript,
             cancelled: $isCancelled,
-            accessibleName: self::accessibleName($event->summary, $start, $isAllDay, $coverage, $isCancelled, $colourRule),
+            accessibleName: self::accessibleName($displayTitle, $start, $isAllDay, $coverage, $isCancelled, $colourRule, $todo),
+            todoStatus: $todo?->modifier(),
         );
     }
 
     /**
      * @return list<string>
      */
-    private static function classNames(MeetingCoverage $coverage, bool $isAllDay, bool $isCancelled, ?EventColourRule $colourRule): array
+    private static function classNames(MeetingCoverage $coverage, bool $isAllDay, bool $isCancelled, ?EventColourRule $colourRule, ?MeetingTodo $todo): array
     {
         $classNames = match (true) {
             $coverage->hasNotes && $coverage->hasTranscript => ['kb-ev--both'],
@@ -78,10 +84,18 @@ final readonly class CalendarEventPayload
             $classNames[] = 'kb-ev--colour-'.$colourRule->colour->value;
         }
 
+        // A third independent channel (US-013): the stylesheet lets this class
+        // paint only the glyph and the title, so the coverage borders above and
+        // the rule fill both survive on the same event. One class picks one
+        // glyph — overdue replaces open rather than stacking on it.
+        if ($todo !== null) {
+            $classNames[] = 'kb-ev--todo-'.$todo->modifier();
+        }
+
         return $classNames;
     }
 
-    private static function accessibleName(string $title, CarbonImmutable $start, bool $isAllDay, MeetingCoverage $coverage, bool $isCancelled, ?EventColourRule $colourRule): string
+    private static function accessibleName(string $title, CarbonImmutable $start, bool $isAllDay, MeetingCoverage $coverage, bool $isCancelled, ?EventColourRule $colourRule, ?MeetingTodo $todo): string
     {
         $coverageWords = match (true) {
             $coverage->hasNotes && $coverage->hasTranscript => __('has notes and transcript'),
@@ -102,6 +116,12 @@ final readonly class CalendarEventPayload
             $name .= ', '.$colourRule->label;
         }
 
+        // Status wording last before the cancelled suffix, so a reader gets
+        // coverage, then classification, then status (US-013).
+        if ($todo !== null) {
+            $name .= ', '.$todo->statusLabel();
+        }
+
         return $isCancelled ? $name.', '.__('cancelled') : $name;
     }
 
@@ -114,7 +134,7 @@ final readonly class CalendarEventPayload
      *     allDay: bool,
      *     url: string,
      *     classNames: list<string>,
-     *     extendedProps: array{hasNotes: bool, hasTranscript: bool, cancelled: bool, accessibleName: string},
+     *     extendedProps: array{hasNotes: bool, hasTranscript: bool, cancelled: bool, accessibleName: string, todoStatus: string|null},
      * }
      */
     public function toArray(): array
@@ -132,6 +152,7 @@ final readonly class CalendarEventPayload
                 'hasTranscript' => $this->hasTranscript,
                 'cancelled' => $this->cancelled,
                 'accessibleName' => $this->accessibleName,
+                'todoStatus' => $this->todoStatus,
             ],
         ];
     }
