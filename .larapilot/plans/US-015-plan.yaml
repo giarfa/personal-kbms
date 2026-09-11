@@ -1,0 +1,144 @@
+code: US-015
+plan_body: |-
+  ## Technical Solution
+
+  **Root cause.** `LaunchPreflight::for()` (`app/Launcher/LaunchPreflight.php:65-80`) validates the resolved `.md` transcript (`TranscriptsDirectory::contains()` + `is_readable()`), then privately calls `withTxtExtension()` to rewrite the extension **after** every check — so the path actually handed to the launcher script (the `.txt` sibling) is never itself checked for containment or readability. FR-006's promise ("verified to exist and be readable") is applied to a file the script never opens.
+
+  **Fix shape.**
+  1. Promote the extension swap out of a private, late-called helper into the **single named place** where the `.txt` path is derived (e.g. `LaunchPreflight::txtSiblingPath(string $mdPath): string`, public static so `LaunchBlockDetail` can reuse the same swap instead of re-deriving it). `for()` calls it once, immediately followed by the same rigour already applied to the `.md` path: `TranscriptsDirectory::contains()` then `is_readable()` on the `.txt` result.
+  2. Add one new `LaunchBlock` case (e.g. `TranscriptSiblingUnreadable`) covering both "missing" and "unreadable" for the sibling — same precedent as the existing `TranscriptUnreadable` case, which already covers both "gone" and "unreadable" for the `.md` path. Message names the expected `.txt` path and states the fix action (the recording pipeline must (re)write it) — never collapsed into `NoTranscript` or `TranscriptUnreadable`.
+  3. Wire the new case's detail through `LaunchBlockDetail::for()` (reusing the same swap helper from step 1 on the `.md` path already passed in) so both the Livewire panel (`AskClaude::render()`) and the job's second pass (`LaunchClaudeSession::handle()`) render it without any view change — the panel already renders `$blockMessage` generically for any `LaunchBlock`, per US-014.
+  4. No change to `LaunchCommand`, `ClaudeSessionLauncher`, or the Blade view — the sibling check is a new refusal branch inside `LaunchPreflight::for()`, and the resulting `LaunchCommand`'s `contextPath` is still the `.txt` path (unchanged behaviour on the happy path).
+  5. Dev demo data: `database/seeders/MeetingTranscriptSeeder.php` currently writes only `.md` fixture files. Once the sibling check lands, every seeded meeting would show the new blocked state instead of the intended launch-ready demo — write a matching `.txt` sibling alongside every seeded `.md` that is meant to demonstrate a ready-to-launch panel (not the deliberately-broken-link case, which stays broken on purpose).
+  6. `README.md`'s launcher-script contract section (line ~190) and the `CHANGELOG.md` `Unreleased -> Fixed` section get a line each describing the verified-sibling behaviour.
+
+  ## Git & Branching
+  - Mode: GITFLOW (from settings.git_mode)
+  - Branch: `feature/US-015-verify-txt-sibling` from `develop`
+  - TASK-00: bootstrap (no push — PR prepared locally only, per GITFLOW)
+  - Per task: one Conventional Commit; no push/remote PR under GITFLOW
+  - Merge after human `larapilot-review` approval (auto_approve is YES, so autopilot may approve after implement with no open Critical blockers)
+
+  ## Test Data Strategy
+  - No new/changed Eloquent models or migrations — `Test Data` is N/A on every task except the seeder demo-data update noted in TASK-01
+  - `MeetingTranscriptSeeder` keeps writing real fixture files (not factories) for the `.md`/`.txt` panel-state demo per README §Transcripts; TASK-01 adds the missing `.txt` sibling for every seeded launch-ready meeting so `migrate:fresh --seed` keeps demonstrating every panel state, including a real successful launch
+  - Verify `php artisan migrate:fresh --seed` still succeeds and the seeded "ready to launch" meetings show the enabled Launch button after TASK-01
+
+  ## Test Strategy
+  - Bar: NORMAL (settings.testing) — Pest/PHPUnit feature + unit tests only, no browser/E2E
+  - Anne (TASK-02): correct the 14 tests already red on `develop` at `fca3fd4` (stale `.md`-path expectations from the extension-swap commit `d6d8ea5`, not a second defect) by updating the three shared test fixture helpers (`LaunchPreflightTest::readableTranscriptPath()`, `AskClaudePanelTest::readableTranscriptPath()`, `LaunchClaudeSessionJobTest::contextPath()`) to also write the `.txt` sibling, and updating the two directly-affected tests' assertions to the `.txt` path
+  - Anne (TASK-02): new regression coverage for the sibling check — sibling present launch proceeds with the `.txt` path (unit, `LaunchPreflightTest`); sibling absent returns the new block and no job is dispatched (feature, `AskClaudePanelTest` + `LaunchClaudeSessionJobTest`); sibling present but unreadable (e.g. `chmod 0000`) returns the same block
+  - No regression to shell-argument safety: `LaunchCommandTest`'s adversarial-question datasets are unaffected by this change (they exercise `LaunchCommand::toArray()` directly) — re-run to confirm
+  - Full suite green (`php artisan test`); `vendor/bin/pint --dirty` and Larastan clean before handoff
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch for US-015'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for this spec: create the feature branch from `develop` and prepare the internal PR description toward `develop`. Do **not** push unless the user asks.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop && git pull` (pull only if already tracking a remote; otherwise local `develop`)
+      2. `git checkout -b feature/US-015-verify-txt-sibling`
+      3. Draft internal PR title/body toward `develop` (keep local until push is requested)
+      4. Optional empty commit for branch anchor: `chore(US-015): TASK-00 bootstrap feature branch`
+
+      ## Completion Criteria
+      - [ ] Branch `feature/US-015-verify-txt-sibling` exists locally
+      - [ ] PR title/body drafted for `develop` (remote open optional — only if user requested push)
+
+      ## Git Deliverables
+      - Commit: `chore(US-015): TASK-00 bootstrap feature branch` (empty commit allowed)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally — open/update remote only if user requests
+    type: Impl
+    status: TODO
+    assignee: Alex
+    estimate_hours: 0.5
+    dependencies: {}
+  -
+    id: TASK-01
+    title: 'Verify the .txt context sibling before it is handed to the launcher'
+    body: |-
+      ## Description
+      Close the gap where `LaunchPreflight::for()` swaps the resolved `.md` transcript path to `.txt` (for the launcher script contract) **after** every containment/readability check has already run, so a missing or unreadable `.txt` sibling silently reaches the job instead of blocking the launch with a named reason.
+
+      ## Files Involved
+      - app/Launcher/LaunchPreflight.php
+      - app/Launcher/LaunchBlock.php
+      - app/Launcher/LaunchBlockDetail.php
+      - database/seeders/MeetingTranscriptSeeder.php
+      - README.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. In `LaunchPreflight`, promote the private `withTxtExtension()` swap into a single named, reusable place (e.g. `public static function txtSiblingPath(string $mdPath): string`) so both `for()` and `LaunchBlockDetail` derive the `.txt` path from the same method — no second place re-implements the swap.
+      2. In `for()`, call that method immediately after the existing `.md` checks pass, then run the same rigour on the result: `TranscriptsDirectory::contains($txtPath)` and `is_readable($txtPath)`. On failure, return a new distinct `LaunchBlock` case (never `NoTranscript` or `TranscriptUnreadable`). On success, build `LaunchCommand` with the already-verified `.txt` path (question checks still run after, unchanged order).
+      3. Add the new case to `LaunchBlock` (enum + `message(?string $detail)` match arm) naming the expected `.txt` path and the action that fixes it (the recording pipeline must write the sibling alongside the `.md` transcript) — follow the existing wording style of `TranscriptUnreadable`/`LauncherMissing`.
+      4. Wire `LaunchBlockDetail::for()` to compute the detail for the new case via the same `txtSiblingPath()` helper on the `$transcriptPath` (`.md`) it already receives — no view/template change needed since `AskClaude::render()` and the Blade view already render `$blockMessage` generically for any `LaunchBlock` (US-014).
+      5. Update `MeetingTranscriptSeeder`: for every seeded `.md` fixture meant to demonstrate a ready-to-launch panel (exact match, weekly-sync drift, ambiguous-but-resolvable, manual link — **not** the deliberately broken link), also write a `.txt` sibling with placeholder content, so `migrate:fresh --seed` keeps showing a real, launchable demo.
+      6. Update `README.md` §"The launcher script contract" (around line 190) to state the `.txt` sibling is verified for containment and readability before being handed to the script, not merely derived from the `.md` path.
+      7. Add a line to `CHANGELOG.md` `[Unreleased] -> ### Fixed` describing the fix.
+      8. `php artisan migrate:fresh --seed` — confirm seeded launch-ready meetings still show "Launcher ready" on the meeting detail page.
+
+      ## Completion Criteria
+      - [ ] `.txt` sibling is checked for containment and readability with the same rigour as the `.md` path
+      - [ ] A missing/unreadable sibling returns its own distinct `LaunchBlock` case, message names the expected path and the fix action
+      - [ ] The extension swap exists in exactly one named place; checks run after it in both `for()` and `LaunchBlockDetail`
+      - [ ] `LaunchClaudeSession`'s second preflight pass refuses the same way when the sibling is deleted between dispatch and execution
+      - [ ] Seeded demo data still demonstrates a real, launchable meeting after `migrate:fresh --seed`
+      - [ ] README launcher-script contract section and CHANGELOG updated
+
+      ## Test Data
+      - N/A — no Eloquent model/migration changes; `MeetingTranscriptSeeder` fixture files updated per Steps 5 (not a factory/seeder schema change)
+
+      ## Git Deliverables
+      - Commit: `fix(US-015): TASK-01 verify txt context sibling before launch`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Fix
+    status: TODO
+    assignee: Alex
+    estimate_hours: 3
+    dependencies:
+      - TASK-00
+  -
+    id: TASK-02
+    title: 'Fix stale .md-path test expectations and add sibling regression coverage'
+    body: |-
+      ## Description
+      Correct the 14 tests already red on `develop` (stale `.md`-path expectations from the extension-swap commit `d6d8ea5`, not introduced by this spec), and add regression coverage for the new sibling-verification behaviour from TASK-01.
+
+      ## Files Involved
+      - tests/Unit/Launcher/LaunchPreflightTest.php
+      - tests/Feature/LaunchClaudeSessionJobTest.php
+      - tests/Feature/AskClaudePanelTest.php
+
+      ## Steps
+      1. Update the three shared test fixture helpers to also write a `.txt` sibling alongside the `.md` file they create: `LaunchPreflightTest::readableTranscriptPath()`, `AskClaudePanelTest::readableTranscriptPath()`, `LaunchClaudeSessionJobTest::contextPath()` — every other passing test in these files depends on these helpers and would otherwise start failing once TASK-01 lands.
+      2. Fix `LaunchClaudeSessionJobTest::test_every_adversarial_question_reaches_the_process_as_a_single_intact_argument` (all 13 datasets): assert the process ran with the `.txt` sibling path, not `$launch->context_path` (`.md`).
+      3. Fix `AskClaudePanelTest::test_the_rendered_invocation_matches_launch_command_display_for_an_adversarial_question`: build the expected `LaunchCommand` with the `.txt` sibling path, not the raw `.md` path from `readableTranscriptPath()`.
+      4. Add new tests to `LaunchPreflightTest`: sibling present returns `LaunchCommand` with the `.txt` path (already covered by existing happy-path tests once step 1 lands — confirm); sibling absent returns the new `LaunchBlock` case; sibling present but unreadable (e.g. `chmod` the `.txt` file to `0000`) returns the same new case.
+      5. Add a feature-level test (`AskClaudePanelTest` and/or `LaunchClaudeSessionJobTest`) asserting: no `.txt` sibling → Launch button disabled, new block message rendered, nothing queued/dispatched; second-pass job re-check catches a sibling deleted between dispatch and execution (extend the existing `test_a_second_pass_preflight_failure_blocks_and_runs_nothing` pattern, deleting only the `.txt` sibling while the `.md` stays).
+      6. `php artisan test` — confirm the full suite is green, including `tests/Unit/Launcher/LaunchCommandTest.php`'s adversarial-question datasets (unaffected by this change, re-run to confirm no regression).
+
+      ## Completion Criteria
+      - [ ] All 14 previously-failing tests pass, asserting the `.txt` path deliberately
+      - [ ] New regression tests cover: sibling present (proceeds), sibling absent (new block, nothing dispatched), sibling unreadable (same block)
+      - [ ] Full suite green
+
+      ## Git Deliverables
+      - Commit: `test(US-015): TASK-02 fix stale txt-path expectations and cover sibling verification`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-01
+updated_at: '2026-09-11T12:19:52+02:00'

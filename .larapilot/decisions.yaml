@@ -974,4 +974,30 @@ decisions:
     source: chat
     spec: US-014
     supersedes: null
-updated_at: '2026-09-11T10:39:13+02:00'
+  -
+    id: a93f7a1e4463578e
+    ts: '2026-09-11T12:14:21+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-bug
+    topic: 'txt context sibling fix approach'
+    label: 'txt context sibling fix approach'
+    value: 'Verify the .txt sibling in LaunchPreflight and refuse with a new named LaunchBlock when missing or unreadable — do NOT generate the .txt file'
+    question: null
+    rationale: "The pipeline already emits .md + .txt pairs so the sibling exists today; generating one would violate the PRD's 'the tool never produces transcripts' constraint"
+    source: askquestion
+    spec: US-015
+    supersedes: null
+  -
+    id: 84aa3040899428be
+    ts: '2026-09-11T12:14:21+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-bug
+    topic: 'launcher context file prd contract'
+    label: 'launcher context file PRD contract'
+    value: 'FR-006 and FR-008 record that the launcher receives the .txt sibling of the resolved context file, carrying the same verify-before-offer guarantee'
+    question: null
+    rationale: 'Operator confirmed this is a product requirement gap, not an implementation detail'
+    source: askquestion
+    spec: US-015
+    supersedes: null
+updated_at: '2026-09-11T12:14:21+02:00'
