@@ -1,0 +1,68 @@
+code: US-014
+title: 'Fix: Launch session button stays disabled after typing a question'
+epic:
+  code: EP-005
+  title: Maintenance
+priority: HIGH
+points: 2
+status: DONE
+body: |
+  #### US-014: Fix — Launch session button stays disabled after typing a question
+
+  **Epic:** EP-005 | **Priority:** HIGH | **Points:** 2 | **Status:** TODO
+  **Type:** Fix
+  **Severity:** High
+  **Security:** Lars/Oliver — no
+  **Related:** US-009 (Claude Code session launch bridge — regression)
+
+  **User Story**
+  As the operator,
+  I want the "Launch session" button to become clickable as soon as I type a valid question,
+  so that I can actually start a Claude Code session instead of being stuck on a disabled button.
+
+  **Demonstrates**
+  Typing a non-whitespace question into the Ask Claude Code textarea enables the "Launch session"
+  button without any other action, and clicking it dispatches the launch job as before.
+
+  **Steps to Reproduce**
+  1. Open a meeting detail page with a linked transcript.
+  2. Type any text into the "Your question" textarea on the Ask Claude Code form.
+  3. Observe the "Launch session" button remains disabled/non-clickable.
+
+  **Root cause**
+  The button (`resources/views/livewire/ask-claude.blade.php:53`) carries a native HTML `disabled`
+  attribute driven by the server-computed `$command` (`app/Livewire/AskClaude.php:89-98`, via
+  `LaunchPreflight::for()`). The question textarea binds with a plain `wire:model="question"`
+  (no `.live`/`.blur`, `ask-claude.blade.php:27`), which Livewire 3 defers client-side only — typing
+  never triggers a server round-trip, so `$command` is never recomputed and the native `disabled`
+  attribute never clears. Because it's a native `disabled` attribute (not Alpine/`wire:target`-driven),
+  the browser also blocks `wire:click="launch"` from firing at all while it's set.
+
+  **Acceptance Criteria**
+  - [x] Typing a non-whitespace question into the textarea makes the "Launch session" button clickable
+        without any other action
+  - [x] The button's enabled/disabled state stays in sync with the server-side block reason (empty
+        question, question too long, no transcript, misconfigured script) as the user edits the question
+  - [x] Regression test covers: button disabled on empty/whitespace-only question, button enabled once
+        valid question text is present, and the launch flow still fires correctly (Anne)
+  - [x] No regression to the existing shell-argument safety behavior in `LaunchPreflight`/`LaunchCommand` (Lars)
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-11T10:23:48+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-11T10:25:49+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-11T10:30:29+02:00'
+  -
+    status: DONE
+    at: '2026-09-11T10:39:11+02:00'
+rework: false
+merge_commit:
+  sha: 60d6a905120b23c1981220e70def04cf7b041571
+  short_sha: 60d6a90
+  subject: 'chore(US-014): move spec to REVIEW'
+  committed_at: '2026-09-11T10:30:43+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/60d6a905120b23c1981220e70def04cf7b041571'

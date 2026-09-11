@@ -62,6 +62,20 @@ final class LaunchPreflight
             return LaunchBlock::QuestionTooLong;
         }
 
-        return new LaunchCommand($script, $contextPath, $question);
+        return new LaunchCommand($script, self::withTxtExtension($contextPath), $question);
+    }
+
+    /**
+     * The launcher script's contract requires a `.txt` context file
+     * regardless of the transcript's actual extension on disk (`.md`
+     * today) — swapped only for the argument the script receives; every
+     * check above still reads the real file.
+     */
+    private static function withTxtExtension(string $path): string
+    {
+        $directory = pathinfo($path, PATHINFO_DIRNAME);
+        $filename = pathinfo($path, PATHINFO_FILENAME);
+
+        return $directory.'/'.$filename.'.txt';
     }
 }

@@ -961,4 +961,17 @@ decisions:
     source: askquestion
     spec: null
     supersedes: null
-updated_at: '2026-09-11T00:52:04+02:00'
+  -
+    id: 9ae995ddbe3b78ed
+    ts: '2026-09-11T10:39:13+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-014 review verdict and dirty-tree handling'
+    label: 'US-014 review verdict and dirty-tree handling'
+    value: 'Approve US-014, commit the uncommitted .txt-extension work in the same branch, and merge everything into develop despite 14 failing launcher tests'
+    question: null
+    rationale: 'Operator explicitly accepted merging the out-of-scope LaunchPreflight .txt change with a red suite rather than splitting it into its own spec'
+    source: chat
+    spec: US-014
+    supersedes: null
+updated_at: '2026-09-11T10:39:13+02:00'

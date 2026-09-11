@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/**
+ * Manual test handoff (US-014): the true keystroke round-trip — typing in a
+ * real browser and watching the button enable without blur/other action —
+ * only reproduces client-side. Verify manually at https://personal-kbms.test
+ * by opening a meeting detail page and typing a question; Playwright/Dusk
+ * are out of scope under `testing: NORMAL`.
+ */
 class AskClaudePanelTest extends TestCase
 {
     use RefreshDatabase;
@@ -236,6 +243,35 @@ class AskClaudePanelTest extends TestCase
             ->call('launch');
 
         Queue::assertPushed(LaunchClaudeSession::class, 1);
+    }
+
+    public function test_the_launch_button_is_disabled_when_the_question_is_empty_or_whitespace_only(): void
+    {
+        $event = $this->readyEvent();
+
+        Livewire::test(AskClaude::class, ['occurrence' => $event])
+            ->set('question', '')
+            ->assertSeeHtml('disabled aria-describedby="ask-block-reason"');
+
+        Livewire::test(AskClaude::class, ['occurrence' => $event])
+            ->set('question', "   \n\t  ")
+            ->assertSeeHtml('disabled aria-describedby="ask-block-reason"');
+    }
+
+    public function test_the_launch_button_is_enabled_once_a_valid_question_is_present(): void
+    {
+        $event = $this->readyEvent();
+
+        Livewire::test(AskClaude::class, ['occurrence' => $event])
+            ->set('question', 'What did we decide?')
+            ->assertDontSeeHtml('disabled aria-describedby="ask-block-reason"');
+    }
+
+    public function test_the_question_textarea_keeps_the_live_binding_modifier(): void
+    {
+        $blade = file_get_contents(resource_path('views/livewire/ask-claude.blade.php'));
+
+        $this->assertStringContainsString('wire:model.live', $blade);
     }
 
     public function test_a_valid_launch_writes_one_queued_row_and_pushes_exactly_one_job(): void
