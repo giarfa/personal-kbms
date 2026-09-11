@@ -26,7 +26,7 @@ use App\Launcher\PromptLaunchStatus;
             <textarea
                 class="kb-textarea kb-textarea--sm"
                 id="question"
-                wire:model="question"
+                wire:model.live.debounce.400ms="question"
                 placeholder="{{ __('What should I ask about this meeting?') }}"
                 aria-describedby="question-help @if ($isQuestionBlock || $errors->has('question')) question-error @endif"
                 @if ($isQuestionBlock || $errors->has('question')) aria-invalid="true" @endif

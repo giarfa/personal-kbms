@@ -1,0 +1,126 @@
+code: US-014
+plan_body: |-
+  ## Technical Solution
+  The "Launch session" button in `resources/views/livewire/ask-claude.blade.php:53` carries a native HTML `disabled` attribute driven by the server-computed `$command` view variable (`app/Livewire/AskClaude.php:89-98`, backed by `LaunchPreflight::for()`). The question `<textarea>` binds with a plain `wire:model="question"` (`ask-claude.blade.php:29`) — deferred in Livewire 3, so typing only updates the client-side Alpine copy and never round-trips to the server. `$command` therefore never recomputes from user input, the native `disabled` attribute never clears, and (because it is a native attribute, not `wire:target`/Alpine-driven) the browser blocks `wire:click="launch"` from firing at all while it is set.
+
+  Fix: change the binding to `wire:model.live.debounce.400ms="question"` so edits are synced to the server on a short debounce, `render()` recomputes `$command` from the live value, and the button's `disabled` attribute tracks the real block reason (empty/whitespace question, question too long, no transcript, misconfigured script) as the user types. No change to `AskClaude::launch()`, `LaunchPreflight`, or `LaunchCommand` — the security-critical argument-array behavior from US-009 is untouched.
+
+  ## Git & Branching
+  - Mode: GITFLOW (no automatic push)
+  - Branch: `feature/US-014-launch-button-live-question` from `develop`
+  - TASK-00: bootstrap
+  - Per task: one Conventional Commit; push/PR remain local until the user asks
+  - Merge after human `larapilot-review` approval
+
+  ## Test Data Strategy
+  - No Eloquent model or schema changes in this fix — N/A
+
+  ## Test Strategy
+  - Bar: NORMAL — Pest feature tests only, no Playwright/Dusk/E2E
+  - Anne extends `tests/Feature/AskClaudePanelTest.php` with explicit `assertSeeHtml`/`assertDontSeeHtml` checks on the button's `disabled` attribute across question states (empty, whitespace-only, valid) reusing the existing `readyEvent()`/`Queue::fake()` fixtures — this guards `render()`'s `$command`-driven disabled logic, which the existing suite exercises only indirectly via `assertSee` on messages.
+  - Anne adds one lightweight regression assertion that the Blade source keeps `wire:model.live` (not plain deferred `wire:model`) on the question textarea, so a future edit cannot silently reintroduce the deferred-binding bug.
+  - The actual keystroke-to-network-request behavior only reproduces in a real browser; Anne documents a **manual test handoff** step for the human to click through in Herd, since Playwright/Dusk are out of scope under `testing: NORMAL`.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and internal PR'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for this spec: create the feature branch from `develop` and prepare the internal PR description toward `develop`. Do **not** push unless the user asks.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop && git pull` (pull only if already tracking; otherwise local develop)
+      2. `git checkout -b feature/US-014-launch-button-live-question`
+      3. Draft internal PR title/body toward `develop` (keep local until push is requested)
+      4. Optional empty commit for branch anchor: `chore(US-014): TASK-00 bootstrap feature branch`
+
+      ## Completion Criteria
+      - [x] Branch `feature/US-014-launch-button-live-question` exists locally
+      - [x] PR title/body drafted for `develop` (remote open optional — only if user requested push)
+
+      ## Git Deliverables
+      - Commit: `chore(US-014): TASK-00 bootstrap feature branch` (empty commit allowed)
+      - Push: skip (`git_mode: GITFLOW`)
+      - PR: prepare locally — open/update remote only if user requests
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 0.5
+    dependencies: {}
+    commit:
+      sha: 929206b326fc503c3d8c059befe27cd1de9b76e2
+      short_sha: 929206b
+      subject: 'chore(US-014): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-11T10:26:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/929206b326fc503c3d8c059befe27cd1de9b76e2'
+  -
+    id: TASK-01
+    title: 'Sync the question textarea live so the launch button re-evaluates on input'
+    body: |-
+      ## Description
+      Fix: the "Launch session" button stays disabled after typing a question because `wire:model="question"` is deferred and never recomputes the server-side `$command` that drives the button's `disabled` attribute.
+
+      ## Files Involved
+      - resources/views/livewire/ask-claude.blade.php
+
+      ## Steps
+      1. Change `wire:model="question"` (line 29) to `wire:model.live.debounce.400ms="question"` so edits sync to the server on a short debounce instead of staying client-side only.
+      2. Confirm `AskClaude::render()` (`app/Livewire/AskClaude.php:89-98`) already recomputes `$command`/`$isQuestionBlock`/`$blockMessage` from `$this->question` on every request — no server-side change needed, only the binding.
+      3. Do not touch `AskClaude::launch()`, `LaunchPreflight`, or `LaunchCommand` — the shell-argument-array security behavior from US-009 must stay exactly as is.
+      4. `php artisan test --filter=AskClaudePanelTest`
+
+      ## Completion Criteria
+      - [ ] Typing a non-whitespace question makes the "Launch session" button clickable without any other action
+      - [ ] Button's enabled/disabled state stays in sync with the server-side block reason as the user edits the question
+      - [ ] No regression to `LaunchPreflight`/`LaunchCommand` argument handling
+      - [ ] Tests pass
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `fix(US-014): TASK-01 sync question input live so launch button re-evaluates`
+      - Push: skip (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Fix
+    status: TODO
+    assignee: Alex
+    estimate_hours: 1
+    dependencies:
+      - TASK-00
+  -
+    id: TASK-02
+    title: "Regression coverage for the launch button's disabled state and the live binding"
+    body: |-
+      ## Description
+      Add Pest coverage that guards the launch-button regression: the button's `disabled` attribute must track `$command`/the block reason across question states, and the textarea binding must stay `wire:model.live` so the deferred-binding bug cannot silently return.
+
+      ## Files Involved
+      - tests/Feature/AskClaudePanelTest.php
+
+      ## Steps
+      1. Reuse the existing `readyEvent()` fixture and `Queue::fake()` from `AskClaudePanelTest`.
+      2. Add a test asserting the rendered button carries the `disabled` attribute when `question` is empty/whitespace-only (`assertSeeHtml`/`assertDontSeeHtml` on the button markup, or `assertSeeHtmlInOrder` around the `disabled` token), and does **not** carry it once a valid question is set — covering the same `$command` states `render()` already computes.
+      3. Add a lightweight assertion (e.g. `assertStringContainsString('wire:model.live', file_get_contents(resource_path('views/livewire/ask-claude.blade.php')))`) that pins the `.live` modifier on the question textarea, guarding against a future revert to plain deferred `wire:model`.
+      4. Document a **manual test handoff** note in the test class docblock (or PR notes) instructing the human to type a question in a real browser at `https://personal-kbms.test` and confirm the button enables without blur/other action — the true keystroke round-trip only reproduces in a browser and Playwright/Dusk are out of scope under `testing: NORMAL`.
+      5. `php artisan test --filter=AskClaudePanelTest`
+
+      ## Completion Criteria
+      - [ ] New tests pass locally alongside the existing `AskClaudePanelTest` suite
+      - [ ] Regression guard on the `.live` modifier is in place
+      - [ ] Manual test handoff note recorded for human browser verification
+
+      ## Git Deliverables
+      - Commit: `test(US-014): TASK-02 cover launch button disabled state and live binding regression`
+      - Push: skip (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 1
+    dependencies:
+      - TASK-01
+updated_at: '2026-09-11T10:26:07+02:00'
