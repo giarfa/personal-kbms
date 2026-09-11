@@ -5,7 +5,7 @@ epic:
   title: Maintenance
 priority: HIGH
 points: 2
-status: REVIEW
+status: DONE
 body: |
   #### US-014: Fix — Launch session button stays disabled after typing a question
 
@@ -39,13 +39,13 @@ body: |
   the browser also blocks `wire:click="launch"` from firing at all while it's set.
 
   **Acceptance Criteria**
-  - [ ] Typing a non-whitespace question into the textarea makes the "Launch session" button clickable
+  - [x] Typing a non-whitespace question into the textarea makes the "Launch session" button clickable
         without any other action
-  - [ ] The button's enabled/disabled state stays in sync with the server-side block reason (empty
+  - [x] The button's enabled/disabled state stays in sync with the server-side block reason (empty
         question, question too long, no transcript, misconfigured script) as the user edits the question
-  - [ ] Regression test covers: button disabled on empty/whitespace-only question, button enabled once
+  - [x] Regression test covers: button disabled on empty/whitespace-only question, button enabled once
         valid question text is present, and the launch flow still fires correctly (Anne)
-  - [ ] No regression to the existing shell-argument safety behavior in `LaunchPreflight`/`LaunchCommand` (Lars)
+  - [x] No regression to the existing shell-argument safety behavior in `LaunchPreflight`/`LaunchCommand` (Lars)
 status_history:
   -
     status: PLANNED
@@ -56,4 +56,13 @@ status_history:
   -
     status: REVIEW
     at: '2026-09-11T10:30:29+02:00'
+  -
+    status: DONE
+    at: '2026-09-11T10:39:11+02:00'
 rework: false
+merge_commit:
+  sha: 60d6a905120b23c1981220e70def04cf7b041571
+  short_sha: 60d6a90
+  subject: 'chore(US-014): move spec to REVIEW'
+  committed_at: '2026-09-11T10:30:43+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/60d6a905120b23c1981220e70def04cf7b041571'
