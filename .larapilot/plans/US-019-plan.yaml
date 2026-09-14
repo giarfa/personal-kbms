@@ -97,14 +97,20 @@ tasks:
       - PR: prepare locally toward `develop`; open remotely only on explicit request
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-019-launch-shortcut` exists locally, cut from `develop`
-      - [ ] Anchor commit present
-      - [ ] PR title/body drafted, nothing pushed
+      - [x] Branch `feature/US-019-launch-shortcut` exists locally, cut from `develop`
+      - [x] Anchor commit present
+      - [x] PR title/body drafted, nothing pushed
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 1
     dependencies: {}
+    commit:
+      sha: fe9ab118085d6cdb1e239cf8c73eb7533539003b
+      short_sha: fe9ab11
+      subject: 'chore(US-019): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-14T21:37:48+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/fe9ab118085d6cdb1e239cf8c73eb7533539003b'
   -
     id: TASK-01
     title: 'Add the LaunchChord enum holding the platform chord labels'
@@ -132,16 +138,22 @@ tasks:
       - PR: update the local PR notes
 
       ## Completion Criteria
-      - [ ] `LaunchChord` exists with both cases, `label()`, `spokenLabel()`, `labels()`, `spokenLabels()`
-      - [ ] Maps are derived from `self::cases()`, not hand-written literals
-      - [ ] Explicit return types and PHPDoc array shapes throughout
-      - [ ] Pint clean, Larastan level 5 clean
+      - [x] `LaunchChord` exists with both cases, `label()`, `spokenLabel()`, `labels()`, `spokenLabels()`
+      - [x] Maps are derived from `self::cases()`, not hand-written literals
+      - [x] Explicit return types and PHPDoc array shapes throughout
+      - [x] Pint clean, Larastan level 5 clean
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1
     dependencies:
       - TASK-00
+    commit:
+      sha: 090dccc3baab397786dcd59514e477fcce0334ce
+      short_sha: 090dccc
+      subject: 'feat(US-019): TASK-01 add the LaunchChord label vocabulary'
+      committed_at: '2026-09-14T21:38:12+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/090dccc3baab397786dcd59514e477fcce0334ce'
   -
     id: TASK-02
     title: 'Unit-test the platform chord mapping'
@@ -165,15 +177,21 @@ tasks:
       - PR: update the local PR notes
 
       ## Completion Criteria
-      - [ ] Both labels covered for both cases
-      - [ ] Map completeness asserted against `cases()`
-      - [ ] `php artisan test --compact --filter=LaunchChordTest` green
+      - [x] Both labels covered for both cases
+      - [x] Map completeness asserted against `cases()`
+      - [x] `php artisan test --compact --filter=LaunchChordTest` green
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies:
       - TASK-01
+    commit:
+      sha: ac56dfee736ca4837117fb7e86c20f7161550451
+      short_sha: ac56dfe
+      subject: 'test(US-019): TASK-02 cover the platform chord mapping'
+      committed_at: '2026-09-14T21:38:36+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ac56dfee736ca4837117fb7e86c20f7161550451'
   -
     id: TASK-03
     title: 'Bind the launch chord to the question textarea'
@@ -209,19 +227,25 @@ tasks:
       - PR: update the local PR notes
 
       ## Completion Criteria
-      - [ ] `kbLaunchShortcut` registered on `alpine:init` and imported from `app.js`
-      - [ ] Listeners live on the `#question` textarea only — no page-, window- or document-level handler
-      - [ ] Question is read from `$event.target.value`, never from `$wire.question`
-      - [ ] `$event.repeat` and the in-flight `busy` flag both short-circuit
-      - [ ] Empty, whitespace-only and over-length values return before any server call
-      - [ ] Bare `Enter` and `Shift`+`Enter` still insert newlines
-      - [ ] `npm run build` green; Pint and Larastan level 5 clean; suite green
+      - [x] `kbLaunchShortcut` registered on `alpine:init` and imported from `app.js`
+      - [x] Listeners live on the `#question` textarea only — no page-, window- or document-level handler
+      - [x] Question is read from `$event.target.value`, never from `$wire.question`
+      - [x] `$event.repeat` and the in-flight `busy` flag both short-circuit
+      - [x] Empty, whitespace-only and over-length values return before any server call
+      - [x] Bare `Enter` and `Shift`+`Enter` still insert newlines
+      - [x] `npm run build` green; Pint and Larastan level 5 clean; suite green
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 3
     dependencies:
       - TASK-00
+    commit:
+      sha: 1d83c80118abf3021eb34d821ae549efee7b582e
+      short_sha: 1d83c80
+      subject: 'feat(US-019): TASK-03 launch the session from the question field with Cmd/Ctrl+Enter'
+      committed_at: '2026-09-14T21:40:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1d83c80118abf3021eb34d821ae549efee7b582e'
   -
     id: TASK-04
     title: 'Render the platform-aware chord hint beside Launch session'
@@ -345,4 +369,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-04
-updated_at: '2026-09-14T21:33:56+02:00'
+updated_at: '2026-09-14T21:40:08+02:00'

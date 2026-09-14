@@ -21,50 +21,63 @@ use App\Launcher\PromptLaunchStatus;
     </div>
 
     <div class="kb-panel__body">
+        {{--
+            x-data lives on this wrapper, not on .sk-field alone, because the
+            chord hint below renders inside the sibling .kb-inline row — both
+            need the same kbLaunchShortcut instance (US-019 TASK-04).
+        --}}
         <div
-            class="sk-field"
-            style="margin-bottom:0.75rem"
-            x-data="kbLaunchShortcut({ max: @js((int) config('kbms.question_max_chars')) })"
+            x-data="kbLaunchShortcut({
+                max: @js((int) config('kbms.question_max_chars')),
+                labels: @js(\App\Launcher\LaunchChord::labels()),
+                spokenLabels: @js(\App\Launcher\LaunchChord::spokenLabels()),
+                spokenTemplate: @js(__('Press :chord to launch the session.')),
+            })"
         >
-            <label for="question">{{ __('Your question') }}</label>
-            <textarea
-                class="kb-textarea kb-textarea--sm"
-                id="question"
-                wire:model.live.debounce.400ms="question"
-                placeholder="{{ __('What should I ask about this meeting?') }}"
-                aria-describedby="question-help @if ($isQuestionBlock || $errors->has('question')) question-error @endif"
-                @if ($isQuestionBlock || $errors->has('question')) aria-invalid="true" @endif
-                x-on:keydown.cmd.enter.prevent="submit($event)"
-                x-on:keydown.ctrl.enter.prevent="submit($event)"
-            ></textarea>
-            <p class="kb-note-inline" id="question-help" style="margin:0.375rem 0 0">
-                {!! __('Handed to your script as the second argument, exactly as typed &mdash; quotes, newlines and <code>$(&hellip;)</code> included, never interpreted.') !!}
-            </p>
-            @if ($errors->has('question'))
-                <p id="question-error" role="alert" style="margin:0.375rem 0 0;font-size:0.75rem;color:var(--kb-danger)">
-                    {{ $errors->first('question') }}
+            <div class="sk-field" style="margin-bottom:0.75rem">
+                <label for="question">{{ __('Your question') }}</label>
+                <textarea
+                    class="kb-textarea kb-textarea--sm"
+                    id="question"
+                    wire:model.live.debounce.400ms="question"
+                    placeholder="{{ __('What should I ask about this meeting?') }}"
+                    aria-describedby="question-help @if ($command) question-shortcut @endif @if ($isQuestionBlock || $errors->has('question')) question-error @endif"
+                    @if ($isQuestionBlock || $errors->has('question')) aria-invalid="true" @endif
+                    x-on:keydown.cmd.enter.prevent="submit($event)"
+                    x-on:keydown.ctrl.enter.prevent="submit($event)"
+                ></textarea>
+                <p class="kb-note-inline" id="question-help" style="margin:0.375rem 0 0">
+                    {!! __('Handed to your script as the second argument, exactly as typed &mdash; quotes, newlines and <code>$(&hellip;)</code> included, never interpreted.') !!}
                 </p>
-            @elseif ($isQuestionBlock)
-                <p id="question-error" role="alert" style="margin:0.375rem 0 0;font-size:0.75rem;color:var(--kb-danger)">
-                    {{ $blockMessage }}
-                </p>
-            @endif
-        </div>
+                @if ($errors->has('question'))
+                    <p id="question-error" role="alert" style="margin:0.375rem 0 0;font-size:0.75rem;color:var(--kb-danger)">
+                        {{ $errors->first('question') }}
+                    </p>
+                @elseif ($isQuestionBlock)
+                    <p id="question-error" role="alert" style="margin:0.375rem 0 0;font-size:0.75rem;color:var(--kb-danger)">
+                        {{ $blockMessage }}
+                    </p>
+                @endif
+            </div>
 
-        <div class="kb-inline">
-            <button
-                type="button"
-                class="sk-btn sk-btn--primary"
-                wire:click="launch"
-                @if (! $command) disabled aria-describedby="ask-block-reason" @endif
-            >
-                <span aria-hidden="true">&#9654;</span> {{ __('Launch session') }}
-            </button>
-            @if ($command)
-                <span class="kb-note-inline">{{ __('Queued · opens its own terminal window · replies stay in the terminal') }}</span>
-            @elseif (! $isQuestionBlock)
-                <span class="kb-note-inline" id="ask-block-reason">{{ $blockMessage }}</span>
-            @endif
+            <div class="kb-inline">
+                <button
+                    type="button"
+                    class="sk-btn sk-btn--primary"
+                    wire:click="launch"
+                    @if (! $command) disabled aria-describedby="ask-block-reason" @endif
+                >
+                    <span aria-hidden="true">&#9654;</span> {{ __('Launch session') }}
+                </button>
+                @if ($command)
+                    <span class="kb-tag kb-tag--muted" aria-hidden="true" x-text="chordLabel"></span>
+                    <span class="kb-note-inline">{{ __('to launch') }}</span>
+                    <span id="question-shortcut" class="sr-only" x-text="spokenHint"></span>
+                    <span class="kb-note-inline">{{ __('Queued · opens its own terminal window · replies stay in the terminal') }}</span>
+                @elseif (! $isQuestionBlock)
+                    <span class="kb-note-inline" id="ask-block-reason">{{ $blockMessage }}</span>
+                @endif
+            </div>
         </div>
 
         @if ($command)

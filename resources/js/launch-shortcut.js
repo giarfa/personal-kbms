@@ -8,6 +8,28 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('kbLaunchShortcut', (config) => ({
         busy: false,
         max: config.max,
+        platform: 'other',
+
+        /**
+         * Client-side platform detection (recorded decision `ask claude
+         * keyboard shortcut affordance`) — this is the only thing JS
+         * decides. The words themselves come from `LaunchChord` in PHP via
+         * `config.labels` / `config.spokenLabels`, which is what keeps the
+         * chord vocabulary unit-testable without a browser suite.
+         */
+        init() {
+            const platformHint = navigator.userAgentData?.platform ?? navigator.platform ?? '';
+
+            this.platform = /mac|iphone|ipad/i.test(platformHint) ? 'mac' : 'other';
+        },
+
+        get chordLabel() {
+            return config.labels[this.platform];
+        },
+
+        get spokenHint() {
+            return config.spokenTemplate.replace(':chord', config.spokenLabels[this.platform]);
+        },
 
         /**
          * `$event.repeat` (OS auto-repeat while the chord is held) and the
