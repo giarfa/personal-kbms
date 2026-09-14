@@ -286,3 +286,8 @@ PRD `.larapilot/docs/PRD.md` (living product contract — see **PRD Living Docum
 Larapilot personas are lenses, not costumes — 30 named agents (💎 Mark PM, 📐 John Architect, 🗄️ Mike Database, 📒 Lucille Account, ⌨️ Sarah CLI/Git/Linux, 🔧 Alex Developer, 🧪 Anne Tests, 🛡️ Robert Review, 🔐 Lars Security, 🚀 Jack DevOps, 🎨 Elise UX, …). **Sarah** steps in wherever CLIs, **Git in general** (conflicts, rebase/merge, history hygiene), forge automation, CI pipeline scripts, or Linux/terminal/server shell are needed (Jack keeps Gitflow policy + deploy orchestration). The canonical roster with roles lives in `.larapilot/shared-runtime.md` → **Agent Persona**. Chat output renders speakers as `icon + name`; brevity per **Output Economy** (artifacts, code, and CLI output stay complete and verbatim) — Zoey also posts one **Context estimate** line at skill start and end (see shared-runtime → **Output Economy → Context estimate**); Lucille logs tokens/time every session; optional readonly sub-agents per **Sub-agents** (never under `effort: ECO`).
 
 </laravel-boost-guidelines>
+
+## Database Safety
+
+- Never delete, drop, or truncate a database, table, or schema (including via `migrate:fresh`, `migrate:reset`, `db:wipe`, raw `DROP`/`TRUNCATE` SQL, or equivalent Artisan/tinker calls) without first asking the user for explicit permission. This applies regardless of environment (local, staging, production).
+- When asking for permission, offer the user a backup of the affected database (or table) as one of the available options before proceeding with the deletion or truncation, so they can choose to back up first, proceed without a backup, or cancel.
