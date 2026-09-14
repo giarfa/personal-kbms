@@ -1,0 +1,390 @@
+code: US-019
+plan_body: |
+  ## Technical Solution
+
+  `AskClaude` (`app/Livewire/AskClaude.php`) already owns the entire launch gate: `launch()` validates, re-runs `LaunchPreflight::for()`, writes the `prompt_launches` row and dispatches `LaunchClaudeSession`. The shortcut adds **no** server-side path — it calls that same action. Everything new is client-side plus one presentational enum.
+
+  ### 1. Chord vocabulary — `app/Launcher/LaunchChord.php`
+
+  A PHP enum with cases `Command` and `Control`:
+
+  - `label()` → `⌘ Enter` / `Ctrl Enter` (visible, symbolic)
+  - `spokenLabel()` → `Command-Enter` / `Control-Enter` (screen-reader phrase)
+  - `LaunchChord::labels()` / `LaunchChord::spokenLabels()` → `['mac' => …, 'other' => …]` maps handed to the view as `@js(…)`
+
+  Detection stays **client-side** per recorded decision `ask claude keyboard shortcut affordance`; JS only picks a key. The mapping table itself is PHP, which is what makes the AC's "unit or component level" coverage of the chord mapping possible without a browser suite.
+
+  ### 2. Listener — `resources/js/launch-shortcut.js`
+
+  Registered as `Alpine.data('kbLaunchShortcut', …)` inside an `alpine:init` listener, matching the house pattern of `self-refresh.js` (`kbSelfRefresh`) and `calendar.js` (`kbCalendar`); imported from `resources/js/app.js`.
+
+  Bound via `x-data="kbLaunchShortcut({ max: …, macLabel: …, otherLabel: …, … })"` on the existing `.sk-field` wrapper, with `x-on:keydown.cmd.enter.prevent` and `x-on:keydown.ctrl.enter.prevent` on the **`#question` textarea element only** (decision `ask claude keyboard shortcut listener scope`) — no `.window`, no `.document`, no page-level handler. The notes editor and transcript panel carry no listener, so the chord is inert there by construction rather than by a guard. Bare `Enter` and `Shift`+`Enter` match no listener at all, so the browser's newline behaviour is untouched.
+
+  Handler contract (`submit($event)`):
+
+  1. `return` when `$event.repeat` (OS auto-repeat) or when the component's own `busy` flag is set (a launch is in flight) → no duplicate row.
+  2. Read the question from **`$event.target.value`**, i.e. straight from the DOM — never from `$wire.question`. This is the whole answer to the debounce race the AC restates from US-014: the 400 ms `wire:model.live.debounce` sync is irrelevant because the handler never reads the debounced copy.
+  3. `return` when the value trims to empty or exceeds `max` (`config('kbms.question_max_chars')`) → the chord is inert exactly where the button is disabled, and crucially **no validation message is produced**, honouring decision `ask claude keyboard shortcut blocked behaviour` (the existing on-screen block reason stays the only explanation).
+  4. Otherwise `await $wire.set('question', value, false)` (third argument `false` = defer, no request) then `await $wire.launch()` — one commit whose `updates` are applied before its `calls`, so the server sees the text as typed at the instant of the keypress.
+  5. `finally` clears `busy`.
+
+  Server-side blocks the client cannot see — script missing or not executable, no linked context file, unreadable `.txt` sibling — still reach `launch()`, which returns early on `LaunchBlock` before any write. That path is unchanged and is what the error-case AC rests on.
+
+  ### 3. Affordance — `resources/views/livewire/ask-claude.blade.php`
+
+  Inside the existing `.kb-inline` row that holds **Launch session**, immediately after the button and only when `$command` is non-null (so the hint appears exactly when the button is enabled):
+
+  - a visible chip in the panel's own idiom — `<span class="kb-tag kb-tag--muted" aria-hidden="true" x-text="chordLabel">` — followed by the existing `kb-note-inline` wording, `{{ __('to launch') }}`
+  - `<span id="question-shortcut" class="sr-only" x-text="spokenHint">`, where `spokenHint` interpolates the spoken label into a `__('Press :chord to launch the session.')` template passed in from Blade; `#question`'s `aria-describedby` gains `question-shortcut`
+
+  The symbolic chip is hidden from assistive tech **only because** the same fact reaches screen-reader users through the control's accessible description — exactly the condition the AC attaches to `aria-hidden`. `sr-only` is Tailwind's (v4, imported at the top of `resources/css/app.css`); no new CSS. Every string goes through `__()`; the project has no `lang/` directory, so English is the passthrough source, as for every other string in the panel.
+
+  ## Git & Branching
+
+  - Mode: **GITFLOW** (from `settings.git_mode`) — Gitflow **without** automatic push
+  - Branch: `feature/US-019-launch-shortcut`, cut from `develop` in TASK-00
+  - One Conventional Commit per task; no batched multi-task commits
+  - PR description toward `develop` prepared **locally**; do not `git push` and do not open a remote PR unless the operator asks in-session
+  - Merge into `develop` only after human `/larapilot-review` approval
+
+  ## Test Data Strategy
+
+  - **No schema change, no new model, no new migration.** Nothing to add to factories or seeders.
+  - Existing fixtures are reused as-is: `CalendarEvent::factory()`, `MeetingTranscript::factory()->forOccurrence($event)->manual()`, and `AskClaudePanelTest`'s established `readyEvent()` / `readableTranscriptPath()` helpers (which also write the `.txt` sibling US-015 requires).
+  - No seeder change; `migrate:fresh --seed` is not part of this spec's gates.
+
+  ## Test Strategy
+
+  Bar: **NORMAL** (`settings.testing`). PHPUnit only — **no** Playwright, Dusk, Pest browser, or viewport matrix. Create tests with `php artisan make:test --phpunit`.
+
+  - **Unit** — `tests/Unit/Launcher/LaunchChordTest.php`: the platform → chord mapping, both the visible and the spoken label for each case, and that `labels()` / `spokenLabels()` cover every enum case with no gaps. This is the AC's unit-level coverage of the chord mapping.
+  - **Feature** — `tests/Feature/AskClaudePanelTest.php`, extended (the chord calls the identical action, so asserting the action's contract is asserting the shortcut's):
+    - *parity*: `->set('question', …)->call('launch')` on a ready occurrence produces exactly one `PromptLaunch` row and one queued `LaunchClaudeSession`, with `context_path`, `question` and `command` matching what `LaunchPreflight` resolved — the same row the button produces
+    - *blocked no-op*: with the launcher blocked, `call('launch')` writes no row (`PromptLaunch::count()` stays 0) and pushes no job (`Queue::assertNothingPushed()`)
+    - *markup contract*: the rendered textarea carries `x-on:keydown.cmd.enter` and `x-on:keydown.ctrl.enter`, the `kbLaunchShortcut` `x-data` wrapper is present, `#question`'s `aria-describedby` includes `question-shortcut`, both chord labels reach the payload, and the hint renders in the ready state but not in a blocked state
+  - **Manual handoff** — the true keystroke round-trip only reproduces in a browser, so it is documented rather than automated, following the US-014 precedent already recorded in `AskClaudePanelTest`'s class docblock. Written to `.larapilot/docs/test-results/US-019-manual.md`: chord fired immediately after the last keystroke launches with the full text; bare `Enter` and `Shift`+`Enter` insert newlines; the chord in the notes editor and the transcript panel does nothing; holding the chord down queues one launch; the hint reads `⌘ Enter` on macOS.
+  - **Gates before every `task-done`**: `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality` (Pint + Larastan level 5), `php artisan test --compact`, plus `npm run build` for tasks touching `resources/js` or `resources/views`.
+
+  ## Risks & reviewer notes
+
+  - `$wire.set(prop, value, false)` deferring without firing a request is documented Livewire behaviour (livewire/livewire 4.4.4). If the installed build ever diverged, the fallback is the documented `x-on` idiom `$wire.question = value` in the same tick before `$wire.launch()` — Livewire pools both into one commit and applies `updates` before `calls`. Either way the feature-test parity assertion and the manual handoff are what prove it, not the mechanism's name.
+  - Alpine state on Livewire-rendered markup survives DOM diffing, so no `wire:ignore` is needed, and `wire:navigate` re-initialises `x-data` normally. No `$cleanup()` is required either: this is a plain element-scoped `x-on`, not a subscription like `kbSelfRefresh`'s tick.
+  - **Flagged for review:** binding both `.cmd` and `.ctrl` means `Ctrl`+`Enter` also launches on macOS. Deliberate — the AC requires each platform's chord to work, not that the other be rejected, and the hint still shows only the platform-native chord. Reject it in review and the fix is a single `if (isMac !== $event.metaKey) return;` guard in the handler.
+  - No security surface change: no new input path, no new write path, and `LaunchPreflight` / `LaunchCommand` argument quoting is untouched (Lars).
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and prepare the internal PR'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for US-019: create the feature branch from `develop` and draft the internal PR description toward `develop`. `settings.git_mode` is `GITFLOW`, so **do not push** and do not open a remote PR unless the operator asks in-session.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop` (the working tree currently carries uncommitted `.larapilot` artifacts from `/larapilot-feature` — commit or carry them deliberately, do not discard)
+      2. `git checkout -b feature/US-019-launch-shortcut`
+      3. Draft the PR title `US-019: Keyboard shortcut to launch a Claude Code session` and a body listing the planned tasks; keep it local
+      4. Anchor the branch: `git commit --allow-empty -m "chore(US-019): TASK-00 bootstrap feature branch"`
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-019): TASK-00 bootstrap feature branch` (empty commit)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally toward `develop`; open remotely only on explicit request
+
+      ## Completion Criteria
+      - [x] Branch `feature/US-019-launch-shortcut` exists locally, cut from `develop`
+      - [x] Anchor commit present
+      - [x] PR title/body drafted, nothing pushed
+    type: Impl
+    status: DONE
+    assignee: Sarah
+    estimate_hours: 1
+    dependencies: {}
+    commit:
+      sha: fe9ab118085d6cdb1e239cf8c73eb7533539003b
+      short_sha: fe9ab11
+      subject: 'chore(US-019): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-14T21:37:48+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/fe9ab118085d6cdb1e239cf8c73eb7533539003b'
+  -
+    id: TASK-01
+    title: 'Add the LaunchChord enum holding the platform chord labels'
+    body: |-
+      ## Description
+      Introduce `App\\Launcher\\LaunchChord`, the single source of truth for how the launch chord is written — symbolically for sighted users and in words for screen readers. Platform *detection* stays client-side (recorded decision `ask claude keyboard shortcut affordance`); this enum owns only the vocabulary, which is what makes the mapping unit-testable without a browser suite.
+
+      ## Files Involved
+      - app/Launcher/LaunchChord.php (new)
+
+      ## Steps
+      1. `php artisan make:enum Launcher/LaunchChord --no-interaction` (or `make:class` and convert) — a pure `enum LaunchChord: string` with cases `Command = 'mac'` and `Control = 'other'`, TitleCase keys per the PHP rules
+      2. `public function label(): string` — `'⌘ Enter'` for `Command`, `'Ctrl Enter'` for `Control`. Symbolic, for the visible chip only
+      3. `public function spokenLabel(): string` — `'Command-Enter'` / `'Control-Enter'`. The phrase a screen reader should read; hyphenated so it is announced as one chord rather than two words
+      4. `public static function labels(): array` and `public static function spokenLabels(): array` — `array_column`-style maps keyed by the case value (`['mac' => …, 'other' => …]`), built by iterating `self::cases()` so a future case cannot be silently omitted. PHPDoc them with `array<string, string>` shapes
+      5. Docblock the enum with why detection is client-side and why the table lives in PHP
+      6. `vendor/bin/pint --dirty --format agent` and `php artisan larapilot:quality`
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-019): TASK-01 add the LaunchChord label vocabulary`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+
+      ## Completion Criteria
+      - [x] `LaunchChord` exists with both cases, `label()`, `spokenLabel()`, `labels()`, `spokenLabels()`
+      - [x] Maps are derived from `self::cases()`, not hand-written literals
+      - [x] Explicit return types and PHPDoc array shapes throughout
+      - [x] Pint clean, Larastan level 5 clean
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1
+    dependencies:
+      - TASK-00
+    commit:
+      sha: 090dccc3baab397786dcd59514e477fcce0334ce
+      short_sha: 090dccc
+      subject: 'feat(US-019): TASK-01 add the LaunchChord label vocabulary'
+      committed_at: '2026-09-14T21:38:12+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/090dccc3baab397786dcd59514e477fcce0334ce'
+  -
+    id: TASK-02
+    title: 'Unit-test the platform chord mapping'
+    body: |-
+      ## Description
+      Cover the chord mapping at unit level — the AC explicitly routes this away from a browser suite, and `settings.testing: NORMAL` forbids one.
+
+      ## Files Involved
+      - tests/Unit/Launcher/LaunchChordTest.php (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit --unit Launcher/LaunchChordTest --no-interaction`
+      2. Assert `LaunchChord::Command->label()` is `'⌘ Enter'` and `LaunchChord::Control->label()` is `'Ctrl Enter'`
+      3. Assert `spokenLabel()` returns the word forms, and that neither spoken label contains the `⌘` glyph — a screen reader must never be handed the symbol
+      4. Assert `labels()` and `spokenLabels()` both have a key for **every** `LaunchChord::cases()` entry and no extras, so adding a case without a label fails here rather than rendering blank in the panel
+      5. `php artisan test --compact --filter=LaunchChordTest`
+
+      ## Git Deliverables
+      - Commit: `test(US-019): TASK-02 cover the platform chord mapping`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+
+      ## Completion Criteria
+      - [x] Both labels covered for both cases
+      - [x] Map completeness asserted against `cases()`
+      - [x] `php artisan test --compact --filter=LaunchChordTest` green
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 1
+    dependencies:
+      - TASK-01
+    commit:
+      sha: ac56dfee736ca4837117fb7e86c20f7161550451
+      short_sha: ac56dfe
+      subject: 'test(US-019): TASK-02 cover the platform chord mapping'
+      committed_at: '2026-09-14T21:38:36+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ac56dfee736ca4837117fb7e86c20f7161550451'
+  -
+    id: TASK-03
+    title: 'Bind the launch chord to the question textarea'
+    body: |-
+      ## Description
+      Add the `kbLaunchShortcut` Alpine component and bind it to `#question` so `Cmd`/`Ctrl`+`Enter` fires the same `launch()` action the button fires — gated identically, racing nothing, and duplicating nothing. JS and Blade binding ship in one commit because either half alone is a broken intermediate state.
+
+      ## Files Involved
+      - resources/js/launch-shortcut.js (new)
+      - resources/js/app.js
+      - resources/views/livewire/ask-claude.blade.php
+
+      ## Steps
+      1. Create `resources/js/launch-shortcut.js` following the house pattern in `self-refresh.js`: a `document.addEventListener('alpine:init', …)` block registering `Alpine.data('kbLaunchShortcut', (config) => ({ … }))`. Add `import './launch-shortcut.js';` to `resources/js/app.js`
+      2. Component state: `busy: false`, plus `max` from `config`
+      3. `submit($event)`:
+         - `if ($event.repeat || this.busy) return;` — OS auto-repeat and in-flight launches both fall out here, so holding the chord queues exactly one launch
+         - `const value = $event.target.value;` — read the DOM, **never** `$wire.question`. This is the whole defence against the `wire:model.live.debounce.400ms` race (US-014's failure mode on the keyboard path): the debounced copy is never consulted, so it can never be stale or empty
+         - `if (value.trim() === '' || value.length > this.max) return;` — inert exactly where the button is disabled, and **no server call**, so no validation message is raised. The existing on-screen block reason stays the only explanation (decision `ask claude keyboard shortcut blocked behaviour`)
+         - `this.busy = true;` then `await this.$wire.set('question', value, false)` (deferred — no request) and `await this.$wire.launch()`, so one commit carries the update and the call, `updates` applied before `calls`
+         - `finally { this.busy = false; }`
+      4. In `ask-claude.blade.php`, put `x-data="kbLaunchShortcut({ max: @js((int) config('kbms.question_max_chars')) })"` on the existing `.sk-field` wrapper (extend it in TASK-04 with the label config), and add `x-on:keydown.cmd.enter.prevent="submit($event)"` and `x-on:keydown.ctrl.enter.prevent="submit($event)"` to the `<textarea id="question">` — **on the element itself**, no `.window`/`.document` modifier (decision `ask claude keyboard shortcut listener scope`). Leave `wire:model.live.debounce.400ms` exactly as it is
+      5. Document in the JS file *why* the value comes from the DOM and not from `$wire` — it reads like a shortcut otherwise and will be "tidied" back into the bug
+      6. `npm run build`, `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`, `php artisan test --compact`
+      7. Smoke-check the panel at 375 / 768 / 1280 px — layout is desktop-first by recorded PRD decision, the obligation is only that nothing breaks below 768 px
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-019): TASK-03 launch the session from the question field with Cmd/Ctrl+Enter`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+
+      ## Completion Criteria
+      - [x] `kbLaunchShortcut` registered on `alpine:init` and imported from `app.js`
+      - [x] Listeners live on the `#question` textarea only — no page-, window- or document-level handler
+      - [x] Question is read from `$event.target.value`, never from `$wire.question`
+      - [x] `$event.repeat` and the in-flight `busy` flag both short-circuit
+      - [x] Empty, whitespace-only and over-length values return before any server call
+      - [x] Bare `Enter` and `Shift`+`Enter` still insert newlines
+      - [x] `npm run build` green; Pint and Larastan level 5 clean; suite green
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 3
+    dependencies:
+      - TASK-00
+    commit:
+      sha: 1d83c80118abf3021eb34d821ae549efee7b582e
+      short_sha: 1d83c80
+      subject: 'feat(US-019): TASK-03 launch the session from the question field with Cmd/Ctrl+Enter'
+      committed_at: '2026-09-14T21:40:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1d83c80118abf3021eb34d821ae549efee7b582e'
+  -
+    id: TASK-04
+    title: 'Render the platform-aware chord hint beside Launch session'
+    body: |-
+      ## Description
+      Show the operator which chord to press, next to the button it aliases (recorded decision `ask claude keyboard shortcut affordance`), in the panel's existing `kb-tag` / `kb-note-inline` idiom — and make sure screen-reader users get the same fact through the textarea's accessible description rather than losing it to `aria-hidden`.
+
+      ## Files Involved
+      - resources/views/livewire/ask-claude.blade.php
+      - resources/js/launch-shortcut.js
+
+      ## Steps
+      1. Extend the `kbLaunchShortcut` config with `labels`, `spokenLabels` (from `LaunchChord::labels()` / `spokenLabels()`, passed with `@js(…)`) and `spokenTemplate` (`@js(__('Press :chord to launch the session.'))`)
+      2. In the component's `init()`, detect the platform client-side — `navigator.userAgentData?.platform ?? navigator.platform`, matched case-insensitively against `mac|iphone|ipad` — and resolve `this.platform` to `'mac'` or `'other'`. Expose `chordLabel` and `spokenHint` getters that index the two maps and interpolate `:chord`. The JS only *picks a key*; the words themselves come from PHP
+      3. In the `.kb-inline` row holding **Launch session**, inside the existing `@if ($command)` branch so the hint appears exactly when the button is enabled, add after the button:
+         - `<span class="kb-tag kb-tag--muted" aria-hidden="true" x-text="chordLabel"></span>` followed by `<span class="kb-note-inline">{{ __('to launch') }}</span>`
+         - `<span id="question-shortcut" class="sr-only" x-text="spokenHint"></span>` (`sr-only` is Tailwind v4's, already imported — no new CSS)
+      4. Append `question-shortcut` to `#question`'s `aria-describedby`, keeping the existing `question-help` and conditional `question-error` ids in order. The chip may only be `aria-hidden` **because** this description exists — do not ship one without the other
+      5. Check the hint does not crowd the existing "Queued · opens its own terminal window …" note at 375 px; `.kb-inline` already wraps, verify it does
+      6. `npm run build`, `vendor/bin/pint --dirty --format agent`, `php artisan larapilot:quality`, `php artisan test --compact`
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-019): TASK-04 show the platform chord beside the launch button`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+
+      ## Completion Criteria
+      - [x] Hint renders beside **Launch session**, only while the launcher is ready
+      - [x] `⌘ Enter` on macOS, `Ctrl Enter` elsewhere, chosen client-side from the PHP-owned label maps
+      - [x] Visible chip is `aria-hidden`, and `#question`'s `aria-describedby` carries `question-shortcut` with the spoken phrase
+      - [x] Every new string passes through `__()`
+      - [x] Visual language matches the existing `kb-tag` / `kb-note-inline` idiom; nothing breaks at 375 px
+      - [x] `npm run build` green; Pint and Larastan level 5 clean; suite green
+    type: Impl
+    status: DONE
+    assignee: Joe
+    estimate_hours: 2
+    dependencies:
+      - TASK-01
+      - TASK-03
+    commit:
+      sha: 50aefa362ea52f754295225cb3543713524351dd
+      short_sha: 50aefa3
+      subject: 'feat(US-019): TASK-04 show the platform chord beside the launch button'
+      committed_at: '2026-09-14T21:42:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/50aefa362ea52f754295225cb3543713524351dd'
+  -
+    id: TASK-05
+    title: 'Feature-test launch parity, the blocked no-op, and the markup contract'
+    body: |-
+      ## Description
+      Cover what PHPUnit can reach: that the action the chord calls behaves identically to the button's, that a blocked launcher writes nothing, and that the bindings and the accessible description are actually in the rendered markup. `settings.testing: NORMAL` — no Playwright, Dusk, Pest browser or viewport suite.
+
+      ## Files Involved
+      - tests/Feature/AskClaudePanelTest.php
+
+      ## Steps
+      1. Reuse the existing `readyEvent()` / `readableTranscriptPath()` helpers and the `setUp()` launcher fixture — do not build new fixtures
+      2. **Parity**: `Livewire::test(AskClaude::class, ['occurrence' => $event])->set('question', …)->call('launch')` on a ready occurrence creates exactly one `PromptLaunch` row whose `context_path`, `question` and `command` match what `LaunchPreflight::for()` resolves, and pushes exactly one `LaunchClaudeSession`. Note in the test docblock that the chord invokes this same action, which is why parity is structural rather than separately driven
+      3. **Blocked no-op**: with the launcher blocked (extend the existing blocked-state cases), assert `PromptLaunch::count()` is `0` alongside the current `Queue::assertNothingPushed()`, and that the on-screen block reason is still the only thing rendered
+      4. **Markup contract**: assert the rendered component contains `x-on:keydown.cmd.enter`, `x-on:keydown.ctrl.enter`, `kbLaunchShortcut`, that `#question`'s `aria-describedby` includes `question-shortcut`, and that both chord labels reach the payload. Assert the hint is present in the ready state and absent in a blocked state
+      5. Update the class docblock's manual-handoff note to cover US-019 alongside the existing US-014 paragraph
+      6. `php artisan test --compact --filter=AskClaudePanelTest`, then the full `php artisan test --compact`
+
+      ## Git Deliverables
+      - Commit: `test(US-019): TASK-05 cover launch parity and the shortcut markup contract`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+
+      ## Completion Criteria
+      - [x] Parity test asserts one row, one job, and matching context/question/command
+      - [x] Blocked case asserts no row, no job, no new message
+      - [x] Markup contract covers both keydown bindings, the `x-data` wrapper, and the `aria-describedby` wiring
+      - [x] Hint asserted present when ready and absent when blocked
+      - [x] Full suite green; Pint and Larastan level 5 clean
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 2
+    dependencies:
+      - TASK-03
+      - TASK-04
+    commit:
+      sha: 4d1c839ded499ba6ceb57aff52ac539ee9581e1b
+      short_sha: 4d1c839
+      subject: 'test(US-019): TASK-05 cover launch parity and the shortcut markup contract'
+      committed_at: '2026-09-14T21:47:05+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4d1c839ded499ba6ceb57aff52ac539ee9581e1b'
+  -
+    id: TASK-06
+    title: 'Update the mockup contract and write the manual test handoff'
+    body: |-
+      ## Description
+      `.larapilot/mockups/kbms-app/README.md` is the repo's stated UI contract (`.ai/rules/views.md`) — a new affordance beside the page's only primary button belongs in it, or the next agent builds against a stale contract. Pair it with the manual handoff note for the keystroke behaviour PHPUnit cannot reach.
+
+      ## Files Involved
+      - .larapilot/mockups/kbms-app/meeting.html
+      - .larapilot/mockups/kbms-app/states.html
+      - .larapilot/mockups/kbms-app/README.md
+      - .larapilot/docs/test-results/US-019-manual.md (new)
+
+      ## Steps
+      1. Add the chord chip next to **Launch session** in `meeting.html` (line ~261) and in the ready variant in `states.html` (line ~317); leave the three disabled variants without it — the hint only shows when the launcher is ready
+      2. Extend the README's "Ask Claude Code" line (≈ line 92) so the panel reads: question textarea → the page's only `sk-btn--primary` **plus the platform chord hint** → the exact invocation. Record that the chip is `aria-hidden` and that the fact reaches screen readers through `#question`'s `aria-describedby`, so nobody removes one half later
+      3. Write `.larapilot/docs/test-results/US-019-manual.md` — an operator checklist against https://personal-kbms.test on a meeting with a linked transcript:
+         - chord pressed immediately after the last keystroke launches with the **full** typed text, not a truncated or empty one
+         - bare `Enter` and `Shift`+`Enter` insert newlines and never launch
+         - chord in the notes editor and in the transcript panel does nothing
+         - holding the chord down queues exactly one launch; pressing it again mid-launch queues no second row
+         - with the launcher blocked (unset `KBMS_CLAUDE_LAUNCHER`) the chord does nothing and no new message appears
+         - the hint reads `⌘ Enter` on macOS
+      4. `npm run build` if any Blade changed in the process
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `docs(US-019): TASK-06 record the chord in the mockup contract and manual handoff`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+
+      ## Completion Criteria
+      - [x] Chord chip present in `meeting.html` and the ready variant of `states.html`, absent from the disabled variants
+      - [x] README's Ask Claude Code contract names the hint and its a11y pairing
+      - [x] `US-019-manual.md` covers all six checks above
+      - [x] Working tree clean after the commit
+    type: Impl
+    status: DONE
+    assignee: Elise
+    estimate_hours: 1
+    dependencies:
+      - TASK-04
+    commit:
+      sha: 79e550bec3492b8548ad75c25472e9d26a83deed
+      short_sha: 79e550b
+      subject: 'docs(US-019): TASK-06 record the chord in the mockup contract and manual handoff'
+      committed_at: '2026-09-14T21:48:00+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/79e550bec3492b8548ad75c25472e9d26a83deed'
+updated_at: '2026-09-14T21:48:00+02:00'

@@ -89,7 +89,7 @@ Two columns at ≥1024 px: **mirror** left, **owned** right.
 - **Owned panels** — normal `--card` with a `Yours` flag in `--kb-note`: Notes, Transcript, Ask Claude Code, Prompt history.
 - Notes: Write/Preview tabs, autosave state in the panel header, `Delete notes…` as a ghost-destructive in the footer next to the "stored as plain text, rendered without HTML" line.
 - Transcript: link-source badge, `Relink…` / `Clear link`, copyable absolute path, bounded scroll region (`max-height: 22rem`, `tabindex="0"`, `role="region"`) so it is keyboard-scrollable, footer stating **read on demand, never copied into the database**.
-- Ask Claude Code: question textarea → **the only `sk-btn--primary` on the page** → the exact invocation rendered as three lines, script then argument one then argument two, each separately quoted. That formatting *is* the argument-array statement; Alex builds from an array and the quoting is display-only.
+- Ask Claude Code: question textarea → **the only `sk-btn--primary` on the page**, paired with the platform chord hint (`⌘ Enter` macOS / `Ctrl Enter` elsewhere, US-019) that fires the same launch — the chip is `aria-hidden`, and the fact reaches screen readers through `#question`'s `aria-describedby`, not the chip; ship one only with the other → the exact invocation rendered as three lines, script then argument one then argument two, each separately quoted. That formatting *is* the argument-array statement; Alex builds from an array and the quoting is display-only.
 - Prompt history is designed now (FR-012, next phase) so the `prompt_launches` row shape does not have to change later.
 
 ### Calendar (`calendar.html`)
