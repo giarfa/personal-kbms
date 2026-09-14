@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Doctor\Checks\IcsFeedCheck;
 use App\Doctor\Checks\LauncherScriptCheck;
 use App\Doctor\Checks\QueueConnectionCheck;
+use App\Doctor\Checks\QueueWorkerFreshnessCheck;
 use App\Doctor\Checks\SchedulerRegistrationCheck;
 use App\Doctor\Checks\TimezoneCheck;
 use App\Doctor\Checks\TranscriptsDirectoryCheck;
@@ -32,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
             new TranscriptsDirectoryCheck,
             new LauncherScriptCheck,
             new QueueConnectionCheck,
+            new QueueWorkerFreshnessCheck($this->app->make(QueueWorkerProbe::class)),
             new SchedulerRegistrationCheck($this->app->make(Schedule::class)),
             new TimezoneCheck,
         ]));
