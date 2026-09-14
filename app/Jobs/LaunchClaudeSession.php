@@ -7,6 +7,7 @@ use App\Launcher\LaunchBlock;
 use App\Launcher\LaunchBlockDetail;
 use App\Launcher\LaunchPreflight;
 use App\Launcher\PromptLaunchStatus;
+use App\Launcher\StaleWorkerDivergence;
 use App\Models\CalendarEvent;
 use App\Models\MeetingTranscript;
 use App\Models\PromptLaunch;
@@ -54,6 +55,7 @@ class LaunchClaudeSession implements ShouldQueue
             : LaunchBlock::NoTranscript;
 
         if ($result instanceof LaunchBlock) {
+            $result = StaleWorkerDivergence::resolve($result, $launch);
             $transcriptPath = MeetingTranscript::query()->forOccurrence($launch->occurrenceKey())->first()?->path;
 
             $launch->update([

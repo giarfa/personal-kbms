@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `TranscriptPattern::parse()` no longer silently rolls an impossible calendar date (e.g. `20261345`) forward into the following month — such a name now parses to `null`, the same as any other name the convention does not claim.
 - The `.txt` context file handed to the launcher script is now verified for containment and readability before a launch proceeds, closing a gap where the extension swap happened after every check had already run. A missing or unreadable `.txt` sibling now blocks the launch with its own named reason instead of dispatching a job that opens a path to nothing.
+- A launch dispatched with a launcher script configured, but refused by a queue worker running against a stale `.env`, is now blocked with a distinct message naming the worker as stale and `php artisan queue:restart` as the remedy — never with `` `KBMS_CLAUDE_LAUNCHER` is not configured. ``, which sent the operator to an `.env` that was already correct.
 
 ### Removed
 
