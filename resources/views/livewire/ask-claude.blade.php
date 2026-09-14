@@ -21,7 +21,11 @@ use App\Launcher\PromptLaunchStatus;
     </div>
 
     <div class="kb-panel__body">
-        <div class="sk-field" style="margin-bottom:0.75rem">
+        <div
+            class="sk-field"
+            style="margin-bottom:0.75rem"
+            x-data="kbLaunchShortcut({ max: @js((int) config('kbms.question_max_chars')) })"
+        >
             <label for="question">{{ __('Your question') }}</label>
             <textarea
                 class="kb-textarea kb-textarea--sm"
@@ -30,6 +34,8 @@ use App\Launcher\PromptLaunchStatus;
                 placeholder="{{ __('What should I ask about this meeting?') }}"
                 aria-describedby="question-help @if ($isQuestionBlock || $errors->has('question')) question-error @endif"
                 @if ($isQuestionBlock || $errors->has('question')) aria-invalid="true" @endif
+                x-on:keydown.cmd.enter.prevent="submit($event)"
+                x-on:keydown.ctrl.enter.prevent="submit($event)"
             ></textarea>
             <p class="kb-note-inline" id="question-help" style="margin:0.375rem 0 0">
                 {!! __('Handed to your script as the second argument, exactly as typed &mdash; quotes, newlines and <code>$(&hellip;)</code> included, never interpreted.') !!}
