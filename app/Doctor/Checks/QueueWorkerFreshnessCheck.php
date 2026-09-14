@@ -72,13 +72,20 @@ final class QueueWorkerFreshnessCheck implements EnvironmentCheck
 
     private function evaluateRunning(CarbonImmutable $startedAt, int $envMtime): CheckResult
     {
+        // createFromTimestamp() defaults to UTC; $startedAt already renders
+        // in the app timezone (it comes from the probe's now()), so every
+        // timestamp compared or shown alongside it must be converted to the
+        // same zone — otherwise the FAIL detail can read as though `.env`
+        // predates the worker when it does not.
+        $timezone = config('app.timezone');
+
         $restartBroadcastAt = Cache::get('illuminate:queue:restart');
 
         $effective = $restartBroadcastAt !== null
-            ? $startedAt->max(CarbonImmutable::createFromTimestamp((int) $restartBroadcastAt))
+            ? $startedAt->max(CarbonImmutable::createFromTimestamp((int) $restartBroadcastAt, $timezone))
             : $startedAt;
 
-        $envWrittenAt = CarbonImmutable::createFromTimestamp($envMtime);
+        $envWrittenAt = CarbonImmutable::createFromTimestamp($envMtime, $timezone);
 
         if ($envWrittenAt->greaterThanOrEqualTo($effective)) {
             return CheckResult::failed(

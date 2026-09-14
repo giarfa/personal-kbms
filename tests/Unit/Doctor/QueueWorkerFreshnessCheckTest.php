@@ -63,13 +63,19 @@ class QueueWorkerFreshnessCheckTest extends TestCase
     public function test_it_fails_when_the_worker_started_before_the_env_write(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-01-01 12:00:00'));
-        $this->touchEnvAt(CarbonImmutable::now()->subMinutes(5));
-        $probe = $this->fakeProbe(QueueWorkerObservation::running(CarbonImmutable::now()->subMinutes(10)));
+        $envWrittenAt = CarbonImmutable::now()->subMinutes(5);
+        $startedAt = CarbonImmutable::now()->subMinutes(10);
+        $this->touchEnvAt($envWrittenAt);
+        $probe = $this->fakeProbe(QueueWorkerObservation::running($startedAt));
 
         $result = (new QueueWorkerFreshnessCheck($probe, $this->envPath))->run();
 
         $this->assertSame(CheckStatus::Failed, $result->status);
         $this->assertStringContainsString('queue:restart', $result->remediation);
+        // Both halves of the detail must render in the same (app) timezone,
+        // or a worker genuinely older than `.env` can read as the reverse.
+        $this->assertStringContainsString("worker started {$startedAt->toDateTimeString()}", $result->detail);
+        $this->assertStringContainsString("\".env\" last written {$envWrittenAt->toDateTimeString()}", $result->detail);
     }
 
     public function test_a_same_second_tie_is_reported_stale(): void
