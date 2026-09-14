@@ -231,6 +231,41 @@ class LaunchClaudeSessionJobTest extends TestCase
         $this->assertNotSame('', LaunchBlock::QuestionTooLong->message($detail));
     }
 
+    public function test_a_worker_resolving_no_launcher_against_a_dispatched_command_blocks_as_a_stale_worker(): void
+    {
+        $launch = $this->queuedLaunch('a question');
+        // Simulate the worker's boot-time view diverging from the request
+        // that dispatched this launch: the dispatching request's answer is
+        // already recorded on $launch->command[0].
+        config(['kbms.claude_launcher' => null]);
+
+        Process::fake();
+
+        LaunchClaudeSession::dispatchSync($launch->id);
+
+        Process::assertNothingRan();
+        $fresh = $launch->fresh();
+        $this->assertSame(PromptLaunchStatus::Blocked, $fresh->status);
+        $this->assertStringContainsString('queue:restart', $fresh->error);
+        $this->assertStringNotContainsString('is not configured', $fresh->error);
+    }
+
+    public function test_a_launch_dispatched_with_no_launcher_recorded_still_blocks_as_not_configured(): void
+    {
+        $launch = $this->queuedLaunch('a question');
+        $launch->update(['command' => []]);
+        config(['kbms.claude_launcher' => null]);
+
+        Process::fake();
+
+        LaunchClaudeSession::dispatchSync($launch->id);
+
+        Process::assertNothingRan();
+        $fresh = $launch->fresh();
+        $this->assertSame(PromptLaunchStatus::Blocked, $fresh->status);
+        $this->assertStringContainsString('is not configured', $fresh->error);
+    }
+
     public function test_a_row_already_launched_is_skipped_without_running_a_process(): void
     {
         $launch = $this->queuedLaunch('a question');
