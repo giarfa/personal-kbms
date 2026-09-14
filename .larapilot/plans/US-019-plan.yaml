@@ -371,14 +371,20 @@ tasks:
       - PR: update the local PR notes
 
       ## Completion Criteria
-      - [ ] Chord chip present in `meeting.html` and the ready variant of `states.html`, absent from the disabled variants
-      - [ ] README's Ask Claude Code contract names the hint and its a11y pairing
-      - [ ] `US-019-manual.md` covers all six checks above
-      - [ ] Working tree clean after the commit
+      - [x] Chord chip present in `meeting.html` and the ready variant of `states.html`, absent from the disabled variants
+      - [x] README's Ask Claude Code contract names the hint and its a11y pairing
+      - [x] `US-019-manual.md` covers all six checks above
+      - [x] Working tree clean after the commit
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Elise
     estimate_hours: 1
     dependencies:
       - TASK-04
-updated_at: '2026-09-14T21:47:05+02:00'
+    commit:
+      sha: 79e550bec3492b8548ad75c25472e9d26a83deed
+      short_sha: 79e550b
+      subject: 'docs(US-019): TASK-06 record the chord in the mockup contract and manual handoff'
+      committed_at: '2026-09-14T21:48:00+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/79e550bec3492b8548ad75c25472e9d26a83deed'
+updated_at: '2026-09-14T21:48:00+02:00'
