@@ -1216,3 +1216,48 @@ specs:
       - [ ] The accessible name carries direction *and* destination (for example "Previous occurrence, Mon 8 Sep 09:00") and announces that the link opens in a new tab; a disabled control's reason remains reachable to a screen reader
       - [ ] Each direction is a single indexed lookup served by the leading column of the `(source_uid, recurrence_id)` unique index — the full series is never loaded, and no N+1 is introduced on the detail page
       - [ ] Feature tests cover: both neighbours present, first stored occurrence (previous disabled), last stored occurrence (next disabled), a cancelled occurrence as a neighbour, a single-occurrence series (both disabled), and a one-off meeting (neither control rendered)
+  -
+    code: US-019
+    title: 'Keyboard shortcut to launch a Claude Code session'
+    epic:
+      code: EP-004
+      title: 'LLM Bridge'
+      objective: "A question typed against a meeting opens an interactive local Claude Code session preloaded with that meeting's transcript"
+    priority: MEDIUM
+    points: 2
+    status: 'IN PROGRESS'
+    body: |
+      #### US-019: Keyboard shortcut to launch a Claude Code session
+
+      **Epic:** EP-004 | **Priority:** MEDIUM | **Points:** 2 | **Status:** TODO
+      **Blocked by:** -
+      **Type:** Evolutiva
+      **Traces to:** FR-008 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want to fire the Claude Code launch with the platform's submit chord while my hands are still on the question field,
+      so that going from a thought to a preloaded session never costs me a trip to the mouse.
+
+      **Demonstrates**
+      After implementing this spec, typing a question into *Ask Claude Code* on a meeting detail page and pressing `Cmd`+`Enter` (macOS) or `Ctrl`+`Enter` (Windows/Linux) queues exactly the same launch the **Launch session** button queues — with the text as typed at the instant of the keypress — and the chord is printed on screen next to that button.
+
+      **Decisions carried into this spec** (see `.larapilot/decisions.yaml`)
+      - The shortcut is a **pure alias** for the button, gated identically — never a second, more permissive path to launch.
+      - The hint lives **next to the Launch session button**, platform-aware.
+      - The listener is bound to the **question textarea only** — no page-level handler.
+
+      **Acceptance Criteria**
+      - [ ] *(Happy path)* With focus in the *Your question* textarea and the launcher ready, `Cmd`+`Enter` on macOS and `Ctrl`+`Enter` on other platforms dispatch the same queued launch as the **Launch session** button: one new `prompt_launches` row, same context path, same question, same resolved command.
+      - [ ] *(Happy path)* The question handed to the launcher is the text present in the textarea **at the moment of the keypress**. The chord must not race the field's `wire:model.live.debounce.400ms` sync — pressing it immediately after the last keystroke must not launch with a stale or empty question (the US-014 failure mode, restated for the keyboard path).
+      - [ ] *(Error case)* When the launcher is blocked — script missing or not executable, no linked context file, unreadable `.txt` sibling, empty question — the chord does **nothing**: no launch row, no queued job, no new message. The existing on-screen block reason remains the only explanation, exactly as when the button is disabled.
+      - [ ] *(Edge case)* A bare `Enter` in the textarea still inserts a newline and never launches; `Shift`+`Enter` likewise. Only the modifier chord submits.
+      - [ ] *(Edge case)* The chord is inert outside the question field: pressing it in the notes editor, the transcript panel, or anywhere else on the meeting detail page does not launch a session.
+      - [ ] *(Edge case)* Holding the chord down (auto-repeat) or pressing it again while a launch is still `Queued` does not queue a duplicate launch for the same question.
+      - [ ] The hint beside **Launch session** renders the correct chord for the visitor's platform — `⌘ Enter` on macOS, `Ctrl Enter` elsewhere — detected client-side, and is hidden from assistive tech only if the same information reaches screen-reader users through the control's accessible description.
+      - [ ] The hint follows the panel's existing visual language (`kb-note-inline` / `kb-tag` idiom) and is translatable through `__()` like every other string in the panel.
+      - [ ] Feature tests cover launch-via-shortcut parity with the button and the blocked-launcher no-op; the platform-specific chord mapping is covered at the unit or component level rather than by a browser suite (`settings.testing: NORMAL` — no Playwright/Dusk).
+    status_history:
+      - { status: PLANNED, at: '2026-09-14T21:33:56+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-14T21:37:21+02:00' }
+    rework: false

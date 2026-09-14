@@ -1247,4 +1247,56 @@ decisions:
     source: chat
     spec: null
     supersedes: null
-updated_at: '2026-09-14T21:13:17+02:00'
+  -
+    id: 973f1a59e2e8700a
+    ts: '2026-09-14T21:18:33+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'keyboard shortcut launch claude session'
+    label: 'keyboard shortcut launch claude session'
+    value: 'Cmd+Enter on macOS, Ctrl+Enter elsewhere, fires Launch session'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-019
+    supersedes: null
+  -
+    id: 8ede54318362144a
+    ts: '2026-09-14T21:18:33+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'ask claude keyboard shortcut blocked behaviour'
+    label: 'ask claude keyboard shortcut blocked behaviour'
+    value: 'Same gate as the button: shortcut is a pure alias, does nothing when Launch session is disabled'
+    question: null
+    rationale: 'No new failure paths or messages; existing block reason remains the single explanation'
+    source: askquestion
+    spec: US-019
+    supersedes: null
+  -
+    id: 115cfb94ca6c370b
+    ts: '2026-09-14T21:18:33+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'ask claude keyboard shortcut affordance'
+    label: 'ask claude keyboard shortcut affordance'
+    value: 'Platform-aware hint rendered next to the Launch session button'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-019
+    supersedes: null
+  -
+    id: b0f6b478947c2e97
+    ts: '2026-09-14T21:18:33+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'ask claude keyboard shortcut listener scope'
+    label: 'ask claude keyboard shortcut listener scope'
+    value: 'Bound to the #question textarea only, no page-level handler'
+    question: null
+    rationale: 'Avoids colliding with the notes editor and other inputs on the meeting detail page'
+    source: askquestion
+    spec: US-019
+    supersedes: null
+updated_at: '2026-09-14T21:18:33+02:00'

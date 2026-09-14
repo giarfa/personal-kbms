@@ -48,3 +48,5 @@
 {"id":"1a64ad36392e2af2","ts":"2026-09-14T20:52:51+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"feature","tokens":31000,"minutes":9,"skill":"larapilot-feature","spec":"US-017","note":null,"estimated":true}
 {"id":"0dccb4d41be61bce","ts":"2026-09-14T20:58:49+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"feature","tokens":24000,"minutes":12,"skill":"larapilot-feature","spec":"US-018","note":null,"estimated":true}
 {"id":"26c73bd89a5f59ab","ts":"2026-09-14T21:15:21+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"review","tokens":118000,"minutes":34,"skill":"larapilot-review","spec":"US-016","note":null,"estimated":false}
+{"id":"e1bcbddde142bb3b","ts":"2026-09-14T21:19:31+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"feature","tokens":48000,"minutes":6,"skill":"larapilot-feature","spec":"US-019","note":null,"estimated":false}
+{"id":"dd25f1c29fdecd45","ts":"2026-09-14T21:34:03+02:00","user":"git:giarfa <giarfa@outlook.com>","category":"planning","tokens":112000,"minutes":14,"skill":"larapilot-plan","spec":"US-019","note":null,"estimated":false}
