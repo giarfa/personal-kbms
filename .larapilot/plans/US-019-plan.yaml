@@ -276,19 +276,25 @@ tasks:
       - PR: update the local PR notes
 
       ## Completion Criteria
-      - [ ] Hint renders beside **Launch session**, only while the launcher is ready
-      - [ ] `⌘ Enter` on macOS, `Ctrl Enter` elsewhere, chosen client-side from the PHP-owned label maps
-      - [ ] Visible chip is `aria-hidden`, and `#question`'s `aria-describedby` carries `question-shortcut` with the spoken phrase
-      - [ ] Every new string passes through `__()`
-      - [ ] Visual language matches the existing `kb-tag` / `kb-note-inline` idiom; nothing breaks at 375 px
-      - [ ] `npm run build` green; Pint and Larastan level 5 clean; suite green
+      - [x] Hint renders beside **Launch session**, only while the launcher is ready
+      - [x] `⌘ Enter` on macOS, `Ctrl Enter` elsewhere, chosen client-side from the PHP-owned label maps
+      - [x] Visible chip is `aria-hidden`, and `#question`'s `aria-describedby` carries `question-shortcut` with the spoken phrase
+      - [x] Every new string passes through `__()`
+      - [x] Visual language matches the existing `kb-tag` / `kb-note-inline` idiom; nothing breaks at 375 px
+      - [x] `npm run build` green; Pint and Larastan level 5 clean; suite green
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Joe
     estimate_hours: 2
     dependencies:
       - TASK-01
       - TASK-03
+    commit:
+      sha: 50aefa362ea52f754295225cb3543713524351dd
+      short_sha: 50aefa3
+      subject: 'feat(US-019): TASK-04 show the platform chord beside the launch button'
+      committed_at: '2026-09-14T21:42:02+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/50aefa362ea52f754295225cb3543713524351dd'
   -
     id: TASK-05
     title: 'Feature-test launch parity, the blocked no-op, and the markup contract'
@@ -369,4 +375,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-04
-updated_at: '2026-09-14T21:40:08+02:00'
+updated_at: '2026-09-14T21:42:02+02:00'
