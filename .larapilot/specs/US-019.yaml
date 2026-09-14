@@ -6,7 +6,7 @@ epic:
   objective: "A question typed against a meeting opens an interactive local Claude Code session preloaded with that meeting's transcript"
 priority: MEDIUM
 points: 2
-status: 'IN PROGRESS'
+status: REVIEW
 body: |
   #### US-019: Keyboard shortcut to launch a Claude Code session
 
@@ -45,4 +45,7 @@ status_history:
   -
     status: 'IN PROGRESS'
     at: '2026-09-14T21:37:21+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-14T21:53:29+02:00'
 rework: false
