@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Doctor\Worker\QueueWorkerObservation;
+use App\Doctor\Worker\QueueWorkerProbe;
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
@@ -39,6 +42,24 @@ class DoctorCommandTest extends TestCase
             'kbms.claude_launcher' => $this->launcherFile,
             'kbms.timezone' => 'Europe/Rome',
         ]);
+
+        // Machine-independent by default: this suite must not depend on
+        // whatever queue worker happens to be running on the machine that
+        // executes it. Tests that need a specific worker state rebind this.
+        $this->bindQueueWorkerObservation(QueueWorkerObservation::notRunning());
+    }
+
+    private function bindQueueWorkerObservation(QueueWorkerObservation $observation): void
+    {
+        $this->app->instance(QueueWorkerProbe::class, new class($observation) implements QueueWorkerProbe
+        {
+            public function __construct(private readonly QueueWorkerObservation $observation) {}
+
+            public function observe(): QueueWorkerObservation
+            {
+                return $this->observation;
+            }
+        });
     }
 
     protected function tearDown(): void
@@ -86,9 +107,20 @@ class DoctorCommandTest extends TestCase
         [$exitCode, $output] = $this->runDoctor();
 
         $this->assertSame(0, $exitCode);
-        foreach (['ICS calendar feed', 'Transcripts directory', 'Claude launcher script', 'Queue connection', 'Calendar sync schedule', 'Timezone'] as $label) {
+        foreach (['ICS calendar feed', 'Transcripts directory', 'Claude launcher script', 'Queue connection', 'Queue worker configuration', 'Calendar sync schedule', 'Timezone'] as $label) {
             $this->assertStringContainsString($label, $output);
         }
+    }
+
+    public function test_it_fails_when_the_queue_worker_is_stale(): void
+    {
+        $this->fakeHealthyIcsFeed();
+        $this->bindQueueWorkerObservation(QueueWorkerObservation::running(CarbonImmutable::createFromTimestamp(0)));
+
+        [$exitCode, $output] = $this->runDoctor();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('queue:restart', $output);
     }
 
     public function test_it_fails_when_the_ics_feed_is_unreachable(): void
