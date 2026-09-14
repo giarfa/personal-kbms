@@ -63,6 +63,18 @@ php artisan schedule:work      # fires kbms:sync-calendar on the configured inte
 
 `composer dev` runs the server, queue listener, log tailer, and Vite dev server together for local iteration.
 
+### Always-on worker (macOS LaunchAgent)
+
+On this machine `php artisan queue:work` runs continuously as a macOS **LaunchAgent** rather than a terminal you have to keep open — `~/Library/LaunchAgents/com.personal-kbms.queue-worker.plist`, `RunAtLoad` + `KeepAlive` (auto-restarts the process if it dies), `WorkingDirectory` at the project root, output appended to `storage/logs/queue-worker.log`:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.personal-kbms.queue-worker.plist    # start / enable at login
+launchctl kickstart -k gui/$(id -u)/com.personal-kbms.queue-worker           # restart now
+launchctl unload ~/Library/LaunchAgents/com.personal-kbms.queue-worker.plist  # stop / disable
+```
+
+**Any `.env` change requires `php artisan queue:restart`.** The worker is long-lived and answers from the `.env` it booted with — under `KeepAlive` the process itself never restarts on its own just because a config value changed, so `queue:restart` (which signals the worker to finish its current job and let `KeepAlive` respawn it) is what actually makes a new value take effect. Skipping it after adding or changing `KBMS_CLAUDE_LAUNCHER` is the single most common cause of a launch refused for a reason that no longer matches your `.env`. `kbms:doctor` now has its own **Queue worker configuration** check that fails when the running worker started before the current `.env` was last written, instead of staying silent about it.
+
 ## Calendar sync
 
 `php artisan kbms:sync-calendar` fetches the feed at `KBMS_ICS_URL`, expands recurring series into individually addressable occurrences, and upserts them into `calendar_events` — never deleting a row, only marking `cancelled_at` when an occurrence disappears or is cancelled upstream. Every run writes a `calendar_sync_runs` row (status, HTTP status, counts, error); runs older than `KBMS_SYNC_RUN_RETENTION_DAYS` are pruned after each run.
@@ -192,7 +204,7 @@ For local development, point `KBMS_TRANSCRIPTS_PATH` at `storage/app/transcripts
 
 Arguments are passed as an argument array, never an interpolated shell string — the question is arbitrary operator input and must never be able to alter the command. The script opens its own terminal window; **the application never captures Claude's reply**.
 
-The invocation runs inside a queued job (`LaunchClaudeSession`) rather than the web request, and **the script must return once it has spawned its own terminal window** — a script that runs Claude in the foreground instead of handing off to a window blocks the job. The job waits up to `KBMS_LAUNCH_TIMEOUT_SECONDS` (default `30`) for that return; a script still running past the bound is recorded as timed out rather than left to hang the worker indefinitely. The launcher's exit code is recorded on the launch row and shown on the meeting page. None of this runs without `php artisan queue:work` actually processing jobs — a reachable queue connection is not the same as a running worker.
+The invocation runs inside a queued job (`LaunchClaudeSession`), which resolves `KBMS_CLAUDE_LAUNCHER` again in the **worker's own process** rather than trusting the web request that dispatched it — so a launcher path added without a `php artisan queue:restart` is refused by its own named "stale worker" reason instead of being reported as unset (see [Always-on worker](#always-on-worker-macos-launchagent) above). **The script must return once it has spawned its own terminal window** — a script that runs Claude in the foreground instead of handing off to a window blocks the job. The job waits up to `KBMS_LAUNCH_TIMEOUT_SECONDS` (default `30`) for that return; a script still running past the bound is recorded as timed out rather than left to hang the worker indefinitely. The launcher's exit code is recorded on the launch row and shown on the meeting page. None of this runs without `php artisan queue:work` actually processing jobs — a reachable queue connection is not the same as a running worker.
 
 Minimal example script:
 
@@ -204,7 +216,7 @@ osascript -e "tell application \"Terminal\" to do script \"claude '$2' --file '$
 
 ## Troubleshooting
 
-1. `php artisan kbms:doctor` — checks the whole integration surface in one shot: the ICS feed is reachable and actually parses as iCalendar, the transcripts directory exists and is readable, the launcher script exists and is executable (see the launcher two-argument contract above — the check only verifies the file exists and is executable, not that it honors the contract), the queue connection is reachable, `kbms:sync-calendar` is registered on the scheduler, and `KBMS_TIMEZONE` is a valid identifier. Every failing check prints a remediation hint naming the `KBMS_*` key at fault, and the command exits non-zero when any check fails, so it can gate a shell script. `NOT CONFIGURED` means the key was never set; `FAIL` means it was set to something the machine rejects — that distinction is the point of the command.
+1. `php artisan kbms:doctor` — checks the whole integration surface in one shot: the ICS feed is reachable and actually parses as iCalendar, the transcripts directory exists and is readable, the launcher script exists and is executable (see the launcher two-argument contract above — the check only verifies the file exists and is executable, not that it honors the contract), the queue connection is reachable, **the running queue worker's configuration is current** — it fails when the worker booted before the current `.env` was last written, naming `php artisan queue:restart` as the remedy, and reports "could not determine" as a failure rather than a pass when the worker's state cannot be established — `kbms:sync-calendar` is registered on the scheduler, and `KBMS_TIMEZONE` is a valid identifier. Every failing check prints a remediation hint naming the `KBMS_*` key at fault, and the command exits non-zero when any check fails, so it can gate a shell script. `NOT CONFIGURED` means the key was never set; `FAIL` means it was set to something the machine rejects — that distinction is the point of the command.
 2. `php artisan kbms:queue-test` then `php artisan queue:work --stop-when-empty` — proves the database queue worker processes a job.
 3. `php artisan schedule:list` — confirms the calendar sync entry and its interval.
 4. If `database/database.sqlite` is missing or unreadable, the shell shows an actionable message naming the exact remedy (`touch` + `migrate`, or a permissions fix) instead of a stack trace.
@@ -214,6 +226,7 @@ osascript -e "tell application \"Terminal\" to do script \"claude '$2' --file '$
    - **Missing** — no candidate file was found within the tolerance window; use the in-app picker to link one manually.
    - **Unreadable** — the file exists but permissions block it; `chmod`, not relink.
    - **Rejected** — the linked path resolves outside `KBMS_TRANSCRIPTS_PATH` (e.g. after the env value changed); relink to a file the server can index inside the base.
+7. A launch blocked as a stale worker while the panel reads **Launcher ready** and shows the correct invocation — `php artisan queue:restart`. The worker that actually runs the job is still answering from the `.env` it had when it booted; `kbms:doctor`'s **Queue worker configuration** check catches this too.
 
 ## Access model
 
