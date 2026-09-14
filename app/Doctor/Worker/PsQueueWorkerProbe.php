@@ -47,7 +47,7 @@ final class PsQueueWorkerProbe implements QueueWorkerProbe
             $elapsedSeconds = $this->parseElapsedSeconds($process['etime']);
 
             if ($elapsedSeconds === null) {
-                return QueueWorkerObservation::undetermined("could not parse \`ps\` elapsed time \"{$process['etime']}\"");
+                return QueueWorkerObservation::undetermined("could not parse `ps` elapsed time \"{$process['etime']}\"");
             }
 
             $startedAts[] = CarbonImmutable::now()->subSeconds($elapsedSeconds);
