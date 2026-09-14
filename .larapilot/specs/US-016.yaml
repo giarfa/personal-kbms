@@ -1,0 +1,101 @@
+code: US-016
+title: 'Fix: a stale queue worker refuses every launch as "not configured"'
+epic:
+  code: EP-005
+  title: Maintenance
+  objective: 'Defects found after a spec reaches DONE are fixed with the same discipline as greenfield work, and the guarantee that was missing is recorded so it cannot go missing again'
+priority: HIGH
+points: 3
+status: DONE
+body: |-
+  #### US-016: Fix — a stale queue worker refuses every launch as "not configured"
+
+  **Epic:** EP-005 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+  **Type:** Fix
+  **Severity:** High
+  **Security:** Lars consulted — no. Nothing escapes a boundary and no input is trusted differently; the defect is a silent, misattributed failure across a process boundary.
+  **Related:** US-009 (launch bridge, DONE), US-002 (doctor command, DONE) — neither is a code regression, both are a missing guarantee
+
+  **Traces to:** FR-008 and FR-011 (both clarified 2026-09-14 — see PRD Revision History)
+
+  **User Story**
+  As the operator,
+  I want a refusal I can act on when the process that runs my launch disagrees with the process that offered it,
+  so that a stale background worker costs me one named remediation instead of an afternoon disbelieving my own `.env`.
+
+  **Demonstrates**
+  After implementing this spec, changing `KBMS_CLAUDE_LAUNCHER` without restarting the worker produces a failing `kbms:doctor` check that names `queue:restart` as the remedy, and a blocked launch whose message says the worker is running stale configuration — not that the key is unset.
+
+  **Steps to Reproduce**
+  1. Start the queue worker (LaunchAgent `com.personal-kbms.queue-worker`, `KeepAlive: true`).
+  2. Add or change `KBMS_CLAUDE_LAUNCHER` in `.env` **without** running `php artisan queue:restart`.
+  3. Open a meeting with a linked transcript, type a question, press **Launch session**.
+  4. The panel shows **Launcher ready** and the exact invocation with the correct path; the launch row lands `blocked` with `` `KBMS_CLAUDE_LAUNCHER` is not configured. ``
+  5. `php artisan kbms:doctor` reports `Claude launcher script .. PASS`, contradicting the launch.
+
+  **Root cause**
+  `LaunchClaudeSession` re-runs `LaunchPreflight` inside the worker (`app/Jobs/LaunchClaudeSession.php:52`) — correct by design, since the script and transcript are mutable between dispatch and execution. But `queue:work` is long-lived and resolves `config('kbms.claude_launcher')` from the `.env` it read **at boot**, so the job saw `null` where the web request saw the path. `kbms:doctor` boots a fresh process and is therefore structurally blind to the one failure mode a long-lived worker actually has.
+
+  **Implementation notes (for the planner, not prescriptive)**
+  - The dispatching request already recorded what it resolved: `prompt_launches.command[0]` holds the script path as the **web process** saw it. A job whose own `resolve()` returns `LauncherNotConfigured` while that column holds a non-empty path has proved the divergence without guessing — no process inspection required, and it works for any config key the two processes could disagree about.
+  - The doctor check is the harder half. Candidate signals: the running worker's start time versus `filemtime(base_path('.env'))`; the `illuminate:queue:restart` cache timestamp versus the same mtime. Herd/macOS is load-bearing for this product (README), so inspecting the worker process is acceptable — but a check that cannot determine the answer must say **"could not determine"** rather than pass, since a false PASS here is exactly the defect being fixed.
+  - `app/Launcher/LauncherScript.php` currently carries two uncommitted duplicate `\Log::debug()` lines from operator debugging. Remove them in TASK-00; they are not part of the defect.
+
+  **Acceptance Criteria**
+  - [x] `php artisan kbms:doctor` fails with its own named check when the running queue worker booted before the current `.env` was last written, and the remediation names `php artisan queue:restart`
+  - [x] That check reports **"could not determine"** as a failure, never a pass, when the worker's state cannot be established — a false PASS is the defect under repair
+  - [x] The check does not fail when no worker is running at all; that condition is already the existing queue check's business and must not be reported twice
+  - [x] A launch blocked by a launcher value the **dispatching request** resolved but the **worker** did not is refused with a distinct reason naming a stale worker and `queue:restart` — never `` `KBMS_CLAUDE_LAUNCHER` is not configured. ``
+  - [x] A launcher key that is genuinely unset in both processes still produces the existing `LauncherNotConfigured` message, unchanged
+  - [x] `README.md` states that any `.env` change requires `php artisan queue:restart`, and says so where the LaunchAgent worker setup is described — not only in a general note
+  - [x] Regression test reproduces the divergence: a job whose preflight resolves no launcher against a launch row whose recorded command holds one, asserting the stale-worker message and not the not-configured one (Anne)
+  - [x] Unit tests cover the doctor check's pass, stale, and indeterminate outcomes with a faked clock/filesystem — no reliance on a real running worker
+  - [x] No security regression — the new message must not leak any path or value the existing blocked messages do not already show (Lars)
+  - [x] `php artisan larapilot:quality` (Pint + Larastan level 5) passes
+  - [x] **Edge case:** `.env` untouched since the worker booted produces a passing check — a worker older than `.env` is the signal, not a worker older than some fixed age
+  - [x] **Edge case:** a `queue:restart` broadcast after the `.env` write clears the stale condition even though the worker process itself is older than the file
+
+
+  ## Rework Feedback
+
+  Robert — rework is scoped to one defect found at the gate. All 12 acceptance criteria are otherwise met, the suite is green (563 passed / 1524 assertions), and `larapilot:quality` is clean (Pint + Larastan level 5, 0 errors). Do not re-open TASK-01/02/03/06 — the fix is confined to TASK-04 and its TASK-05 coverage.
+
+  - app/Doctor/Checks/QueueWorkerFreshnessCheck.php:81 — [Medium] Timezone mismatch in the operator-facing detail. `$startedAt` is app-local (it comes from `now()` in the probe, Europe/Rome), but `CarbonImmutable::createFromTimestamp()` returns **UTC** in Carbon 3.13. The two halves of the message are therefore rendered in different zones. Reproduced live with a worker started 60 min ago against an `.env` written 10 min ago: `worker started 2026-09-14 19:43:36, ".env" last written 2026-09-14 18:33:36` — which reads as though `.env` is *older* than the worker and so contradicts the FAIL it is attached to, off by exactly the local offset. Pass `config('app.timezone')` as the second argument (or `->setTimezone(...)`) so both timestamps render in the same zone.
+  - app/Doctor/Checks/QueueWorkerFreshnessCheck.php:85 — [Medium] Consequence of the above: this is the sentence the operator acts on. A check whose whole purpose is to end a misattributed diagnostic must not ship a self-contradicting one. The verdict itself is correct — `greaterThanOrEqualTo()` compares absolute instants, so no pass/fail outcome is wrong and the documented same-second tie-break still holds. Text only.
+  - app/Doctor/Checks/QueueWorkerFreshnessCheck.php:78 — [Low] Same call for `$restartBroadcastAt`. It only ever feeds the `max()` comparison and is never rendered, so it is not a defect — normalize it in the same pass for consistency rather than leaving one converted timestamp and one not.
+  - tests/Unit/Doctor/QueueWorkerFreshnessCheckTest.php:65 — [Medium] The gap that let this through: the stale case asserts `queue:restart` is in the remediation but never asserts anything about the rendered `detail`. Add an assertion pinning both timestamps in the stale detail to the expected app-timezone strings, so a future zone regression fails the suite instead of reaching the operator. `travelTo()` is already in place at line 54/65 — the clock is fixed, so the expected strings are deterministic.
+  - app/Doctor/Worker/PsQueueWorkerProbe.php:39 — [Low, note only — no action required] `observe()` returns `Undetermined` when `lsof` cannot resolve *any* candidate's cwd, including a `queue:work` owned by a different user on the machine. This fails safe and matches the spec's "never a false PASS" rule; recorded so the trade-off is deliberate rather than rediscovered later.
+
+  Re-run `php artisan test` and `php artisan larapilot:quality` before returning to REVIEW. No changelog or README change is needed — neither documents the timestamp format.
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-14T20:05:59+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-14T20:09:41+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-14T20:23:52+02:00'
+  -
+    status: TODO
+    at: '2026-09-14T20:52:54+02:00'
+  -
+    status: PLANNED
+    at: '2026-09-14T20:55:57+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-14T20:56:01+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-14T20:56:13+02:00'
+  -
+    status: DONE
+    at: '2026-09-14T21:13:06+02:00'
+rework: false
+merge_commit:
+  sha: 4e6b3c228b97630701520af7f69ec195667513db
+  short_sha: 4e6b3c2
+  subject: 'fix(US-016): render queue worker freshness timestamps in app timezone'
+  committed_at: '2026-09-14T20:55:30+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/4e6b3c228b97630701520af7f69ec195667513db'

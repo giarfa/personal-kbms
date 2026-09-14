@@ -1000,4 +1000,251 @@ decisions:
     source: askquestion
     spec: US-015
     supersedes: null
-updated_at: '2026-09-11T12:14:21+02:00'
+  -
+    id: fb2f12b075a39e5a
+    ts: '2026-09-14T19:57:00+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-bug
+    topic: 'queue worker stale config immediate unblock'
+    label: 'queue worker stale config immediate unblock'
+    value: 'Ran php artisan queue:restart on 2026-09-14 to unblock launching (worker PID 92058 booted 2026-09-10 before KBMS_CLAUDE_LAUNCHER existed in .env; launchd restarted it as PID 94319). Treated as a workaround, not the fix.'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 436320d1a19d046e
+    ts: '2026-09-14T19:57:01+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-bug
+    topic: 'queue worker stale config bug severity and routing'
+    label: 'queue worker stale config bug severity and routing'
+    value: 'High severity; routed to a new fix spec US-016 under the existing EP-005 Maintenance epic. US-002 and US-009 are both DONE so spec-request-changes was unavailable.'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 855611fc30c92def
+    ts: '2026-09-14T19:57:01+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-bug
+    topic: 'queue worker stale config fix scope'
+    label: 'queue worker stale config fix scope'
+    value: 'Detect and surface staleness: kbms:doctor gains a stale-worker check, the blocked message distinguishes a stale worker from a genuinely unset key, and the README documents queue:restart after every .env change. Panel-side readiness guarantee was considered and not chosen.'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: bc9c0aa129821381
+    ts: '2026-09-14T19:57:01+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-bug
+    topic: 'queue worker stale config prd requirement gap'
+    label: 'queue worker stale config PRD requirement gap'
+    value: "Requirement gap confirmed: clarify FR-008 (the queued job must resolve the same configuration the panel offered, or name the divergence) and FR-011 (the doctor verifies the worker's live configuration, not just reachability), plus a PRD Revision History row. Not a new FR."
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: cc6b7bbde57ffcc0
+    ts: '2026-09-14T20:48:41+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'pdf generation approach'
+    label: 'pdf generation approach'
+    value: 'Browser print — a print-styled route plus the browser print dialog; no PDF package added'
+    question: null
+    rationale: 'Zero new dependency and zero recurring cost on a localhost personal tool; dompdf cannot render Tailwind 4 and Browsershot would add Node+Chrome to a doctor surface built to keep assumptions few'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 46e33122a11d0751
+    ts: '2026-09-14T20:48:42+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'meeting export scope'
+    label: 'meeting export scope'
+    value: 'Per surface, separately — note and transcript each copyable as Markdown and printable as PDF; no combined meeting brief'
+    question: null
+    rationale: 'Matches the existing separation of the notes and transcript panels on the meeting detail page'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: fff44c2594a37bf0
+    ts: '2026-09-14T20:48:42+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'transcript export volume'
+    label: 'transcript export volume'
+    value: 'Always the full file — exports read the transcript unbounded, ignoring KBMS_TRANSCRIPT_PREVIEW_BYTES'
+    question: null
+    rationale: 'A shared document must never be silently partial; the 2 MiB bound exists for the in-page preview, not for an artifact leaving the tool'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 61032be78ae7b001
+    ts: '2026-09-14T20:51:04+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'markdown copy mechanism'
+    label: 'markdown copy mechanism'
+    value: "Clipboard API when available with a hidden-textarea document.execCommand('copy') fallback; the site stays on http"
+    question: null
+    rationale: 'http://personal-kbms.test is not a secure context, so navigator.clipboard is undefined; securing the site was rejected to avoid adding a TLS assumption to kbms:doctor'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 02c55772c8274a34
+    ts: '2026-09-14T20:51:04+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'markdown export payload'
+    label: 'markdown export payload'
+    value: 'Body verbatim — no meeting header prepended to the copied note or transcript'
+    question: null
+    rationale: 'Keeps the paste predictable and round-trippable back into the tool'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: 468779fc1f2d9b86
+    ts: '2026-09-14T20:51:04+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'print layout mockups'
+    label: 'print layout mockups'
+    value: 'No mockup round — plan directly, deriving the print stylesheet from the existing kb-* vocabulary'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: dcd3db20b1d7db24
+    ts: '2026-09-14T20:52:51+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'us-017 backlog placement'
+    label: 'US-017 backlog placement'
+    value: 'EP-003 Meeting Workspace, MoSCoW Should, priority MEDIUM, 3 points, no blocking dependency'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-017
+    supersedes: null
+  -
+    id: f2c36f842429bff8
+    ts: '2026-09-14T20:53:08+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-016 review verdict'
+    label: 'US-016 review verdict'
+    value: 'Request changes'
+    question: null
+    rationale: "Gate found a timezone mismatch in QueueWorkerFreshnessCheck's operator-facing detail: now() is app-local but CarbonImmutable::createFromTimestamp() is UTC in Carbon 3.13, so the stale-worker message contradicts its own FAIL. Verdict unaffected; text fixed inside US-016 rather than deferred."
+    source: chat
+    spec: US-016
+    supersedes: null
+  -
+    id: e5ea27b328c8167c
+    ts: '2026-09-14T20:57:56+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'series navigation new tab behavior'
+    label: 'series navigation new tab behavior'
+    value: 'Real <a href> links with target=_blank rel=noopener — a plain click opens a new tab, modifier-clicks and the context menu keep their normal meaning'
+    question: null
+    rationale: 'Superset of forced new-tab: same default behaviour, but cmd/ctrl/middle-click and back/forward still work'
+    source: askquestion
+    spec: US-018
+    supersedes: null
+  -
+    id: b297a8fe80dfcbb4
+    ts: '2026-09-14T20:57:57+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'series navigation boundary behavior'
+    label: 'series navigation boundary behavior'
+    value: 'Disabled control with an adjacent aria-describedby reason when the mirror holds no neighbour in that direction; wording never claims the series begins or ends there'
+    question: null
+    rationale: 'Mirror window exhaustion and true series end are indistinguishable from the stored data; matches the existing Open in Outlook fallback'
+    source: askquestion
+    spec: US-018
+    supersedes: null
+  -
+    id: 3e685b17446d811c
+    ts: '2026-09-14T20:57:57+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'series navigation cancelled occurrences'
+    label: 'series navigation cancelled occurrences'
+    value: 'Occurrences cancelled upstream count as neighbours and are reachable by prev/next'
+    question: null
+    rationale: 'Consistent with the product stance that a cancelled occurrence is kept, not hidden, and keeps its notes and transcript link reachable'
+    source: askquestion
+    spec: US-018
+    supersedes: null
+  -
+    id: 9928f0bc2693e398
+    ts: '2026-09-14T20:57:57+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'series navigation on one-off meetings'
+    label: 'series navigation on one-off meetings'
+    value: 'Render neither control when recurrence_id is empty; recurrence is decided by the feed-carried recurrence_id, not by counting stored rows'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-018
+    supersedes: null
+  -
+    id: 33883e23217cca2c
+    ts: '2026-09-14T20:57:57+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-feature
+    topic: 'series navigation prd traceability'
+    label: 'series navigation PRD traceability'
+    value: 'Clarifying bullets under FR-004 (MoSCoW stays Must) rather than a new FR-026; spec MoSCoW Should maps to backlog priority MEDIUM'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: US-018
+    supersedes: null
+  -
+    id: e945c209f0217657
+    ts: '2026-09-14T21:13:17+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-016 review verdict'
+    label: 'US-016 review verdict'
+    value: 'Approved to DONE after the launcher window defect was traced to the LaunchAgent PATH and fixed outside the spec'
+    question: null
+    rationale: 'All 12 acceptance criteria met, 563 tests green, quality clean; the window-closing defect was a separate operator-local launcher script bug, not a US-016 gap'
+    source: chat
+    spec: US-016
+    supersedes: null
+  -
+    id: 61d4f25ea165fc03
+    ts: '2026-09-14T21:13:17+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'queue worker path for gui launches'
+    label: 'queue worker PATH for GUI launches'
+    value: 'Set an explicit PATH in the LaunchAgent plist so the worker and anything it spawns can resolve user-installed binaries'
+    question: null
+    rationale: 'launchd gives the worker PATH=/usr/bin:/bin:/usr/sbin:/sbin and open() propagates it into Ghostty, so a bare claude was not found and the window died instantly'
+    source: chat
+    spec: null
+    supersedes: null
+updated_at: '2026-09-14T21:13:17+02:00'

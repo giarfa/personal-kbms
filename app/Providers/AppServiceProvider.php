@@ -5,10 +5,13 @@ namespace App\Providers;
 use App\Doctor\Checks\IcsFeedCheck;
 use App\Doctor\Checks\LauncherScriptCheck;
 use App\Doctor\Checks\QueueConnectionCheck;
+use App\Doctor\Checks\QueueWorkerFreshnessCheck;
 use App\Doctor\Checks\SchedulerRegistrationCheck;
 use App\Doctor\Checks\TimezoneCheck;
 use App\Doctor\Checks\TranscriptsDirectoryCheck;
 use App\Doctor\CheckSuite;
+use App\Doctor\Worker\PsQueueWorkerProbe;
+use App\Doctor\Worker\QueueWorkerProbe;
 use App\Meetings\OccurrenceKey;
 use App\Models\CalendarEvent;
 use App\Transcripts\TranscriptsDirectory;
@@ -23,11 +26,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(QueueWorkerProbe::class, PsQueueWorkerProbe::class);
+
         $this->app->singleton(CheckSuite::class, fn (): CheckSuite => new CheckSuite([
             new IcsFeedCheck,
             new TranscriptsDirectoryCheck,
             new LauncherScriptCheck,
             new QueueConnectionCheck,
+            new QueueWorkerFreshnessCheck($this->app->make(QueueWorkerProbe::class)),
             new SchedulerRegistrationCheck($this->app->make(Schedule::class)),
             new TimezoneCheck,
         ]));

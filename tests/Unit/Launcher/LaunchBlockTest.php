@@ -13,6 +13,7 @@ class LaunchBlockTest extends TestCase
             LaunchBlock::LauncherNotConfigured->message(),
             LaunchBlock::LauncherMissing->message('/opt/launch.sh'),
             LaunchBlock::LauncherNotExecutable->message('/opt/launch.sh'),
+            LaunchBlock::LauncherStaleWorker->message(),
             LaunchBlock::NoTranscript->message(),
             LaunchBlock::TranscriptRejected->message(),
             LaunchBlock::TranscriptUnreadable->message('/opt/transcript.md'),
@@ -24,7 +25,7 @@ class LaunchBlockTest extends TestCase
             $this->assertNotSame('', $message);
         }
 
-        $this->assertCount(8, array_unique($messages));
+        $this->assertCount(9, array_unique($messages));
     }
 
     public function test_launcher_not_configured_names_its_configuration_key(): void
@@ -46,6 +47,17 @@ class LaunchBlockTest extends TestCase
 
         $this->assertStringContainsString('chmod +x', $message);
         $this->assertStringContainsString('/opt/launch.sh', $message);
+    }
+
+    public function test_launcher_stale_worker_names_the_remedy_and_leaks_no_path_or_value(): void
+    {
+        config(['kbms.claude_launcher' => '/opt/launch.sh']);
+
+        $message = LaunchBlock::LauncherStaleWorker->message();
+
+        $this->assertStringContainsString('queue:restart', $message);
+        $this->assertStringNotContainsString('is not configured', $message);
+        $this->assertStringNotContainsString('/opt/launch.sh', $message);
     }
 
     public function test_transcript_rejected_names_its_configuration_key(): void

@@ -13,6 +13,7 @@ enum LaunchBlock
     case LauncherNotConfigured;
     case LauncherMissing;
     case LauncherNotExecutable;
+    case LauncherStaleWorker;
     case NoTranscript;
     case TranscriptRejected;
     case TranscriptUnreadable;
@@ -35,6 +36,7 @@ enum LaunchBlock
             self::LauncherNotConfigured => '`KBMS_CLAUDE_LAUNCHER` is not configured.',
             self::LauncherMissing => "No launcher script at \"{$detail}\" — check `KBMS_CLAUDE_LAUNCHER`.",
             self::LauncherNotExecutable => "Script found but not executable: `chmod +x {$detail}`",
+            self::LauncherStaleWorker => 'This launch was offered with a launcher script configured, but the queue worker that ran it resolved a different configuration — it is running the `.env` it booted with. Run `php artisan queue:restart`.',
             self::NoTranscript => 'No transcript linked — there would be no context file to pass as argument one.',
             self::TranscriptRejected => 'The linked path escapes `KBMS_TRANSCRIPTS_PATH` and is refused outright.',
             self::TranscriptUnreadable => "The linked transcript is no longer readable at \"{$detail}\".",

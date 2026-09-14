@@ -1040,3 +1040,179 @@ specs:
       subject: 'docs(US-015): record Robert + Lars review notes'
       committed_at: '2026-09-11T12:29:14+02:00'
       url: 'https://github.com/giarfa/personal-kbms/commit/55c7aa52c1a52199eb815ddf9b7d0bed095715a5'
+  -
+    code: US-016
+    title: 'Fix: a stale queue worker refuses every launch as "not configured"'
+    epic:
+      code: EP-005
+      title: Maintenance
+      objective: 'Defects found after a spec reaches DONE are fixed with the same discipline as greenfield work, and the guarantee that was missing is recorded so it cannot go missing again'
+    priority: HIGH
+    points: 3
+    status: DONE
+    body: |-
+      #### US-016: Fix — a stale queue worker refuses every launch as "not configured"
+
+      **Epic:** EP-005 | **Priority:** HIGH | **Points:** 3 | **Status:** TODO
+      **Type:** Fix
+      **Severity:** High
+      **Security:** Lars consulted — no. Nothing escapes a boundary and no input is trusted differently; the defect is a silent, misattributed failure across a process boundary.
+      **Related:** US-009 (launch bridge, DONE), US-002 (doctor command, DONE) — neither is a code regression, both are a missing guarantee
+
+      **Traces to:** FR-008 and FR-011 (both clarified 2026-09-14 — see PRD Revision History)
+
+      **User Story**
+      As the operator,
+      I want a refusal I can act on when the process that runs my launch disagrees with the process that offered it,
+      so that a stale background worker costs me one named remediation instead of an afternoon disbelieving my own `.env`.
+
+      **Demonstrates**
+      After implementing this spec, changing `KBMS_CLAUDE_LAUNCHER` without restarting the worker produces a failing `kbms:doctor` check that names `queue:restart` as the remedy, and a blocked launch whose message says the worker is running stale configuration — not that the key is unset.
+
+      **Steps to Reproduce**
+      1. Start the queue worker (LaunchAgent `com.personal-kbms.queue-worker`, `KeepAlive: true`).
+      2. Add or change `KBMS_CLAUDE_LAUNCHER` in `.env` **without** running `php artisan queue:restart`.
+      3. Open a meeting with a linked transcript, type a question, press **Launch session**.
+      4. The panel shows **Launcher ready** and the exact invocation with the correct path; the launch row lands `blocked` with `` `KBMS_CLAUDE_LAUNCHER` is not configured. ``
+      5. `php artisan kbms:doctor` reports `Claude launcher script .. PASS`, contradicting the launch.
+
+      **Root cause**
+      `LaunchClaudeSession` re-runs `LaunchPreflight` inside the worker (`app/Jobs/LaunchClaudeSession.php:52`) — correct by design, since the script and transcript are mutable between dispatch and execution. But `queue:work` is long-lived and resolves `config('kbms.claude_launcher')` from the `.env` it read **at boot**, so the job saw `null` where the web request saw the path. `kbms:doctor` boots a fresh process and is therefore structurally blind to the one failure mode a long-lived worker actually has.
+
+      **Implementation notes (for the planner, not prescriptive)**
+      - The dispatching request already recorded what it resolved: `prompt_launches.command[0]` holds the script path as the **web process** saw it. A job whose own `resolve()` returns `LauncherNotConfigured` while that column holds a non-empty path has proved the divergence without guessing — no process inspection required, and it works for any config key the two processes could disagree about.
+      - The doctor check is the harder half. Candidate signals: the running worker's start time versus `filemtime(base_path('.env'))`; the `illuminate:queue:restart` cache timestamp versus the same mtime. Herd/macOS is load-bearing for this product (README), so inspecting the worker process is acceptable — but a check that cannot determine the answer must say **"could not determine"** rather than pass, since a false PASS here is exactly the defect being fixed.
+      - `app/Launcher/LauncherScript.php` currently carries two uncommitted duplicate `\Log::debug()` lines from operator debugging. Remove them in TASK-00; they are not part of the defect.
+
+      **Acceptance Criteria**
+      - [x] `php artisan kbms:doctor` fails with its own named check when the running queue worker booted before the current `.env` was last written, and the remediation names `php artisan queue:restart`
+      - [x] That check reports **"could not determine"** as a failure, never a pass, when the worker's state cannot be established — a false PASS is the defect under repair
+      - [x] The check does not fail when no worker is running at all; that condition is already the existing queue check's business and must not be reported twice
+      - [x] A launch blocked by a launcher value the **dispatching request** resolved but the **worker** did not is refused with a distinct reason naming a stale worker and `queue:restart` — never `` `KBMS_CLAUDE_LAUNCHER` is not configured. ``
+      - [x] A launcher key that is genuinely unset in both processes still produces the existing `LauncherNotConfigured` message, unchanged
+      - [x] `README.md` states that any `.env` change requires `php artisan queue:restart`, and says so where the LaunchAgent worker setup is described — not only in a general note
+      - [x] Regression test reproduces the divergence: a job whose preflight resolves no launcher against a launch row whose recorded command holds one, asserting the stale-worker message and not the not-configured one (Anne)
+      - [x] Unit tests cover the doctor check's pass, stale, and indeterminate outcomes with a faked clock/filesystem — no reliance on a real running worker
+      - [x] No security regression — the new message must not leak any path or value the existing blocked messages do not already show (Lars)
+      - [x] `php artisan larapilot:quality` (Pint + Larastan level 5) passes
+      - [x] **Edge case:** `.env` untouched since the worker booted produces a passing check — a worker older than `.env` is the signal, not a worker older than some fixed age
+      - [x] **Edge case:** a `queue:restart` broadcast after the `.env` write clears the stale condition even though the worker process itself is older than the file
+
+
+      ## Rework Feedback
+
+      Robert — rework is scoped to one defect found at the gate. All 12 acceptance criteria are otherwise met, the suite is green (563 passed / 1524 assertions), and `larapilot:quality` is clean (Pint + Larastan level 5, 0 errors). Do not re-open TASK-01/02/03/06 — the fix is confined to TASK-04 and its TASK-05 coverage.
+
+      - app/Doctor/Checks/QueueWorkerFreshnessCheck.php:81 — [Medium] Timezone mismatch in the operator-facing detail. `$startedAt` is app-local (it comes from `now()` in the probe, Europe/Rome), but `CarbonImmutable::createFromTimestamp()` returns **UTC** in Carbon 3.13. The two halves of the message are therefore rendered in different zones. Reproduced live with a worker started 60 min ago against an `.env` written 10 min ago: `worker started 2026-09-14 19:43:36, ".env" last written 2026-09-14 18:33:36` — which reads as though `.env` is *older* than the worker and so contradicts the FAIL it is attached to, off by exactly the local offset. Pass `config('app.timezone')` as the second argument (or `->setTimezone(...)`) so both timestamps render in the same zone.
+      - app/Doctor/Checks/QueueWorkerFreshnessCheck.php:85 — [Medium] Consequence of the above: this is the sentence the operator acts on. A check whose whole purpose is to end a misattributed diagnostic must not ship a self-contradicting one. The verdict itself is correct — `greaterThanOrEqualTo()` compares absolute instants, so no pass/fail outcome is wrong and the documented same-second tie-break still holds. Text only.
+      - app/Doctor/Checks/QueueWorkerFreshnessCheck.php:78 — [Low] Same call for `$restartBroadcastAt`. It only ever feeds the `max()` comparison and is never rendered, so it is not a defect — normalize it in the same pass for consistency rather than leaving one converted timestamp and one not.
+      - tests/Unit/Doctor/QueueWorkerFreshnessCheckTest.php:65 — [Medium] The gap that let this through: the stale case asserts `queue:restart` is in the remediation but never asserts anything about the rendered `detail`. Add an assertion pinning both timestamps in the stale detail to the expected app-timezone strings, so a future zone regression fails the suite instead of reaching the operator. `travelTo()` is already in place at line 54/65 — the clock is fixed, so the expected strings are deterministic.
+      - app/Doctor/Worker/PsQueueWorkerProbe.php:39 — [Low, note only — no action required] `observe()` returns `Undetermined` when `lsof` cannot resolve *any* candidate's cwd, including a `queue:work` owned by a different user on the machine. This fails safe and matches the spec's "never a false PASS" rule; recorded so the trade-off is deliberate rather than rediscovered later.
+
+      Re-run `php artisan test` and `php artisan larapilot:quality` before returning to REVIEW. No changelog or README change is needed — neither documents the timestamp format.
+    status_history:
+      - { status: PLANNED, at: '2026-09-14T20:05:59+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-14T20:09:41+02:00' }
+      - { status: REVIEW, at: '2026-09-14T20:23:52+02:00' }
+      - { status: TODO, at: '2026-09-14T20:52:54+02:00' }
+      - { status: PLANNED, at: '2026-09-14T20:55:57+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-14T20:56:01+02:00' }
+      - { status: REVIEW, at: '2026-09-14T20:56:13+02:00' }
+      - { status: DONE, at: '2026-09-14T21:13:06+02:00' }
+    rework: false
+    merge_commit:
+      sha: 4e6b3c228b97630701520af7f69ec195667513db
+      short_sha: 4e6b3c2
+      subject: 'fix(US-016): render queue worker freshness timestamps in app timezone'
+      committed_at: '2026-09-14T20:55:30+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4e6b3c228b97630701520af7f69ec195667513db'
+  -
+    code: US-017
+    title: "Share a meeting's note and transcript as Markdown and PDF"
+    epic:
+      code: EP-003
+      title: 'Meeting Workspace'
+      objective: 'The meeting detail page is the single place the operator reads, annotates, links and now shares everything known about one occurrence'
+    priority: MEDIUM
+    points: 3
+    status: TODO
+    body: |
+      #### US-017: Share a meeting's note and transcript as Markdown and PDF
+
+      **Epic:** EP-003 | **Priority:** MEDIUM | **Points:** 3 | **Status:** TODO
+      **Blocked by:** -
+      **Type:** Feature
+      **Traces to:** FR-025 (MoSCoW: Should); extends FR-005 (notes) and FR-007 (transcript preview) at their read-only boundary
+
+      **User Story**
+      As the operator,
+      I want to take a meeting's note and its linked transcript out of the tool — as Markdown I can paste, and as a PDF I can attach —
+      so that a thought I captured against a meeting can reach a colleague without me retyping it or hunting for the file on disk.
+
+      **Demonstrates**
+      After implementing this spec, a meeting with a note and a linked transcript shows two actions on each of the two panels. **Copy as Markdown** puts that surface's content on the clipboard verbatim, working on `http://personal-kbms.test` where the Clipboard API is unavailable. **Print / Save as PDF** opens a chrome-free print view carrying a meeting header and the surface's content, and the browser's own print dialog turns it into a PDF.
+
+      **Acceptance Criteria**
+
+      _Happy path_
+      - [ ] The notes panel exposes **Copy as Markdown** and **Print / Save as PDF**; the transcript panel exposes the same two actions
+      - [ ] Copy places the body **verbatim** on the clipboard — the note exactly as stored, the transcript exactly as it sits on disk — with nothing prepended, so a paste round-trips back into the tool unchanged
+      - [ ] A successful copy confirms with a transient "Copied" state on the button it was triggered from
+      - [ ] Print opens a dedicated print view in a new tab and invokes the browser print dialog, so macOS *Save as PDF* produces the file
+      - [ ] The printed document carries a header naming the meeting, its date and time, and — for a transcript — the source filename. This asymmetry with the verbatim clipboard payload is intentional and must not be "corrected"
+      - [ ] The print view renders a note and a `.md` transcript through the existing `MarkdownRenderer`, and a `.txt` transcript as escaped monospace text — the same rendering contract the in-page preview already honors, never a second converter
+      - [ ] Transcript export reads the **full file**: `KBMS_TRANSCRIPT_PREVIEW_BYTES` bounds the in-page preview only and must not truncate an artifact leaving the tool
+
+      _Error cases_
+      - [ ] With an empty note body, the note's copy and print actions are **absent** — nothing offers to share a blank document
+      - [ ] With no linked transcript, or one in a `Broken`, `Unreadable`, `Rejected` or `Suppressed` state, the transcript's copy and print actions are **absent** rather than present-and-failing
+      - [ ] The print route re-verifies the transcript path for containment and readability **at request time**, exactly as the preview does; a file deleted since the page loaded yields a stated error page, never a blank or partial PDF
+      - [ ] A clipboard write that fails reports the failure in place; it never leaves a "Copied" confirmation on a clipboard that did not receive anything
+
+      _Edge cases_
+      - [ ] Copy works on `http://personal-kbms.test`: browsers do not treat `.test` over HTTP as a secure context — only `localhost` and `127.0.0.1` — so `navigator.clipboard` is undefined there. The implementation feature-detects and falls back to a hidden-textarea `document.execCommand('copy')` path, and keeps using the Clipboard API wherever it is available
+      - [ ] A transcript larger than the 2 MiB preview bound copies and prints complete
+      - [ ] The print view carries no application chrome — no navigation, breadcrumbs, or action buttons — and prints legibly on white paper whether the app was in light or dark mode when the export was triggered
+      - [ ] A cancelled occurrence still exports: like notes, sharing never gates on upstream feed state
+      - [ ] The print view is reachable only for an existing occurrence and resolves the same occurrence identity (`UID` + `RECURRENCE-ID`) as the detail page, so one occurrence of a recurring series never prints a sibling's note
+
+      **Notes**
+      - **No PDF package is added.** Recorded decision `pdf generation approach` (2026-09-14): `dompdf` cannot render the Tailwind 4 styling the rest of the product uses, and Browsershot would add Node, Puppeteer and a headless Chrome to the integration surface `kbms:doctor` exists to keep small. Paper size and margins belong to the browser — an accepted trade, not an oversight
+      - **Privacy (FR-025, PRD `### Privacy & data handling` obligation 4):** this is the first capability whose purpose is to move transcript and note content off the machine. No consent machinery is warranted for a single-operator local tool, but the operator carries the responsibility at the moment of sharing
+      - Per `.ai/rules/views.md`, the print view is a new visual surface: update `.larapilot/mockups/kbms-app/README.md` with its `kb-*` vocabulary as part of delivery. No mockup round was requested (recorded decision `print layout mockups`)
+  -
+    code: US-018
+    title: 'Step to the previous or next occurrence of a series'
+    epic:
+      code: EP-003
+      title: 'Meeting Workspace'
+      objective: 'The meeting detail page is the single place the operator reads, annotates, links and now shares everything known about one occurrence'
+    priority: MEDIUM
+    points: 2
+    status: TODO
+    body: |
+      #### US-018: Step to the previous or next occurrence of a series
+
+      **Epic:** EP-003 | **Priority:** MEDIUM | **Points:** 2 | **Status:** TODO
+      **Blocked by:** -
+      **Type:** Feature
+      **Traces to:** FR-004 (MoSCoW: Must)
+
+      **User Story**
+      As the operator,
+      I want the detail page of a recurring meeting to carry a control for the previous and the next occurrence of that same series, each opening beside the page I am on,
+      so that preparing this week's standing meeting from last week's note is one click rather than a detour back through the agenda.
+
+      **Demonstrates**
+      After implementing this spec, opening any occurrence of a weekly series at `http://personal-kbms.test/meetings/{key}` shows two controls naming the adjacent occurrences by their own date and time; clicking one opens that occurrence in a new tab while the original stays put; the earliest occurrence the mirror holds renders the previous control inert with its reason stated; and a one-off meeting shows neither control.
+
+      **Acceptance Criteria**
+      - [ ] On the detail page of an occurrence whose `recurrence_id` is non-empty, two controls render — previous occurrence and next occurrence of the same `source_uid` — each labelled with the neighbour's own date and time, and each a real `<a href>` to `route('meetings.show', …)` built from that neighbour's `OccurrenceKey::toRouteKey()`
+      - [ ] Each control carries `target="_blank"` and `rel="noopener"`, so a plain click opens a new tab while cmd/ctrl-click, middle-click, the context menu, and back/forward keep their ordinary meaning — no `window.open`, no click handler that swallows modifier keys
+      - [ ] *Previous* resolves to the occurrence of the same `source_uid` with the greatest `starts_at` strictly earlier than the current one; *next* to the smallest `starts_at` strictly later. Ties on `starts_at` are broken deterministically on `recurrence_id`, so an occurrence is never its own neighbour and two rows never resolve to each other
+      - [ ] Occurrences cancelled upstream are included in the chain and are reachable by prev/next; the destination page's existing "Cancelled upstream" banner is what states their status — the control itself does not mark them
+      - [ ] **Boundary:** when the mirror holds no occurrence in that direction, the control renders disabled with an adjacent reason wired through `aria-describedby`, in the same shape as the existing "Open in Outlook" fallback. The reason speaks about the mirror holding nothing earlier/later and never claims the series begins or ends there
+      - [ ] **One-off meetings:** an occurrence whose `recurrence_id` is empty renders neither control. Recurrence is decided by the feed-carried `recurrence_id`, not by counting stored rows — a series whose sync window holds exactly one occurrence still renders both controls, both disabled with their reason
+      - [ ] The accessible name carries direction *and* destination (for example "Previous occurrence, Mon 8 Sep 09:00") and announces that the link opens in a new tab; a disabled control's reason remains reachable to a screen reader
+      - [ ] Each direction is a single indexed lookup served by the leading column of the `(source_uid, recurrence_id)` unique index — the full series is never loaded, and no N+1 is introduced on the detail page
+      - [ ] Feature tests cover: both neighbours present, first stored occurrence (previous disabled), last stored occurrence (next disabled), a cancelled occurrence as a neighbour, a single-occurrence series (both disabled), and a one-off meeting (neither control rendered)
