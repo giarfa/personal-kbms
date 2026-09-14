@@ -9,6 +9,8 @@ use App\Doctor\Checks\SchedulerRegistrationCheck;
 use App\Doctor\Checks\TimezoneCheck;
 use App\Doctor\Checks\TranscriptsDirectoryCheck;
 use App\Doctor\CheckSuite;
+use App\Doctor\Worker\PsQueueWorkerProbe;
+use App\Doctor\Worker\QueueWorkerProbe;
 use App\Meetings\OccurrenceKey;
 use App\Models\CalendarEvent;
 use App\Transcripts\TranscriptsDirectory;
@@ -23,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(QueueWorkerProbe::class, PsQueueWorkerProbe::class);
+
         $this->app->singleton(CheckSuite::class, fn (): CheckSuite => new CheckSuite([
             new IcsFeedCheck,
             new TranscriptsDirectoryCheck,
