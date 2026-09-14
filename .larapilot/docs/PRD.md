@@ -59,6 +59,11 @@ A chronological list view spanning recent past and upcoming meetings, defaulting
 
 A single canonical page per meeting occurrence, showing feed-derived fields read-only (title, time, duration, location, organizer, attendees, description) alongside the operator-owned surfaces: notes (FR-005), transcript (FR-006, FR-007), prompt box (FR-008), and the Outlook CTA (FR-009). Feed data and operator data are visually distinct — one is a mirror and can change under you, the other is yours.
 
+- **The page is addressable from its neighbours.** When the occurrence belongs to a recurring series, the adjacent occurrences of that same series are reachable directly from the page, in both directions. The recurring meeting is the case where one occurrence is rarely self-sufficient — the standing 1:1, the weekly review — and the preparation for this week is last week's note. Routing that through the agenda or the calendar is a detour past information the page already holds.
+- **Adjacency is the feed's, not a guess.** Neighbours are the occurrences sharing the same `UID`, ordered by start time; the series is what the feed says it is. Occurrences cancelled upstream stay in the chain — excluding them would make a note attached to a cancelled occurrence unreachable by this route, which contradicts keeping it rather than hiding it.
+- **The mirror's edge is stated, not disguised.** The stored window holds only what the feed carried, so "there is no later occurrence" and "the sync window ends here" are indistinguishable from the data. At the edge the affordance stays visible and inert with its reason given, and the reason speaks about the mirror — never about the series having begun or ended. A one-off meeting has no series and shows no such affordance at all.
+- **Neighbours open beside the occurrence, not over it.** The default click opens the neighbour in a new tab, because the reason to reach for it is almost always comparison — losing the occurrence you started from defeats the purpose. It remains an ordinary link, so the browser's own navigation vocabulary keeps working.
+
 ### FR-005: Personal notes on a meeting
 
 **MoSCoW:** Must
@@ -105,6 +110,7 @@ A text input on the meeting detail page becomes the initial question for an inte
 - Arguments are passed as an **argument array**, never an interpolated shell string — question text is arbitrary operator input and must not be able to alter the command.
 - Each launch is persisted (meeting, context path, question, resolved command, timestamp, dispatch outcome).
 - Launch is blocked with a clear reason when the script is missing or not executable, or when no context file is linked.
+- Because the job runs in a **separate, long-lived process**, its configuration can drift from the one the operator was just shown: a `queue:work` worker holds the `.env` it booted with. The job must resolve the **same configuration the panel offered**, or refuse with a reason that names that divergence — never report a value as unset when the interface has just rendered it. A refusal the operator cannot reconcile with `.env`, `kbms:doctor`, and the on-screen invocation is worse than no refusal at all.
 - The exact invocation is available to copy, so the operator can run it manually when preferred.
 
 **Explicit non-goal:** the session is interactive and owned by the terminal, so the application **does not** capture Claude's replies. The meeting record holds the question, not the answer. See FR-018.
@@ -132,6 +138,8 @@ The interface always shows when the calendar was last successfully synced and wh
 
 An Artisan command verifies the whole integration surface in one shot and reports pass/fail per check: ICS URL reachable and parseable; transcripts directory present and readable; launcher script present and executable; queue worker reachable; scheduler registered; configured timezone valid. Every one of the three integration points in this product is an assumption about the operator's machine, and this command is what turns a silent misconfiguration into a stated one.
 
+Reachability alone is not enough for the queue worker: the worker is long-lived and answers from the configuration it booted with, so the doctor must verify that the **running worker's live configuration matches the current `.env`** and report a stale worker as its own named failure with `queue:restart` as the remediation. A check that runs in a fresh process is structurally blind to the one failure mode a long-lived worker actually has.
+
 ### FR-023: Rule-based event colouring
 
 **MoSCoW:** Must
@@ -153,6 +161,21 @@ The operator also uses the calendar as an occasional todo list, encoded in the e
 - **Overdue** means open *and* past its end time. Time is re-derived on every render, so an item becomes overdue on its own as the day moves (FR-002 / FR-003 self-refresh), and a completed item is never overdue no matter how old.
 - This is a **third independent channel**, alongside the FR-002 coverage map and the FR-023 rule colour. An overdue todo that is also a rule-coloured meeting with notes must read as all three at once — no channel may consume another.
 - Status never rests on colour alone: the checkbox glyph and the accessible name carry "to do", "done" and "overdue" for a reader who cannot see the treatment.
+
+### FR-025: Sharing a meeting's note and transcript out of the tool
+
+**MoSCoW:** Should
+
+The note surface (FR-005) and the transcript preview (FR-007) both stop at *readable in place*. This requirement takes them one step further: from the meeting detail page, each of the two surfaces can leave the tool — as Markdown on the clipboard, and as a PDF through the browser's print dialog.
+
+- **Two surfaces, handled separately.** The note and the transcript each carry their own copy and print actions. There is no combined "meeting brief" document: the panels are separate on screen because they have separate owners — the feed's pipeline wrote one, the operator wrote the other — and an export that fuses them would undo that distinction.
+- **The clipboard payload is verbatim.** The note is copied exactly as stored and the transcript exactly as it sits on disk, with nothing prepended. A paste must round-trip back into the tool unchanged.
+- **The printed document is not verbatim**, and this asymmetry is deliberate: a PDF is read away from the machine that produced it, so it carries a header naming the meeting, its date and time, and — for a transcript — the source filename. A context-free PDF is not worth producing.
+- **No PDF library.** Rendering is the browser's: a dedicated, chrome-free print view per surface plus a print stylesheet, driven by the operator's own print dialog. A server-side PDF engine was rejected because `dompdf` cannot render the Tailwind 4 styling the rest of the product is built from, and Browsershot would add Node, Puppeteer and a headless Chrome to a machine whose integration assumptions FR-011 exists to keep few and checkable. The trade is real and accepted: paper size and margins belong to the browser, not to this product.
+- **Exports are unbounded.** `KBMS_TRANSCRIPT_PREVIEW_BYTES` bounds the in-page preview so a huge file cannot wedge the detail page; it must not bound an artifact that leaves the tool. A shared document is never silently partial.
+- **Verified at request time, not at render time.** The print view re-checks the transcript path for containment and readability exactly as the preview does, so a file deleted since the page loaded produces a stated error rather than an empty PDF — the same verify-before-offer guarantee FR-006 already carries.
+- **The clipboard must work on the real origin.** The application is served at `http://personal-kbms.test`, which browsers do not treat as a secure context — only `localhost` and `127.0.0.1` earn that exemption — so `navigator.clipboard` is undefined there. A copy path that works only under HTTPS is a copy path that does not work. The feature-detects and falls back, and a failed write is reported rather than silently claimed.
+- **Privacy (see `### Privacy & data handling`, obligation 4).** This is the first capability whose entire purpose is to move transcript and note content off the machine, and the household exemption the product relies on is conditional on output staying personal. No machinery is added for it — that would be disproportionate for a single-operator local tool — but the responsibility is now the operator's at the moment they share, and it is recorded here rather than left implicit.
 
 ### FR-012: Prompt launch history per meeting
 
@@ -242,6 +265,7 @@ Single operator, single machine, no accounts, no sharing, no remote hosting in t
 - FR-011 — `doctor` command validating every integration assumption
 - FR-023 — Rule-based event colouring on the calendar and agenda, configured as an ordered rule list, layered over (never replacing) the coverage map
 - FR-024 — Calendar-as-todo: `[]` / `[x]` title convention parsed into a time-aware open / done / overdue state on the agenda, calendar, and meeting detail, as a third channel beside coverage and rule colour
+- FR-025 — Sharing out of the tool: per-surface Markdown copy (verbatim, secure-context-independent) and browser-rendered PDF via a chrome-free print view, with exports unbounded by the preview limit and no PDF library added
 
 ### Out of Scope
 
@@ -391,3 +415,6 @@ Baseline set only, matching a personal project: a `README.md` covering Herd setu
 | 2026-09-10 | larapilot-feature US-012 | Added FR-023 (Must): rule-based event colouring on the calendar and agenda, driven by an ordered rule list in `config/kbms.php` with first-match-wins precedence, a closed colour-token palette, and labels in the legend and accessible names; added to MVP In Scope |
 | 2026-09-11 | larapilot-bug → FR-006 / FR-008 gap | Recorded that the launcher receives the `.txt` **sibling** of the resolved context file (the pipeline emits a `.md` + `.txt` pair; the resolver indexes `.md` only), and that the sibling carries the same verify-before-offer guarantee as the resolved path — a missing or unreadable sibling is a distinct blocked reason, not a silent launch. Routed to US-015 |
 | 2026-09-11 | larapilot-feature US-013 | Added FR-024 (Should): calendar-as-todo — `[]` / `[x]` title-prefix convention parsed read-only into open / done / overdue status across agenda, calendar and meeting detail, with overdue derived from end time versus now; a third visual channel beside FR-002 coverage and FR-023 rule colour; added to MVP In Scope |
+| 2026-09-14 | larapilot-bug → FR-008 / FR-011 gap | Recorded that the queued launch job must resolve the same configuration the panel offered — a long-lived `queue:work` worker answers from its boot-time `.env`, so a refusal must name that divergence rather than report a configured value as unset — and that the doctor verifies the running worker's **live** configuration, not merely that the queue is reachable. Routed to US-016 |
+| 2026-09-14 | larapilot-feature US-017 | Added FR-025 (Should): the note and the transcript can each leave the meeting detail page — Markdown copy (verbatim, with a non-secure-context fallback since `.test` over HTTP has no Clipboard API) and PDF via a chrome-free browser print view rather than a PDF library; exports read the full transcript, not the `KBMS_TRANSCRIPT_PREVIEW_BYTES` preview bound; added to MVP In Scope and cross-referenced to the privacy reassess-on-sharing obligation |
+| 2026-09-14 | larapilot-feature US-018 | Clarified FR-004 (MoSCoW unchanged — Must): the meeting detail page of an occurrence in a recurring series reaches the previous and next occurrence of that series directly; adjacency is `UID` + start-time order, cancelled occurrences stay in the chain, the mirror's edge renders inert with a reason that speaks about the mirror rather than the series, one-off meetings show nothing, and the default click opens the neighbour in a new tab as an ordinary link |

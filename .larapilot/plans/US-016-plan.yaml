@@ -1,0 +1,380 @@
+code: US-016
+plan_body: |
+  ## Technical Solution
+
+  **Root cause.** `LaunchClaudeSession::handle()` re-runs `LaunchPreflight` inside the worker (`app/Jobs/LaunchClaudeSession.php:52`) — correct by design. But `queue:work` is long-lived (LaunchAgent `com.personal-kbms.queue-worker`, `KeepAlive: true`) and answers `config('kbms.claude_launcher')` from the `.env` it read at boot, so the job resolves `null` where the web request resolved a path. `kbms:doctor` boots a fresh process and is therefore structurally blind to that divergence: it reports `Claude launcher script .. PASS` while every launch is refused.
+
+  Two independent halves, one per FR.
+
+  ### Half A — the refusal names the divergence (FR-008)
+
+  The dispatching request already recorded what the **web process** resolved: `prompt_launches.command[0]`. No process inspection is needed at launch time — the comparison is between a column and the worker's own `config()`.
+
+  1. New enum case `LaunchBlock::LauncherStaleWorker` with its own sentence, per the `states.html` contract that every blocked state names the action that fixes it. Wording must name a **stale worker** and `php artisan queue:restart`, and must **not** interpolate the launcher path or any value (Lars: the existing `LauncherNotConfigured` message shows no path — the new one must not leak one either). `LaunchBlockDetail::for()` needs no arm; the case falls to `default => null`.
+  2. New named collaborator `App\Launcher\StaleWorkerDivergence` — a pure static function over `(LaunchBlock $block, PromptLaunch $launch): LaunchBlock`. It substitutes `LauncherStaleWorker` when **all** hold:
+     - `$block` is one of the launcher blocks (`LauncherNotConfigured`, `LauncherMissing`, `LauncherNotExecutable`) — transcript and question blocks are never config divergence;
+     - `$launch->command[0]` exists and is a non-empty string;
+     - the launcher value **as this process resolves it** — `(string) config('kbms.claude_launcher')` — differs from `command[0]`.
+     Otherwise `$block` is returned untouched. The comparison is on the **value**, not on the block case: this is what keeps a genuinely unset key (identical in both processes) on its existing `LauncherNotConfigured` message, and keeps a launcher file deleted after dispatch (same path in both processes) on `LauncherMissing` — both already asserted by `LaunchClaudeSessionJobTest`.
+  3. `LaunchClaudeSession::handle()` passes the second-pass block through `StaleWorkerDivergence::resolve()` before composing the detail and persisting the error. One line; the job stays thin and the rule stays unit-testable without a queue.
+
+  Deliberately **not** done: no attempt to re-read `.env` from inside the job and no config reload. The job must report the divergence, not paper over it — silently launching with a value the worker never had is a worse outcome than a named refusal.
+
+  ### Half B — the doctor sees a stale worker (FR-011)
+
+  `kbms:doctor` gains **one new check** that answers a question no fresh process can answer by itself: is the running worker older than the configuration it is supposed to be running?
+
+  1. `App\Doctor\Worker\QueueWorkerProbe` (interface) → `observe(): QueueWorkerObservation`, a tri-state value object: `Running($startedAt)`, `NotRunning`, `Undetermined($reason)`. The interface is the test seam — the unit tests never depend on a real worker.
+  2. `App\Doctor\Worker\PsQueueWorkerProbe` (Sarah) — macOS/Herd is load-bearing for this product (README §Requirements), so process inspection is in-contract:
+     - `ps -axo pid=,etime=,command=` via Laravel's `Process` facade with an **argument array**, never a shell string;
+     - keep lines whose command contains `artisan queue:work`;
+     - attribute each candidate to **this** project by resolving its working directory: `lsof -a -p {pid} -d cwd -Fn` → the line starting with `n`; keep only `=== base_path()`. Without this, another project's worker on the same machine would produce a false verdict;
+     - parse `etime` (`[[dd-]hh:]mm:ss`, locale-free) into elapsed seconds and derive `startedAt = now()->subSeconds($elapsed)`. **Not** `lstart`: its output is locale-dependent and would parse differently on a non-English machine;
+     - no candidate lines → `NotRunning`; several → the **oldest** start time wins (the most conservative answer);
+     - `ps` unavailable/non-zero/unparsable, or `lsof` unavailable/failing for a candidate → `Undetermined` with the reason — never a silent empty result treated as "no worker".
+  3. `App\Doctor\Checks\QueueWorkerFreshnessCheck` — label `Queue worker configuration`, registered in `AppServiceProvider` immediately after `QueueConnectionCheck`. Logic:
+     - `.env` mtime: `filemtime(base_path('.env'))`. Unreadable/absent → `CheckResult::failed(...)` naming that it **could not determine** the answer;
+     - `Undetermined` → `failed()` with the probe's reason. A check that cannot answer refuses to pass — a false PASS is the defect under repair;
+     - `NotRunning` → `pass()`, detail stating no worker for this project is running. The existing `QueueConnectionCheck` already owns "reachable queue ≠ running worker"; this check must not say it a second time;
+     - `Running` → `$effective = max($startedAt, $restartBroadcastAt)` where `$restartBroadcastAt` is `Cache::get('illuminate:queue:restart')` (the key `queue:restart` writes and `Worker::queueShouldRestart()` reads — verified in `vendor/laravel/framework/.../Queue/Worker.php:914` and `Console/RestartCommand.php:55`; the project's cache store is `database`, shared across processes). Stale when `envMtime >= $effective`; remediation names `php artisan queue:restart`.
+     - **Tie-break deliberately resolved as stale** (`>=`, not `>`): `ps` and `filemtime` are both second-granular, and a one-second window that reports a stale worker as fresh is the exact failure being fixed. The cost is a rare false FAIL whose own named remediation (`queue:restart`, which writes a strictly later timestamp) clears it.
+     - The restart broadcast is what satisfies the second edge case: it clears the stale condition even though the worker process itself is still older than the file, because the worker is about to exit and `KeepAlive` will restart it.
+
+  **Determinism in the suite.** `DoctorCommandTest` runs the real `CheckSuite`, and this machine has a live worker — the probe **must** be bound through the container (`$this->app->make(QueueWorkerProbe::class)` inside the `CheckSuite` closure, resolved lazily) so tests can bind a fake instance and the suite stops depending on whatever `ps` says at that moment.
+
+  ## Git & Branching
+  - Mode: GITFLOW (from `settings.git_mode`)
+  - Branch: `feature/US-016-stale-worker-refusal` from `develop`
+  - TASK-00: bootstrap (no push — PR prepared locally only)
+  - Per task: one atomic Conventional Commit; no push, no remote PR under GITFLOW
+  - `app/Launcher/LauncherScript.php` carries two uncommitted duplicate `\Log::debug()` lines from operator debugging and is dirty on `develop` — TASK-00 removes them so the feature branch starts clean; they are not part of the defect
+  - Merge after `larapilot-review` approval (`auto_approve: YES`, so autopilot may approve with no open blockers)
+
+  ## Test Data Strategy
+  - No new or changed Eloquent models, migrations, or relationships — `Test Data` is `N/A` on every task
+  - Existing `PromptLaunchFactory` (with `queued()` / `forOccurrence()` states) and `MeetingTranscriptFactory` cover every case; no seeder change — the demo dataset does not depend on worker freshness
+  - No `migrate:fresh --seed` gate for this spec
+
+  ## Test Strategy
+  - Bar: NORMAL (`settings.testing`) — Pest/PHPUnit feature + unit only, no browser, E2E, or viewport suites
+  - Anne (TASK-02) — divergence regression, the AC's named reproduction: a queued launch whose `command[0]` holds a path while `config('kbms.claude_launcher')` is `null` in the job's process asserts the **stale-worker** message and explicitly asserts the absence of `` `KBMS_CLAUDE_LAUNCHER` is not configured. ``; plus unit coverage of `StaleWorkerDivergence` for each guard (non-launcher block untouched, empty/missing `command`, identical value untouched)
+  - Anne (TASK-02) — negative regressions must stay green unchanged: `test_launcher_deleted_after_dispatch_blocks_and_runs_nothing` (same path in both processes → `LauncherMissing`) and `LaunchBlockTest::test_every_case_has_its_own_distinct_non_empty_message` (extend for the new case)
+  - Anne (TASK-05) — `QueueWorkerFreshnessCheck` unit tests against a **fake probe** and a temp `.env` file with a controlled `touch()` mtime, plus `travelTo()` for the clock: pass (worker newer than `.env`), stale (worker older), restart-broadcast-clears-stale, tie (same second → stale), indeterminate probe → FAIL naming "could not determine", no worker → PASS and **not** a duplicate of the queue-connection wording, `.env` unreadable → FAIL. No test may depend on a real running worker
+  - Anne (TASK-05) — `PsQueueWorkerProbe` covered with `Process::fake()` over canned `ps`/`lsof` output: parses `etime` in all three shapes (`mm:ss`, `hh:mm:ss`, `dd-hh:mm:ss`), filters a foreign-cwd worker out, picks the oldest of several, and returns `Undetermined` on a `ps` failure and on an `lsof` failure
+  - Anne (TASK-05) — `DoctorCommandTest` binds a fake probe in `setUp()` so the suite is machine-independent
+  - Full suite green (`php artisan test`) and `php artisan larapilot:quality` (Pint + Larastan level 5) clean before handoff
+  - **Manual test handoff** (the one thing automation cannot prove — it needs a real long-lived worker): with the LaunchAgent worker running, change `KBMS_CLAUDE_LAUNCHER` in `.env` without restarting, then (1) `php artisan kbms:doctor` → `Queue worker configuration .. FAIL` naming `queue:restart`, (2) launch a session from a meeting → blocked with the stale-worker message, (3) `php artisan queue:restart`, wait for `KeepAlive` to respawn, re-run both → check passes and the launch runs
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and drop the stray debug logging'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for this spec and start from a clean tree: `app/Launcher/LauncherScript.php` carries two uncommitted, duplicated `\Log::debug()` lines left over from operator debugging. They are not part of the defect and must not travel into the fix commits.
+
+      ## Files Involved
+      - app/Launcher/LauncherScript.php
+      - (git)
+
+      ## Steps
+      1. `git checkout develop && git pull` (pull only if tracking a remote; otherwise local `develop`)
+      2. `git checkout -b feature/US-016-stale-worker-refusal`
+      3. Delete both `\Log::debug('Launcher path: ' . ($path ?? 'null'));` lines from `LauncherScript::resolve()` — the method returns to being a pure resolver with no side effect
+      4. `php artisan test --filter=LauncherScript` — confirm nothing depended on the logging
+      5. Draft internal PR title/body toward `develop` (keep local until push is requested)
+
+      ## Completion Criteria
+      - [x] Branch `feature/US-016-stale-worker-refusal` exists locally
+      - [x] `LauncherScript::resolve()` has no `Log::debug` calls and the working tree is clean of that debugging edit
+      - [x] PR title/body drafted for `develop` (remote open only if the user asks)
+
+      ## Test Data
+      - N/A — no model or schema changes
+
+      ## Git Deliverables
+      - Commit: `chore(US-016): TASK-00 bootstrap feature branch and drop stray debug logging`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally — open/update remote only if the user requests
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 0.5
+    dependencies: {}
+  -
+    id: TASK-01
+    title: 'Refuse a divergent launch as a stale worker, not as an unset key'
+    body: |-
+      ## Description
+      A launch dispatched with a launcher path the **web process** resolved, and refused by a **worker** that resolves a different value (typically none), must be blocked with its own named reason pointing at `php artisan queue:restart` — never with `` `KBMS_CLAUDE_LAUNCHER` is not configured. ``, which sends the operator to an `.env` that is already correct.
+
+      ## Files Involved
+      - app/Launcher/LaunchBlock.php
+      - app/Launcher/StaleWorkerDivergence.php (new)
+      - app/Jobs/LaunchClaudeSession.php
+
+      ## Steps
+      1. Add `LaunchBlock::LauncherStaleWorker` with its own `message()` arm. Wording names the divergence and the remedy, e.g. *"This launch was offered with a launcher script configured, but the queue worker that ran it resolved a different configuration — it is running the `.env` it booted with. Run `php artisan queue:restart`."* **Lars gate:** the sentence must not interpolate the launcher path, the configured value, or `command[0]` — `LauncherNotConfigured` leaks nothing today and this message must leak nothing either. No `LaunchBlockDetail` arm is needed (`default => null`).
+      2. Add `App\Launcher\StaleWorkerDivergence` with a single static `resolve(LaunchBlock $block, PromptLaunch $launch): LaunchBlock`, documented as the one place the two processes' answers are compared. Substitute `LauncherStaleWorker` only when all three hold:
+         - `$block` is `LauncherNotConfigured`, `LauncherMissing`, or `LauncherNotExecutable`;
+         - `$launch->command[0]` is present and a non-empty string;
+         - `(string) config('kbms.claude_launcher')` (this process's answer) `!==` that `command[0]`.
+         Return `$block` unchanged otherwise. Compare **values**, never block cases — that is what leaves a genuinely unset key and a launcher deleted after dispatch on their existing messages.
+      3. In `LaunchClaudeSession::handle()`, pass the second-pass block through `StaleWorkerDivergence::resolve($result, $launch)` before `LaunchBlockDetail::for(...)` and the `update()`. Keep the existing `Log::info('kbms.launch', …)` shape unchanged.
+      4. Add a `CHANGELOG.md` `[Unreleased] -> ### Fixed` line describing the refusal (docs for README land in TASK-06).
+      5. `php artisan test --filter=LaunchClaudeSessionJobTest` — the existing launcher-deleted and transcripts-repointed regressions must stay green untouched.
+
+      ## Completion Criteria
+      - [x] A job whose preflight resolves no launcher, against a launch row whose `command[0]` holds one, blocks with the stale-worker message
+      - [x] That message never contains the launcher path or any configured value
+      - [x] A key genuinely unset in both processes still blocks with the unchanged `` `KBMS_CLAUDE_LAUNCHER` is not configured. `` message
+      - [x] A launcher file deleted after dispatch (same path both sides) still blocks with the unchanged `LauncherMissing` message
+      - [x] The comparison lives in exactly one named place; the job gained one line, not a branch tree
+      - [x] CHANGELOG updated
+
+      ## Test Data
+      - N/A — no model or schema changes
+
+      ## Git Deliverables
+      - Commit: `fix(US-016): TASK-01 refuse a divergent launch as a stale worker`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Fix
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2
+    dependencies:
+      - TASK-00
+    commit:
+      sha: c923515c053a621e9d75525f0b8b3515082c9d09
+      short_sha: c923515
+      subject: 'fix(US-016): TASK-01 refuse a divergent launch as a stale worker'
+      committed_at: '2026-09-14T20:11:14+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/c923515c053a621e9d75525f0b8b3515082c9d09'
+  -
+    id: TASK-02
+    title: 'Regression coverage for the launch-time divergence'
+    body: |-
+      ## Description
+      Reproduce the reported defect as a test — a job whose preflight resolves no launcher against a launch row whose recorded command holds one — and pin every guard that keeps the existing refusals unchanged.
+
+      ## Files Involved
+      - tests/Feature/LaunchClaudeSessionJobTest.php
+      - tests/Unit/Launcher/StaleWorkerDivergenceTest.php (new)
+      - tests/Unit/Launcher/LaunchBlockTest.php
+
+      ## Steps
+      1. `LaunchClaudeSessionJobTest`: new test building a queued launch via the existing `queuedLaunch()` helper (its `command` already holds `[$this->launcherFile, $txtPath, $question]`), then `config(['kbms.claude_launcher' => null])` to stand in for the worker's boot-time view. Assert the row lands `Blocked`, `Process::assertNothingRan()`, the error contains `queue:restart`, and — the point of the spec — `assertStringNotContainsString('is not configured', $fresh->error)`.
+      2. Same file: a launch whose `command` is `[]`/absent and whose config is null still blocks with the unchanged not-configured message.
+      3. New `StaleWorkerDivergenceTest` (unit, no queue): substitutes for each of the three launcher blocks when the values differ; returns the block untouched for a transcript block, a question block, an empty `command`, and an identical value.
+      4. `LaunchBlockTest`: the exhaustive `test_every_case_has_its_own_distinct_non_empty_message` picks up the new case automatically — add a dedicated test that the stale-worker message names `queue:restart` **and** contains neither the configured launcher path nor the word "not configured".
+      5. `php artisan test` — full suite green, including `LaunchCommandTest`'s adversarial datasets (unaffected; re-run to confirm).
+
+      ## Completion Criteria
+      - [x] The reported reproduction is a failing-before / passing-after test
+      - [x] Every `StaleWorkerDivergence` guard has its own unit case
+      - [x] The Lars no-leak constraint is asserted, not just reviewed
+      - [x] Full suite green
+
+      ## Git Deliverables
+      - Commit: `test(US-016): TASK-02 cover the stale-worker launch refusal`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-01
+    commit:
+      sha: 454ec555f8944ab9bed828bbf9cc7c6ded170bc5
+      short_sha: 454ec55
+      subject: 'test(US-016): TASK-02 cover the stale-worker launch refusal'
+      committed_at: '2026-09-14T20:12:30+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/454ec555f8944ab9bed828bbf9cc7c6ded170bc5'
+  -
+    id: TASK-03
+    title: "Probe the running queue worker's start time (macOS/Herd)"
+    body: |-
+      ## Description
+      Give the doctor a way to answer "is a worker for **this** project running, and since when?" — with an explicit third answer, *could not determine*, that the check is required to treat as a failure. Parallel with TASK-01: no shared files.
+
+      ## Files Involved
+      - app/Doctor/Worker/QueueWorkerProbe.php (new, interface)
+      - app/Doctor/Worker/QueueWorkerObservation.php (new)
+      - app/Doctor/Worker/QueueWorkerState.php (new, enum)
+      - app/Doctor/Worker/PsQueueWorkerProbe.php (new)
+
+      ## Steps
+      1. `QueueWorkerState`: `Running`, `NotRunning`, `Undetermined`. `QueueWorkerObservation`: `final readonly`, static constructors `running(CarbonImmutable $startedAt)`, `notRunning()`, `undetermined(string $reason)`; `?CarbonImmutable $startedAt`, `?string $reason`.
+      2. `QueueWorkerProbe`: one method, `observe(): QueueWorkerObservation`. Docblock states the contract: never throws, and never reports `NotRunning` for a question it could not answer.
+      3. `PsQueueWorkerProbe`:
+         - run `ps -axo pid=,etime=,command=` through the `Process` facade as an **argument array** (no shell string, nothing interpolated);
+         - non-zero exit or empty output → `undetermined()` naming `ps`;
+         - keep lines whose command contains `artisan queue:work`; none → `notRunning()`;
+         - for each candidate resolve its cwd with `lsof -a -p {pid} -d cwd -Fn` (argument array; `{pid}` is an int parsed from our own `ps` output) and read the `n`-prefixed line. `lsof` missing or failing → `undetermined()` naming `lsof`. Keep only candidates whose cwd is exactly `base_path()`; none left → `notRunning()`;
+         - parse `etime` as `[[dd-]hh:]mm:ss` into seconds — **not** `lstart`, whose format is locale-dependent; unparsable → `undetermined()`;
+         - `startedAt = now()->subSeconds($elapsed)`; several workers → the **oldest** start time (most conservative).
+      4. Bind `QueueWorkerProbe` → `PsQueueWorkerProbe` in `AppServiceProvider::register()` so the check and the tests resolve it through the container.
+      5. Sanity-check against the real machine once (`php artisan tinker --execute 'dump(app(App\Doctor\Worker\QueueWorkerProbe::class)->observe());'`) — the LaunchAgent worker must be seen, with a plausible start time.
+
+      ## Completion Criteria
+      - [x] Three states exist and `Undetermined` always carries a reason naming the tool that failed
+      - [x] Workers belonging to another project (different cwd) are excluded
+      - [x] No shell string is ever built; both external commands run as argument arrays
+      - [x] `QueueWorkerProbe` is bound in the container
+      - [x] The real running worker is observed correctly on this machine
+
+      ## Test Data
+      - N/A — no model or schema changes
+
+      ## Git Deliverables
+      - Commit: `feat(US-016): TASK-03 probe the running queue worker start time`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Sarah
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-00
+    commit:
+      sha: 37fce08dc59e44c945b54361c20b8c4e049748dc
+      short_sha: 37fce08
+      subject: 'feat(US-016): TASK-03 probe the running queue worker start time'
+      committed_at: '2026-09-14T20:14:38+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/37fce08dc59e44c945b54361c20b8c4e049748dc'
+  -
+    id: TASK-04
+    title: 'Fail kbms:doctor when the worker is older than the .env it should be running'
+    body: |-
+      ## Description
+      Add the check that `kbms:doctor` was structurally missing: a fresh process can see the queue is reachable, but not that the long-lived worker is answering from a superseded `.env`. This is the check whose false PASS is the defect under repair.
+
+      ## Files Involved
+      - app/Doctor/Checks/QueueWorkerFreshnessCheck.php (new)
+      - app/Providers/AppServiceProvider.php
+
+      ## Steps
+      1. `QueueWorkerFreshnessCheck implements EnvironmentCheck`, label `Queue worker configuration`. Constructor takes the `QueueWorkerProbe` and an optional `?string $envPath = null` (defaulting to `base_path('.env')`) so tests can point it at a temp file.
+      2. `.env` mtime via `filemtime()`. Not a readable file, or `filemtime()` returns `false` → `CheckResult::failed()` whose detail says the check **could not determine** the answer and names the path; remediation states that an undeterminable answer is reported as a failure by design.
+      3. `$probe->observe()`:
+         - `Undetermined` → `failed()` repeating the probe's reason, remediation `run \`php artisan queue:restart\` after any \`.env\` change — this check refuses to pass when it cannot prove the worker is current`.
+         - `NotRunning` → `pass()` with a detail stating no `queue:work` worker for this project is running, so there is nothing to be stale. Do **not** restate the queue-connection check's "reachable ≠ running" line — that check already owns it and the operator must not read it twice.
+         - `Running` → compute `$effective = max($startedAt, $restartBroadcastAt)`, where `$restartBroadcastAt` is `Cache::get('illuminate:queue:restart')` cast to a timestamp when present (the key `queue:restart` writes and the worker reads; the project's cache store is `database`, so it is visible across processes). Stale when `envMtime >= $effective` → `failed()` naming the worker's start time, the `.env` mtime, and `php artisan queue:restart` as the remedy. Otherwise `pass()` naming the worker's start time.
+      4. Document the `>=` tie-break in the class docblock: `ps` and `filemtime` are both second-granular, so a same-second tie is reported **stale**; a false PASS is the failure mode this check exists to remove, and the named remedy writes a strictly later restart timestamp that clears the tie.
+      5. Register in `AppServiceProvider`'s `CheckSuite` singleton immediately after `QueueConnectionCheck`, resolving the probe lazily inside the closure (`$this->app->make(QueueWorkerProbe::class)`) so tests can swap it.
+      6. `php artisan kbms:doctor` on this machine — confirm the check appears and reports truthfully against the live LaunchAgent worker.
+
+      ## Completion Criteria
+      - [x] A worker that booted before the current `.env` was last written fails the check, with `php artisan queue:restart` as the remediation
+      - [x] An undeterminable worker state is reported as a FAIL naming "could not determine", never a PASS
+      - [x] No worker running at all passes this check and does not duplicate the queue-connection check's wording
+      - [x] A `queue:restart` broadcast later than the `.env` write clears the stale condition
+      - [x] An `.env` untouched since boot passes — the signal is "older than `.env`", never "older than some fixed age"
+      - [x] The check is registered and visible in `kbms:doctor` output
+
+      ## Test Data
+      - N/A — no model or schema changes
+
+      ## Git Deliverables
+      - Commit: `feat(US-016): TASK-04 fail doctor on a stale queue worker`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-03
+    commit:
+      sha: 01cd47b050587c41b1f27ac59f2689daacb8dca1
+      short_sha: 01cd47b
+      subject: 'feat(US-016): TASK-04 fail doctor on a stale queue worker'
+      committed_at: '2026-09-14T20:16:06+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/01cd47b050587c41b1f27ac59f2689daacb8dca1'
+  -
+    id: TASK-05
+    title: 'Unit coverage for the freshness check and the probe, with no real worker'
+    body: |-
+      ## Description
+      Cover every outcome of the new check and probe against a faked clock, a temp `.env`, and canned process output — and make `DoctorCommandTest` independent of whatever is actually running on the machine executing the suite.
+
+      ## Files Involved
+      - tests/Unit/Doctor/QueueWorkerFreshnessCheckTest.php (new)
+      - tests/Unit/Doctor/PsQueueWorkerProbeTest.php (new)
+      - tests/Feature/DoctorCommandTest.php
+
+      ## Steps
+      1. `QueueWorkerFreshnessCheckTest` — a small in-test fake implementing `QueueWorkerProbe`, a temp `.env` whose mtime is set with `touch($path, $timestamp)`, and `$this->travelTo()` for the clock. Cases: worker started after the `.env` write → PASS; worker started before → FAIL naming `queue:restart`; same second → FAIL (the documented tie-break); `Cache::put('illuminate:queue:restart', <after the .env write>)` with an older worker → PASS; `Undetermined` → FAIL whose detail contains "could not determine"; `NotRunning` → PASS, asserting the detail does **not** repeat the queue-connection check's wording; missing/unreadable `.env` → FAIL.
+      2. `PsQueueWorkerProbeTest` — `Process::fake()` with canned `ps` and `lsof` output: all three `etime` shapes (`06:20`, `01:06:20`, `2-01:06:20`) map to the right elapsed seconds; a candidate whose `lsof` cwd is another project is excluded; two workers for this project yield the **oldest** start time; a failed `ps` and a failed `lsof` each yield `Undetermined` with a reason naming the tool; output with no `artisan queue:work` line yields `NotRunning`.
+      3. `DoctorCommandTest` — bind a fake probe in `setUp()` (`$this->app->instance(QueueWorkerProbe::class, …)` returning `notRunning()`) before the suite is resolved, so existing all-pass assertions stay true on any machine; add one case binding a stale observation and asserting the command exits non-zero with `queue:restart` in the output.
+      4. `php artisan test` — full suite green.
+      5. `php artisan larapilot:quality` — Pint + Larastan level 5 clean (`--fix` for formatting only).
+
+      ## Completion Criteria
+      - [x] Pass, stale, indeterminate, no-worker, restart-clears, tie, and unreadable-`.env` outcomes each have a test
+      - [x] No test depends on a real running worker or on real `ps`/`lsof` output
+      - [x] `DoctorCommandTest` is machine-independent
+      - [x] Full suite green and `larapilot:quality` clean
+
+      ## Git Deliverables
+      - Commit: `test(US-016): TASK-05 cover the queue worker freshness check`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 2
+    dependencies:
+      - TASK-04
+    commit:
+      sha: ff8a0936210bc39bd5b60c1228f6e9071bb4b9f0
+      short_sha: ff8a093
+      subject: 'test(US-016): TASK-05 cover the queue worker freshness check'
+      committed_at: '2026-09-14T20:19:26+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ff8a0936210bc39bd5b60c1228f6e9071bb4b9f0'
+  -
+    id: TASK-06
+    title: 'Document the LaunchAgent worker and the queue:restart rule in the README'
+    body: |-
+      ## Description
+      The `.env`-change-requires-`queue:restart` rule has to live where the operator sets the worker up, not only in a general note — the LaunchAgent worker (`com.personal-kbms.queue-worker`, `KeepAlive: true`) is how this machine actually runs `queue:work`, and the README does not mention it at all today.
+
+      ## Files Involved
+      - README.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. §"Running the background processes" — add a subsection describing the always-on worker as a macOS **LaunchAgent** (`~/Library/LaunchAgents/com.personal-kbms.queue-worker.plist`, `RunAtLoad` + `KeepAlive`, `WorkingDirectory` at the project root, output to `storage/logs/queue-worker.log`), including the `launchctl load`/`kickstart` lines used to manage it.
+      2. In that same subsection, state the rule plainly: **any `.env` change requires `php artisan queue:restart`** — the worker is long-lived and answers from the `.env` it booted with, and under `KeepAlive` the restart is what makes the new value take effect. Note that `kbms:doctor` now reports a stale worker as its own failure.
+      3. §"Troubleshooting" — extend entry 1 with the new `Queue worker configuration` check in the list of what `kbms:doctor` verifies, and add a numbered entry for the symptom the operator will actually hit: a launch blocked as a stale worker while the panel reads **Launcher ready** → run `php artisan queue:restart`.
+      4. §"The launcher script contract" — one sentence that the queued job resolves configuration in the worker's own process, so a launcher path added without a restart is refused by name rather than reported as unset.
+      5. `CHANGELOG.md` `[Unreleased] -> ### Added` — a line for the new doctor check (the TASK-01 `### Fixed` line already covers the refusal).
+
+      ## Completion Criteria
+      - [x] The `queue:restart` rule appears in the LaunchAgent worker setup subsection, not only as a general note
+      - [x] The LaunchAgent setup itself is documented (label, KeepAlive, working directory, log path, management commands)
+      - [x] Troubleshooting names the stale-worker symptom and its remedy, and the doctor check list includes the new check
+      - [x] CHANGELOG updated
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-016): TASK-06 document the LaunchAgent worker and the queue:restart rule`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update local PR notes only
+    type: Impl
+    status: DONE
+    assignee: Albert
+    estimate_hours: 1
+    dependencies:
+      - TASK-01
+      - TASK-04
+    commit:
+      sha: 3be87aa6961f1b24111891399776a87a705817d6
+      short_sha: 3be87aa
+      subject: 'docs(US-016): TASK-06 document the LaunchAgent worker and the queue:restart rule'
+      committed_at: '2026-09-14T20:20:17+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/3be87aa6961f1b24111891399776a87a705817d6'
+updated_at: '2026-09-14T20:55:57+02:00'

@@ -38,3 +38,27 @@
 - **Routed to:** spec-add US-015 (new fix spec; US-009 and US-014 are both DONE, so `spec-request-changes` was unavailable)
 - **PRD:** requirement gap confirmed — FR-006 and FR-008 clarified to record the sibling contract and its verify-before-offer guarantee; PRD Revision History row added 2026-09-11
 - **Security:** No — Lars consulted (the sibling stays inside `KBMS_TRANSCRIPTS_PATH`, so containment is not bypassed; the gap is silent failure, not escape)
+
+## BUG-20260914-queue-worker-stale-config
+
+- **Reported:** 2026-09-14
+- **Severity:** High
+- **Environment:** Local (the only environment this product has)
+- **Summary:** Every Claude Code launch is refused with `` `KBMS_CLAUDE_LAUNCHER` is not configured. `` while the same page's panel badge reads **Launcher ready** and renders the full invocation with the correct script path. The two surfaces disagree because they run in two different processes: the panel resolves config in the web request, the job resolves it inside a long-lived queue worker that booted before the value existed.
+- **Steps to reproduce:**
+  1. Start the queue worker (LaunchAgent `com.personal-kbms.queue-worker`, `KeepAlive: true`).
+  2. Add or change `KBMS_CLAUDE_LAUNCHER` in `.env` **without** running `php artisan queue:restart`.
+  3. Open any meeting with a linked transcript, e.g. `/meetings/MDQwMDAwMDA4MjAwRTAwMDc0QzVCNzEwMUE4MkUwMDgwMDAwMDAwMEQyRDEyOTI2QUIzQUREMDEwMDAwMDAwMDAwMDAwMDAwMTAwMDAwMDA4MjZFRUNFRDIyNzgzMjQ3OTA3RjBFMzYxQTQzMUQzRA.MjAyNi0wOS0xNFQwNzoyMTowMFo`.
+  4. Type a question and press **Launch session**.
+  5. The panel still shows **Launcher ready** and the exact invocation; the launch row lands `blocked` with `` `KBMS_CLAUDE_LAUNCHER` is not configured. ``
+- **Expected / Actual:**
+  - Expected: the launch runs; or, if it genuinely cannot, the refusal names the real cause and the panel does not claim readiness it cannot deliver.
+  - Actual: a launch that every operator-visible signal said was ready is refused with a message that contradicts `.env`, `kbms:doctor`, and the panel's own invocation preview. The operator has no way to reach the true cause from the interface.
+- **Root cause (confirmed in-session):** `LaunchClaudeSession` deliberately re-runs `LaunchPreflight` inside the worker (`app/Jobs/LaunchClaudeSession.php:52`) — correct by design, since the script and transcript are mutable between dispatch and execution. But `queue:work` is a long-lived process that resolves `config('kbms.claude_launcher')` from the `.env` read **at boot**. Worker PID 92058 started **Thu 2026-09-10 09:50**; `.env` was last written **2026-09-11 09:54** (`storage/app/launcher/claude-launcher.sh` was itself created 09:31 that day). No `queue:restart` was ever broadcast. So the job saw `null` where the web request saw the path.
+- **Evidence:** `.env:74` set and the script `-rwxr-xr-x`; `php artisan kbms:doctor` reports `Claude launcher script .. PASS` (it boots a fresh process, so it is structurally blind to this failure); `prompt_launches` shows every real launch since 2026-09-11 14:30 `blocked` with this message — the `launched`/`failed`/`queued` rows at 2026-09-11 12:28:46 are `PromptLaunchSeeder` fixtures, not real runs.
+- **Immediate unblock (applied 2026-09-14):** `php artisan queue:restart` — launchd restarted the worker as PID 94319 with the current `.env`. Launching works again. This is a workaround, not the fix.
+- **Affected spec:** US-009 (DONE — FR-008 launch bridge) and US-002 (DONE — FR-011 doctor); neither is a code regression, both are a missing guarantee
+- **Routed to:** spec-add US-016 (US-002 and US-009 are both DONE, so `spec-request-changes` was unavailable)
+- **PRD:** requirement gap confirmed — FR-008 and FR-011 clarified to record that the queued job must resolve the same configuration the panel offered, and that the doctor must verify the worker's **live** configuration rather than mere reachability; PRD Revision History row added 2026-09-14
+- **Security:** No — Lars consulted. Nothing escapes a boundary and no input is trusted differently; the defect is a silent, misattributed failure across a process boundary.
+- **Housekeeping:** `app/Launcher/LauncherScript.php` carries two uncommitted duplicate `\Log::debug()` lines from the operator's own debugging, flooding `laravel.log`. Not part of the defect — remove before the fix branch.
