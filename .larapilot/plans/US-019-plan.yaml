@@ -319,18 +319,24 @@ tasks:
       - PR: update the local PR notes
 
       ## Completion Criteria
-      - [ ] Parity test asserts one row, one job, and matching context/question/command
-      - [ ] Blocked case asserts no row, no job, no new message
-      - [ ] Markup contract covers both keydown bindings, the `x-data` wrapper, and the `aria-describedby` wiring
-      - [ ] Hint asserted present when ready and absent when blocked
-      - [ ] Full suite green; Pint and Larastan level 5 clean
+      - [x] Parity test asserts one row, one job, and matching context/question/command
+      - [x] Blocked case asserts no row, no job, no new message
+      - [x] Markup contract covers both keydown bindings, the `x-data` wrapper, and the `aria-describedby` wiring
+      - [x] Hint asserted present when ready and absent when blocked
+      - [x] Full suite green; Pint and Larastan level 5 clean
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 2
     dependencies:
       - TASK-03
       - TASK-04
+    commit:
+      sha: 4d1c839ded499ba6ceb57aff52ac539ee9581e1b
+      short_sha: 4d1c839
+      subject: 'test(US-019): TASK-05 cover launch parity and the shortcut markup contract'
+      committed_at: '2026-09-14T21:47:05+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/4d1c839ded499ba6ceb57aff52ac539ee9581e1b'
   -
     id: TASK-06
     title: 'Update the mockup contract and write the manual test handoff'
@@ -375,4 +381,4 @@ tasks:
     estimate_hours: 1
     dependencies:
       - TASK-04
-updated_at: '2026-09-14T21:42:02+02:00'
+updated_at: '2026-09-14T21:47:05+02:00'
