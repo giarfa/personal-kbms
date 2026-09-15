@@ -1312,4 +1312,17 @@ decisions:
     source: chat
     spec: US-019
     supersedes: null
-updated_at: '2026-09-14T22:27:15+02:00'
+  -
+    id: 6070d613d9436c2c
+    ts: '2026-09-15T20:18:19+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-review
+    topic: 'us-017 review verdict'
+    label: 'US-017 review verdict'
+    value: 'Approved — all 13 acceptance criteria verified against code and tests; 617/617 suite green, Pint + Larastan clean. Three Low residual items accepted as-is: unbounded export read, theoretical verify/read TOCTOU, and three unreachable branches in TranscriptState::exportRefusalReason(). Browser-only criteria (clipboard fallback on .test, dark-mode print) handed to the operator as a manual pass rather than blocking the gate.'
+    question: null
+    rationale: null
+    source: chat
+    spec: US-017
+    supersedes: null
+updated_at: '2026-09-15T20:18:19+02:00'

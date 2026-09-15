@@ -6,7 +6,7 @@ epic:
   objective: 'The meeting detail page is the single place the operator reads, annotates, links and now shares everything known about one occurrence'
 priority: MEDIUM
 points: 3
-status: REVIEW
+status: DONE
 body: |
   #### US-017: Share a meeting's note and transcript as Markdown and PDF
 
@@ -26,26 +26,26 @@ body: |
   **Acceptance Criteria**
 
   _Happy path_
-  - [ ] The notes panel exposes **Copy as Markdown** and **Print / Save as PDF**; the transcript panel exposes the same two actions
-  - [ ] Copy places the body **verbatim** on the clipboard — the note exactly as stored, the transcript exactly as it sits on disk — with nothing prepended, so a paste round-trips back into the tool unchanged
-  - [ ] A successful copy confirms with a transient "Copied" state on the button it was triggered from
-  - [ ] Print opens a dedicated print view in a new tab and invokes the browser print dialog, so macOS *Save as PDF* produces the file
-  - [ ] The printed document carries a header naming the meeting, its date and time, and — for a transcript — the source filename. This asymmetry with the verbatim clipboard payload is intentional and must not be "corrected"
-  - [ ] The print view renders a note and a `.md` transcript through the existing `MarkdownRenderer`, and a `.txt` transcript as escaped monospace text — the same rendering contract the in-page preview already honors, never a second converter
-  - [ ] Transcript export reads the **full file**: `KBMS_TRANSCRIPT_PREVIEW_BYTES` bounds the in-page preview only and must not truncate an artifact leaving the tool
+  - [x] The notes panel exposes **Copy as Markdown** and **Print / Save as PDF**; the transcript panel exposes the same two actions
+  - [x] Copy places the body **verbatim** on the clipboard — the note exactly as stored, the transcript exactly as it sits on disk — with nothing prepended, so a paste round-trips back into the tool unchanged
+  - [x] A successful copy confirms with a transient "Copied" state on the button it was triggered from
+  - [x] Print opens a dedicated print view in a new tab and invokes the browser print dialog, so macOS *Save as PDF* produces the file
+  - [x] The printed document carries a header naming the meeting, its date and time, and — for a transcript — the source filename. This asymmetry with the verbatim clipboard payload is intentional and must not be "corrected"
+  - [x] The print view renders a note and a `.md` transcript through the existing `MarkdownRenderer`, and a `.txt` transcript as escaped monospace text — the same rendering contract the in-page preview already honors, never a second converter
+  - [x] Transcript export reads the **full file**: `KBMS_TRANSCRIPT_PREVIEW_BYTES` bounds the in-page preview only and must not truncate an artifact leaving the tool
 
   _Error cases_
-  - [ ] With an empty note body, the note's copy and print actions are **absent** — nothing offers to share a blank document
-  - [ ] With no linked transcript, or one in a `Broken`, `Unreadable`, `Rejected` or `Suppressed` state, the transcript's copy and print actions are **absent** rather than present-and-failing
-  - [ ] The print route re-verifies the transcript path for containment and readability **at request time**, exactly as the preview does; a file deleted since the page loaded yields a stated error page, never a blank or partial PDF
-  - [ ] A clipboard write that fails reports the failure in place; it never leaves a "Copied" confirmation on a clipboard that did not receive anything
+  - [x] With an empty note body, the note's copy and print actions are **absent** — nothing offers to share a blank document
+  - [x] With no linked transcript, or one in a `Broken`, `Unreadable`, `Rejected` or `Suppressed` state, the transcript's copy and print actions are **absent** rather than present-and-failing
+  - [x] The print route re-verifies the transcript path for containment and readability **at request time**, exactly as the preview does; a file deleted since the page loaded yields a stated error page, never a blank or partial PDF
+  - [x] A clipboard write that fails reports the failure in place; it never leaves a "Copied" confirmation on a clipboard that did not receive anything
 
   _Edge cases_
-  - [ ] Copy works on `http://personal-kbms.test`: browsers do not treat `.test` over HTTP as a secure context — only `localhost` and `127.0.0.1` — so `navigator.clipboard` is undefined there. The implementation feature-detects and falls back to a hidden-textarea `document.execCommand('copy')` path, and keeps using the Clipboard API wherever it is available
-  - [ ] A transcript larger than the 2 MiB preview bound copies and prints complete
-  - [ ] The print view carries no application chrome — no navigation, breadcrumbs, or action buttons — and prints legibly on white paper whether the app was in light or dark mode when the export was triggered
-  - [ ] A cancelled occurrence still exports: like notes, sharing never gates on upstream feed state
-  - [ ] The print view is reachable only for an existing occurrence and resolves the same occurrence identity (`UID` + `RECURRENCE-ID`) as the detail page, so one occurrence of a recurring series never prints a sibling's note
+  - [x] Copy works on `http://personal-kbms.test`: browsers do not treat `.test` over HTTP as a secure context — only `localhost` and `127.0.0.1` — so `navigator.clipboard` is undefined there. The implementation feature-detects and falls back to a hidden-textarea `document.execCommand('copy')` path, and keeps using the Clipboard API wherever it is available
+  - [x] A transcript larger than the 2 MiB preview bound copies and prints complete
+  - [x] The print view carries no application chrome — no navigation, breadcrumbs, or action buttons — and prints legibly on white paper whether the app was in light or dark mode when the export was triggered
+  - [x] A cancelled occurrence still exports: like notes, sharing never gates on upstream feed state
+  - [x] The print view is reachable only for an existing occurrence and resolves the same occurrence identity (`UID` + `RECURRENCE-ID`) as the detail page, so one occurrence of a recurring series never prints a sibling's note
 
   **Notes**
   - **No PDF package is added.** Recorded decision `pdf generation approach` (2026-09-14): `dompdf` cannot render the Tailwind 4 styling the rest of the product uses, and Browsershot would add Node, Puppeteer and a headless Chrome to the integration surface `kbms:doctor` exists to keep small. Paper size and margins belong to the browser — an accepted trade, not an oversight
@@ -61,4 +61,13 @@ status_history:
   -
     status: REVIEW
     at: '2026-09-15T19:52:27+02:00'
+  -
+    status: DONE
+    at: '2026-09-15T20:18:14+02:00'
 rework: false
+merge_commit:
+  sha: f65667676ff430e940dbf17dd92d70bbc63394f1
+  short_sha: f656676
+  subject: 'chore(US-017): log the implement session in the usage ledger'
+  committed_at: '2026-09-15T19:52:52+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/f65667676ff430e940dbf17dd92d70bbc63394f1'
