@@ -6,7 +6,7 @@ epic:
   objective: 'The meeting detail page is the single place the operator reads, annotates, links and now shares everything known about one occurrence'
 priority: MEDIUM
 points: 2
-status: REVIEW
+status: DONE
 body: |
   #### US-018: Step to the previous or next occurrence of a series
 
@@ -24,15 +24,15 @@ body: |
   After implementing this spec, opening any occurrence of a weekly series at `http://personal-kbms.test/meetings/{key}` shows two controls naming the adjacent occurrences by their own date and time; clicking one opens that occurrence in a new tab while the original stays put; the earliest occurrence the mirror holds renders the previous control inert with its reason stated; and a one-off meeting shows neither control.
 
   **Acceptance Criteria**
-  - [ ] On the detail page of an occurrence whose `recurrence_id` is non-empty, two controls render — previous occurrence and next occurrence of the same `source_uid` — each labelled with the neighbour's own date and time, and each a real `<a href>` to `route('meetings.show', …)` built from that neighbour's `OccurrenceKey::toRouteKey()`
-  - [ ] Each control carries `target="_blank"` and `rel="noopener"`, so a plain click opens a new tab while cmd/ctrl-click, middle-click, the context menu, and back/forward keep their ordinary meaning — no `window.open`, no click handler that swallows modifier keys
-  - [ ] *Previous* resolves to the occurrence of the same `source_uid` with the greatest `starts_at` strictly earlier than the current one; *next* to the smallest `starts_at` strictly later. Ties on `starts_at` are broken deterministically on `recurrence_id`, so an occurrence is never its own neighbour and two rows never resolve to each other
-  - [ ] Occurrences cancelled upstream are included in the chain and are reachable by prev/next; the destination page's existing "Cancelled upstream" banner is what states their status — the control itself does not mark them
-  - [ ] **Boundary:** when the mirror holds no occurrence in that direction, the control renders disabled with an adjacent reason wired through `aria-describedby`, in the same shape as the existing "Open in Outlook" fallback. The reason speaks about the mirror holding nothing earlier/later and never claims the series begins or ends there
-  - [ ] **One-off meetings:** an occurrence whose `recurrence_id` is empty renders neither control. Recurrence is decided by the feed-carried `recurrence_id`, not by counting stored rows — a series whose sync window holds exactly one occurrence still renders both controls, both disabled with their reason
-  - [ ] The accessible name carries direction *and* destination (for example "Previous occurrence, Mon 8 Sep 09:00") and announces that the link opens in a new tab; a disabled control's reason remains reachable to a screen reader
-  - [ ] Each direction is a single indexed lookup served by the leading column of the `(source_uid, recurrence_id)` unique index — the full series is never loaded, and no N+1 is introduced on the detail page
-  - [ ] Feature tests cover: both neighbours present, first stored occurrence (previous disabled), last stored occurrence (next disabled), a cancelled occurrence as a neighbour, a single-occurrence series (both disabled), and a one-off meeting (neither control rendered)
+  - [x] On the detail page of an occurrence whose `recurrence_id` is non-empty, two controls render — previous occurrence and next occurrence of the same `source_uid` — each labelled with the neighbour's own date and time, and each a real `<a href>` to `route('meetings.show', …)` built from that neighbour's `OccurrenceKey::toRouteKey()`
+  - [x] Each control carries `target="_blank"` and `rel="noopener"`, so a plain click opens a new tab while cmd/ctrl-click, middle-click, the context menu, and back/forward keep their ordinary meaning — no `window.open`, no click handler that swallows modifier keys
+  - [x] *Previous* resolves to the occurrence of the same `source_uid` with the greatest `starts_at` strictly earlier than the current one; *next* to the smallest `starts_at` strictly later. Ties on `starts_at` are broken deterministically on `recurrence_id`, so an occurrence is never its own neighbour and two rows never resolve to each other
+  - [x] Occurrences cancelled upstream are included in the chain and are reachable by prev/next; the destination page's existing "Cancelled upstream" banner is what states their status — the control itself does not mark them
+  - [x] **Boundary:** when the mirror holds no occurrence in that direction, the control renders disabled with an adjacent reason wired through `aria-describedby`, in the same shape as the existing "Open in Outlook" fallback. The reason speaks about the mirror holding nothing earlier/later and never claims the series begins or ends there
+  - [x] **One-off meetings:** an occurrence whose `recurrence_id` is empty renders neither control. Recurrence is decided by the feed-carried `recurrence_id`, not by counting stored rows — a series whose sync window holds exactly one occurrence still renders both controls, both disabled with their reason
+  - [x] The accessible name carries direction *and* destination (for example "Previous occurrence, Mon 8 Sep 09:00") and announces that the link opens in a new tab; a disabled control's reason remains reachable to a screen reader
+  - [x] Each direction is a single indexed lookup served by the leading column of the `(source_uid, recurrence_id)` unique index — the full series is never loaded, and no N+1 is introduced on the detail page
+  - [x] Feature tests cover: both neighbours present, first stored occurrence (previous disabled), last stored occurrence (next disabled), a cancelled occurrence as a neighbour, a single-occurrence series (both disabled), and a one-off meeting (neither control rendered)
 status_history:
   -
     status: PLANNED
@@ -43,4 +43,13 @@ status_history:
   -
     status: REVIEW
     at: '2026-09-15T20:42:11+02:00'
+  -
+    status: DONE
+    at: '2026-09-15T20:42:23+02:00'
 rework: false
+merge_commit:
+  sha: 5d2079d45f175d14df7f8d06ebee87de464f109f
+  short_sha: 5d2079d
+  subject: 'chore(US-018): record REVIEW status in backlog and spec'
+  committed_at: '2026-09-15T20:42:21+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/5d2079d45f175d14df7f8d06ebee87de464f109f'
