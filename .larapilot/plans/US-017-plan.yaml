@@ -95,8 +95,8 @@ tasks:
       4. Anchor commit: `chore(US-017): TASK-00 bootstrap feature branch` (empty commit allowed)
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-017-share-note-transcript` exists locally off `develop`
-      - [ ] PR title/body drafted toward `develop`, unpushed
+      - [x] Branch `feature/US-017-share-note-transcript` exists locally off `develop`
+      - [x] PR title/body drafted toward `develop`, unpushed
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -106,10 +106,16 @@ tasks:
       - Push: **skip** (`git_mode: GITFLOW`)
       - PR: prepare locally — open remotely only if the operator asks
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 0.5
     dependencies: {}
+    commit:
+      sha: c3989c6a1de47c026a486fc871c2b99981142c6b
+      short_sha: c3989c6
+      subject: 'chore(US-017): TASK-00 bootstrap feature branch with spec and plan'
+      committed_at: '2026-09-15T18:39:40+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/c3989c6a1de47c026a486fc871c2b99981142c6b'
   -
     id: TASK-01
     title: 'Unbounded transcript read, shared verification, export resolution'
@@ -484,4 +490,4 @@ tasks:
       subject: 'docs(US-017): TASK-08 record the export surface in the mockups and changelog'
       committed_at: '2026-09-15T19:46:38+02:00'
       url: 'https://github.com/giarfa/personal-kbms/commit/eb4a2e9e8aeece66ee3ccde0b12aab676eb52c5a'
-updated_at: '2026-09-15T19:46:38+02:00'
+updated_at: '2026-09-15T19:52:10+02:00'
