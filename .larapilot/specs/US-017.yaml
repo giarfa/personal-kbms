@@ -6,7 +6,7 @@ epic:
   objective: 'The meeting detail page is the single place the operator reads, annotates, links and now shares everything known about one occurrence'
 priority: MEDIUM
 points: 3
-status: 'IN PROGRESS'
+status: REVIEW
 body: |
   #### US-017: Share a meeting's note and transcript as Markdown and PDF
 
@@ -58,4 +58,7 @@ status_history:
   -
     status: 'IN PROGRESS'
     at: '2026-09-15T18:39:43+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-15T19:52:27+02:00'
 rework: false
