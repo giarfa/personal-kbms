@@ -1,0 +1,329 @@
+code: US-018
+plan_body: |-
+  ## Technical Solution
+
+  One domain seam, one Blade component, two bounded queries. No migration, no new package, no new `KBMS_*` key, no change to `kbms:sync-calendar`.
+
+  **Where adjacency is decided.** `App\Meetings\SeriesNeighbourLookup` answers "what sits either side of this occurrence in its own series" and is the only place that knows the ordering rule. The detail page asks it once; nothing else in the product has an opinion about series order.
+
+  | Class | Kind | Responsibility |
+  | --- | --- | --- |
+  | `App\Meetings\SeriesDirection` | enum | `Previous` / `Next` — direction as a type, not a string literal in three files |
+  | `App\Meetings\SeriesNeighbour` | readonly | One direction's outcome: the neighbour event or the stated reason there is none, plus the label and accessible name the view renders |
+  | `App\Meetings\SeriesNeighbours` | readonly | The pair (`previous`, `next`) handed to the view |
+  | `App\Meetings\SeriesNeighbourLookup` | service | `forOccurrence(CalendarEvent): ?SeriesNeighbours` — `null` for a one-off, a pair otherwise |
+
+  `SeriesNeighbour` follows `OutlookLink`'s three-way shape deliberately: a link, or an absence carrying its own reason, never a broken `href`. That is why the disabled control below can reuse the "Open in Outlook" fallback markup rather than invent a second vocabulary for "this affordance exists but leads nowhere".
+
+  **Recurrence is the feed's answer, not a row count.** `forOccurrence()` returns `null` when — and only when — `recurrence_id === ''`. A series whose sync window happens to hold exactly one occurrence still returns a pair, both sides absent with their reason. This is the AC's sharpest line and the one a "count the siblings" implementation gets wrong: the mirror's window and the series' extent are different facts, and the page must never conflate them.
+
+  **The two queries (keyset, not offset).**
+
+  ```php
+  // previous
+  ->where('source_uid', $occurrence->source_uid)
+  ->where(fn ($q) => $q
+      ->where('starts_at', '<', $occurrence->starts_at)
+      ->orWhere(fn ($q) => $q
+          ->where('starts_at', $occurrence->starts_at)
+          ->where('recurrence_id', '<', $occurrence->recurrence_id)))
+  ->orderByDesc('starts_at')->orderByDesc('recurrence_id')->first();
+  ```
+
+  `next` is the same with `>`, `orderBy` ascending. The composite `(starts_at, recurrence_id)` comparison is what makes ties deterministic **and** total: an occurrence is strictly excluded from its own result set, so it can never be its own neighbour, and two rows sharing a `starts_at` resolve past each other in a fixed order rather than pointing at each other. A `RECURRENCE-ID` override that moved an occurrence onto a sibling's start time is exactly the feed shape that produces such a tie, so this is a real case, not a theoretical one.
+
+  Both queries filter on `source_uid`, the **leading column of the existing `(source_uid, recurrence_id)` unique index** — no new index, and the series is never loaded: `first()` with `LIMIT 1`, one row per direction. Cancelled occurrences are not filtered out; per FR-004 they stay in the chain, and the destination page's existing "Cancelled upstream" banner is what states their status. The control itself says nothing about it.
+
+  **Labels.** `SeriesNeighbour::label()` renders the neighbour's own date and time: `Mon 8 Sep 09:00`, or `Mon 8 Sep · all day` for an all-day occurrence, with the year appended when it differs from the current occurrence's year (a weekly series crossing New Year would otherwise offer two indistinguishable "Mon 30 Dec" links). `accessibleName()` prefixes the direction and appends the new-tab announcement: `Previous occurrence, Mon 8 Sep 09:00 (opens in a new tab)`. Absent directions carry a reason that speaks about the mirror only — *"The mirror holds no earlier occurrence of this series."* — never about the series beginning or ending.
+
+  **The control.** `resources/views/components/meeting/series-nav.blade.php`, rendered from `pages/meeting.blade.php` between the cancelled banner and `.kb-detail`, inside a `<nav aria-label="Occurrences of this series">`. Present: `<flux:button variant="outline" :href="…" target="_blank" rel="noopener" :aria-label="…">` — Flux renders an `<a href>`, so cmd/ctrl-click, middle-click, the context menu and back/forward all keep their ordinary meaning. There is **no** `window.open`, no click handler, no `wire:navigate` and no JavaScript in this spec at all; `wire:navigate` in particular would hijack the modifier keys the AC protects. Absent: `<flux:button variant="outline" disabled aria-describedby="…">` plus a visible `kb-note-inline` reason span — byte-for-byte the shape `x-meeting.external-links` already uses for the unavailable Outlook CTA, so the page has one vocabulary for "offered but inert", and the reason stays in the accessible document even though a `disabled` button is not focusable.
+
+  **What this spec does not do:** no prev/next on the agenda or calendar, no "occurrence 3 of 12" position indicator, no series overview page, no prefetch of the neighbour, no keyboard shortcut, and no change to the route contract or to `OccurrenceKey`.
+
+  ## Architecture & quality notes
+
+  - **N+1 / query shape (John, Mike):** the detail page gains exactly two queries, both `LIMIT 1` on an indexed column, independent of series length. No relation is loaded, nothing iterates. TASK-04 pins this with a query-count assertion in the same style as `AgendaColourTest` and `TodoRenderingTest`, so a later refactor that loads the series to find a neighbour fails a test rather than a review.
+  - **SOLID:** `SeriesNeighbourLookup` owns ordering and nothing else; `SeriesNeighbour` owns presentation of one outcome; the controller stays a three-line composition root; the Blade component stays a pure renderer, consistent with how `AgendaRow` pre-computes for the views.
+  - **Security (Lars):** no new input surface. Neighbour route keys are built from stored `source_uid` / `recurrence_id` through `OccurrenceKey::toRouteKey()`, the same encoder the current URL came from; nothing from the request reaches a query. `rel="noopener"` on every `target="_blank"` link, matching the existing external-link convention. The feed is semi-trusted, but no feed-carried URL is involved here — these are internal routes only.
+  - **Larastan level 5:** `forOccurrence()` returns `?SeriesNeighbours` and the private query helper returns `?CalendarEvent`; both need accurate return types rather than PHPDoc-only hints. `php artisan larapilot:quality` runs before every task commit.
+  - **UI contract (Elise):** `.larapilot/mockups/kbms-app/README.md` is this project's agreed visual contract (recorded rule `.ai/rules/views.md`) and currently describes a meeting detail page with no such control. TASK-05 updates it — the contract is amended, not bypassed. Layout stays desktop-first per the recorded PRD decision; the obligation is only that the nav does not break below 768 px, where the two controls wrap.
+
+  ## Git & Branching
+
+  - Mode: `GITFLOW_PUSH` (from `settings.git_mode`) — Gitflow **with** push after each task commit
+  - Branch: `feature/US-018-series-neighbour-links` from `develop`
+  - TASK-00: bootstrap the branch, push it, and prepare the internal PR toward `develop` (`settings.github` is `NO`, so the PR description is drafted locally rather than opened with `gh`)
+  - Per task: exactly one Conventional Commit, `type(US-018): TASK-NN summary`; never batch two tasks into one commit
+  - Push after every task commit; merge to `develop` only after the review gate
+
+  ## Test Data Strategy
+
+  - No new model, no migration, no schema change — `CalendarEventFactory` already carries everything this spec needs
+  - `occurrenceOf(string $sourceUid, string $recurrenceId)` builds series members sharing a `source_uid`; `at(CarbonInterface $start, int $minutes)` pins deterministic start times; `cancelled()` covers the cancelled-neighbour case; `allDay()` covers the all-day label branch
+  - No factory state, seeder entry, or `migrate:fresh --seed` step is required by this spec — `## Test Data` is `N/A` on every task
+
+  ## Test Strategy
+
+  - Bar: `NORMAL` (from `settings.testing`) — PHPUnit feature and unit tests; **no** Playwright, Dusk, Pest browser, or viewport E2E suites
+  - Unit (`tests/Unit/Meetings/SeriesNeighbourLookupTest.php`): both neighbours present; nearest neighbour chosen over a farther one; first and last stored occurrence; a cancelled sibling is returned, not skipped; a tie on `starts_at` resolved deterministically and never onto itself; a single-occurrence series returns a pair with both sides absent; a one-off returns `null`; label formatting for timed, all-day, and cross-year neighbours
+  - Feature (`tests/Feature/MeetingSeriesNavigationTest.php`): the six AC rendering cases, plus the `target="_blank"` / `rel="noopener"` / `<a href>` shape, the accessible name carrying direction, destination and the new-tab announcement, the disabled control's `aria-describedby` reason, and a query-count guard proving the page cost is constant in series length
+  - Manual test handoff (UI spec under `NORMAL`): open a recurring occurrence at `http://personal-kbms.test/meetings/{key}`, confirm a plain click opens a new tab while the original stays put, confirm cmd-click and middle-click behave identically, and confirm the two controls wrap rather than overflow below 768 px
+  - `php artisan larapilot:quality` (Pint + Larastan level 5) green before every `task-done`
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and internal PR'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for this spec: create the feature branch from `develop`, push it, and prepare the internal PR toward `develop`.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop && git pull`
+      2. `git checkout -b feature/US-018-series-neighbour-links`
+      3. `git push -u origin feature/US-018-series-neighbour-links`
+      4. Draft the internal PR title (`US-018: Step to the previous or next occurrence of a series`) and body locally — link the plan and list the planned tasks. `settings.github` is `NO`, so do not open the PR with `gh`
+
+      ## Completion Criteria
+      - [x] Branch `feature/US-018-series-neighbour-links` exists and tracks `origin`
+      - [x] PR title/body drafted toward `develop`
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-018): TASK-00 bootstrap feature branch` (empty commit allowed)
+      - Push: `origin feature/US-018-series-neighbour-links`
+      - PR: prepared locally (remote forge integrations are off)
+    type: Impl
+    status: DONE
+    assignee: Sarah
+    estimate_hours: 0.25
+    dependencies: {}
+    commit:
+      sha: ad841e77a8492747a53ce477c6a4adc5b00c720f
+      short_sha: ad841e7
+      subject: 'chore(US-018): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-15T20:28:48+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ad841e77a8492747a53ce477c6a4adc5b00c720f'
+  -
+    id: TASK-01
+    title: 'Series neighbour lookup and its value objects'
+    body: |-
+      ## Description
+      Add the single seam that decides series adjacency: `SeriesNeighbourLookup`, returning a `SeriesNeighbours` pair of `SeriesNeighbour` outcomes, or `null` for a one-off occurrence.
+
+      ## Files Involved
+      - app/Meetings/SeriesDirection.php (new)
+      - app/Meetings/SeriesNeighbour.php (new)
+      - app/Meetings/SeriesNeighbours.php (new)
+      - app/Meetings/SeriesNeighbourLookup.php (new)
+
+      ## Steps
+      1. `php artisan make:class Meetings/SeriesNeighbourLookup --no-interaction` (and the value objects; `SeriesDirection` is a backed enum with `Previous` / `Next`, TitleCase keys per the PHP conventions)
+      2. `SeriesNeighbourLookup::forOccurrence(CalendarEvent $occurrence): ?SeriesNeighbours` — return `null` when `$occurrence->recurrence_id === ''`. Recurrence is decided by the feed-carried `recurrence_id`, **never** by counting stored rows
+      3. One private query helper per direction, keyset-style: filter `source_uid`, then `starts_at` strictly before/after the current one **or** equal `starts_at` with `recurrence_id` strictly before/after; order by `starts_at` then `recurrence_id` in the matching direction; `first()`. Do not exclude cancelled occurrences — they stay in the chain (FR-004)
+      4. `SeriesNeighbour` carries the direction, the neighbour event or `null`, and the reason when absent. Expose `isAvailable()`, `routeKey()` (via `OccurrenceKey::toRouteKey()`), `label()`, and `accessibleName()` so the Blade layer stays a pure renderer, as `AgendaRow` already establishes
+      5. `label()`: `D j M H:i` for a timed occurrence, `D j M · all day` for an all-day one, appending ` Y` when the neighbour's year differs from the current occurrence's. `accessibleName()`: `"{Previous|Next} occurrence, {label} (opens in a new tab)"`
+      6. Absent reasons speak about the mirror only: `The mirror holds no earlier occurrence of this series.` / `…no later occurrence…` — never that the series begins or ends there. Wrap user-facing strings in `__()`
+      7. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] `forOccurrence()` returns `null` for `recurrence_id === ''` and a pair otherwise, including for a series with exactly one stored occurrence
+      - [x] Each direction costs exactly one `LIMIT 1` query filtered on `source_uid`; the series is never loaded
+      - [x] Ties on `starts_at` break deterministically on `recurrence_id`; an occurrence is never its own neighbour
+      - [x] Cancelled occurrences are returned as neighbours, unmarked by the lookup
+      - [x] Pint + Larastan level 5 pass
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-018): TASK-01 add series neighbour lookup`
+      - Push: `origin feature/US-018-series-neighbour-links`
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-00
+    commit:
+      sha: 211b81313e46875bb4320a4a374ba96bc110f04e
+      short_sha: 211b813
+      subject: 'feat(US-018): TASK-01 add series neighbour lookup'
+      committed_at: '2026-09-15T20:30:15+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/211b81313e46875bb4320a4a374ba96bc110f04e'
+  -
+    id: TASK-02
+    title: 'Unit tests for series adjacency and labelling'
+    body: |-
+      ## Description
+      Pin the ordering rule, the one-off/single-occurrence distinction, and the label formatting at the seam that owns them, before any view depends on them.
+
+      ## Files Involved
+      - tests/Unit/Meetings/SeriesNeighbourLookupTest.php (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit SeriesNeighbourLookupTest --no-interaction`, then move it under `tests/Unit/Meetings/` alongside `MeetingCoverageLookupTest` and match its namespace and structure
+      2. Build series members with `CalendarEvent::factory()->occurrenceOf($uid, $recurrenceId)->at(...)`; freeze time with `Carbon::setTestNow()` as the sibling tests do
+      3. Cover: both neighbours present; the **nearest** sibling chosen over a farther one in each direction; the first stored occurrence (previous absent, reason set); the last stored occurrence (next absent); a cancelled sibling returned rather than skipped; a series with exactly one stored occurrence returning a pair with both sides absent; a one-off (`recurrence_id === ''`) returning `null`; an occurrence of a *different* `source_uid` at an adjacent time never returned
+      4. Tie-break: two siblings sharing a `starts_at` — assert the resolution is deterministic, that neither resolves to itself, and that they do not resolve onto each other in a cycle
+      5. Labels: timed (`Mon 8 Sep 09:00`), all-day (`· all day`), and a neighbour in a different year carrying the year; accessible name carrying direction, destination and the new-tab announcement
+      6. `php artisan test --compact --filter=SeriesNeighbourLookupTest`
+
+      ## Completion Criteria
+      - [x] Every case above asserted and green
+      - [x] Tests use existing factory states — no duplicated factory definitions
+      - [x] No browser/E2E tooling added (`settings.testing: NORMAL`)
+
+      ## Git Deliverables
+      - Commit: `test(US-018): TASK-02 cover series neighbour adjacency and labels`
+      - Push: `origin feature/US-018-series-neighbour-links`
+      - PR: update the local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 1
+    dependencies:
+      - TASK-01
+    commit:
+      sha: 41ffcc5ef78e4ca70ea28614694ee03f3e2278f7
+      short_sha: 41ffcc5
+      subject: 'test(US-018): TASK-02 cover series neighbour adjacency and labels'
+      committed_at: '2026-09-15T20:31:24+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/41ffcc5ef78e4ca70ea28614694ee03f3e2278f7'
+  -
+    id: TASK-03
+    title: 'Render the previous/next controls on the meeting detail page'
+    body: |-
+      ## Description
+      Surface the two neighbour controls on `/meetings/{occurrence}` as ordinary links that open beside the page, reusing the existing disabled-CTA shape at the mirror's edge.
+
+      ## Files Involved
+      - app/Http/Controllers/MeetingController.php
+      - resources/views/components/meeting/series-nav.blade.php (new)
+      - resources/views/pages/meeting.blade.php
+      - resources/css/app.css
+
+      ## Steps
+      1. Inject `SeriesNeighbourLookup` into `MeetingController::__invoke()` and pass `neighbours` (nullable) to the view — keep the controller a composition root, no logic
+      2. New component `x-meeting.series-nav` taking `:neighbours`. Wrap both controls in `<nav aria-label="{{ __('Occurrences of this series') }}">`
+      3. Available direction: `<flux:button variant="outline" :href="route('meetings.show', $neighbour->routeKey())" target="_blank" rel="noopener" :aria-label="$neighbour->accessibleName()">` with a direction glyph marked `aria-hidden` plus the visible label. It must stay a real `<a href>` — **no** `window.open`, no click handler, and no `wire:navigate`, so modifier-click, middle-click, the context menu and back/forward keep their ordinary meaning
+      4. Absent direction: `<flux:button variant="outline" disabled aria-describedby="…">` plus a `<span class="kb-note-inline" id="…">` carrying the reason — the same shape as the unavailable "Open in Outlook" CTA in `x-meeting.external-links`. Ids must be unique per direction
+      5. Render from `pages/meeting.blade.php` between the cancelled banner and `.kb-detail`, guarded by `@if ($neighbours)` so a one-off renders neither control and no empty nav
+      6. Add `.kb-series-nav` to `resources/css/app.css` in the meeting-detail component layer: row layout, `gap`, `flex-wrap`, previous/next pushed to opposite ends, reason spans aligned with their control. Smoke-check at 375, 768 and 1280 px — desktop-first per the recorded PRD decision, but nothing may break below 768 px
+      7. `php artisan larapilot:quality` and `npm run build`
+
+      ## Completion Criteria
+      - [x] Both controls render on a recurring occurrence, each labelled with the neighbour's own date and time
+      - [x] Each available control is an `<a href>` to `meetings.show` with `target="_blank"` and `rel="noopener"`
+      - [x] At the mirror's edge the control renders disabled with its reason wired through `aria-describedby`
+      - [x] A one-off occurrence renders neither control
+      - [x] Layout intact at 375 / 768 / 1280 px (manual smoke)
+      - [x] Pint + Larastan level 5 pass
+
+      ## Test Data
+      - N/A — no model/schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-018): TASK-03 render previous/next occurrence controls`
+      - Push: `origin feature/US-018-series-neighbour-links`
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-02
+    commit:
+      sha: 9b7f9373952e7ade5cc66589fa54c87d7ee80ea3
+      short_sha: 9b7f937
+      subject: 'feat(US-018): TASK-03 render previous/next occurrence controls'
+      committed_at: '2026-09-15T20:32:48+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/9b7f9373952e7ade5cc66589fa54c87d7ee80ea3'
+  -
+    id: TASK-04
+    title: 'Feature tests for the detail page controls'
+    body: |-
+      ## Description
+      Cover every rendering case the acceptance criteria name, plus the link shape, the accessible name, and the constant query cost.
+
+      ## Files Involved
+      - tests/Feature/MeetingSeriesNavigationTest.php (new)
+
+      ## Steps
+      1. `php artisan make:test --phpunit MeetingSeriesNavigationTest --no-interaction`; follow `MeetingDetailTest`'s structure (`RefreshDatabase`, `Carbon::setTestNow()` in `setUp`, `config(['kbms.outlook_url_template' => null])`)
+      2. Cases: both neighbours present; the first stored occurrence (previous disabled with its reason); the last stored occurrence (next disabled); a cancelled occurrence as a neighbour — reachable, and the control itself does not mark it cancelled; a single-occurrence series (both controls present, both disabled); a one-off meeting (neither control rendered, no nav element)
+      3. Assert the available control's `href` equals `route('meetings.show', $neighbour->occurrenceKey()->toRouteKey())` and that the markup carries `target="_blank"` and `rel="noopener"`
+      4. Assert the accessible name carries direction, destination and the new-tab announcement, and that a disabled control's `aria-describedby` points at a rendered reason whose wording speaks about the mirror, not about the series beginning or ending
+      5. Query-count guard: register a `DB::listen` collector around the detail-page request, as `AgendaColourTest` and `TodoRenderingTest` do, and assert the count is unchanged when the series holds many more occurrences — the page cost must not grow with series length
+      6. `php artisan test --compact --filter=MeetingSeriesNavigationTest`, then the full suite once
+      7. Record the manual verification steps from the plan's Test Strategy as a **Manual tests recommended** note in the handoff (`settings.testing: NORMAL` — no browser automation)
+
+      ## Completion Criteria
+      - [x] All six AC rendering cases asserted and green
+      - [x] Link shape, accessible name, and disabled-reason wording asserted
+      - [x] Query count on the detail page proven constant in series length
+      - [x] Full `php artisan test` suite green
+
+      ## Git Deliverables
+      - Commit: `test(US-018): TASK-04 cover previous/next occurrence controls`
+      - Push: `origin feature/US-018-series-neighbour-links`
+      - PR: update the local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-03
+    commit:
+      sha: 1a87104d60d8c69cc6d4941cca0480e11cc9b74e
+      short_sha: 1a87104
+      subject: 'test(US-018): TASK-04 cover previous/next occurrence controls'
+      committed_at: '2026-09-15T20:34:05+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1a87104d60d8c69cc6d4941cca0480e11cc9b74e'
+  -
+    id: TASK-05
+    title: 'Amend the UI contract and the changelog'
+    body: |-
+      ## Description
+      The mockup README is this project's agreed visual contract (recorded rule `.ai/rules/views.md`) and currently describes a meeting detail page with no series navigation. Amend it, and record the capability in the changelog.
+
+      ## Files Involved
+      - .larapilot/mockups/kbms-app/README.md
+      - CHANGELOG.md
+
+      ## Steps
+      1. In the **Meeting detail (`meeting.html`)** section, add the series navigation: where it sits, that both directions are ordinary `target="_blank"` links labelled with the neighbour's own date and time, that the mirror's edge renders inert with a reason borrowed from the "Open in Outlook" fallback shape, and that a one-off meeting shows nothing at all
+      2. State the two rules a later edit could quietly break: recurrence is the feed's `recurrence_id`, not a count of stored rows; and the reason at the edge speaks about the mirror, never about the series beginning or ending
+      3. Add an `### Added` entry to `CHANGELOG.md` under `[Unreleased]` in the established voice — what ships, what is deliberately absent (no agenda/calendar prev-next, no position indicator, no series overview, no keyboard shortcut, no new `KBMS_*` key)
+      4. No baseline README or `.env.example` change — this spec adds no configuration surface
+
+      ## Completion Criteria
+      - [x] Mockup README describes the control, its disabled shape, and the one-off case
+      - [x] Both non-obvious rules stated in the contract
+      - [x] `CHANGELOG.md` `[Unreleased] / Added` entry present
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-018): TASK-05 record series navigation in the UI contract and changelog`
+      - Push: `origin feature/US-018-series-neighbour-links`
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Albert
+    estimate_hours: 0.5
+    dependencies:
+      - TASK-04
+    commit:
+      sha: a5414133b7dd43d774c1b4aaa6d65d0bc0056f2e
+      short_sha: a541413
+      subject: 'docs(US-018): TASK-05 record series navigation in the UI contract and changelog'
+      committed_at: '2026-09-15T20:34:37+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a5414133b7dd43d774c1b4aaa6d65d0bc0056f2e'
+updated_at: '2026-09-15T20:34:39+02:00'
