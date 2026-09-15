@@ -23,7 +23,7 @@ class MeetingTranscriptPrintController extends Controller
 
         if ($export instanceof TranscriptState) {
             return response()->view('pages.print.unavailable', [
-                'reason' => $this->reasonFor($export),
+                'reason' => $export->exportRefusalReason(),
             ], 404);
         }
 
@@ -31,19 +31,5 @@ class MeetingTranscriptPrintController extends Controller
             'row' => new AgendaRow($occurrence),
             'export' => $export,
         ]);
-    }
-
-    private function reasonFor(TranscriptState $state): string
-    {
-        return match ($state) {
-            TranscriptState::Missing => __('No transcript is linked to this meeting.'),
-            TranscriptState::Suppressed => __('The transcript link was cleared for this meeting. There is nothing to export.'),
-            TranscriptState::Broken => __('The linked transcript file no longer exists.'),
-            TranscriptState::Unreadable => __('The linked transcript file exists but cannot be read.'),
-            TranscriptState::Rejected => __('The linked transcript path is outside the configured transcripts directory and is refused.'),
-            // TranscriptExporter never returns these three — kept only so the
-            // match stays exhaustive against the full enum.
-            TranscriptState::NotConfigured, TranscriptState::Ambiguous, TranscriptState::Linked => __('This transcript cannot be exported right now.'),
-        };
     }
 }

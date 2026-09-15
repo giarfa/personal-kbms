@@ -5,6 +5,7 @@ use App\Http\Controllers\CalendarEventsController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingNotePrintController;
 use App\Http\Controllers\MeetingTranscriptPrintController;
+use App\Http\Controllers\MeetingTranscriptSourceController;
 use App\Livewire\Agenda;
 use App\Meetings\CalendarRange;
 use App\Meetings\EventColourRules;
@@ -32,3 +33,5 @@ Route::get('meetings/{occurrence}', MeetingController::class)->name('meetings.sh
 Route::get('meetings/{occurrence}/note/print', MeetingNotePrintController::class)->name('meetings.note.print');
 
 Route::get('meetings/{occurrence}/transcript/print', MeetingTranscriptPrintController::class)->name('meetings.transcript.print');
+
+Route::get('meetings/{occurrence}/transcript/source', MeetingTranscriptSourceController::class)->name('meetings.transcript.source');
