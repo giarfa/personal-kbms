@@ -154,4 +154,35 @@ class MeetingNotesTest extends TestCase
 
         $this->assertDatabaseCount('meeting_notes', 0);
     }
+
+    public function test_the_copy_and_print_actions_are_absent_with_a_blank_body(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+
+        Livewire::test(MeetingNotes::class, ['occurrence' => $event])
+            ->assertDontSee('Copy as Markdown')
+            ->assertDontSee('Print / Save as PDF');
+    }
+
+    public function test_the_copy_and_print_actions_appear_once_the_body_has_content(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+
+        Livewire::test(MeetingNotes::class, ['occurrence' => $event])
+            ->set('body', 'Something to share')
+            ->assertSee('Copy as Markdown')
+            ->assertSee('Print / Save as PDF');
+    }
+
+    public function test_the_print_link_targets_a_new_tab_with_noopener(): void
+    {
+        $event = CalendarEvent::factory()->at(now('Europe/Rome')->setTime(9, 30), 30)->create();
+
+        $html = Livewire::test(MeetingNotes::class, ['occurrence' => $event])
+            ->set('body', 'Something to share')
+            ->html();
+
+        $this->assertStringContainsString(route('meetings.note.print', $event->occurrenceKey()->toRouteKey()), $html);
+        $this->assertMatchesRegularExpression('/target="_blank"\s+rel="noopener"/', $html);
+    }
 }

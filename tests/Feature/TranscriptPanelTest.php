@@ -349,4 +349,95 @@ class TranscriptPanelTest extends TestCase
         Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
             ->assertSee('open the file for the rest');
     }
+
+    public function test_the_copy_and_print_actions_appear_only_when_linked(): void
+    {
+        $this->configureDirectory();
+        $this->seedFile('20260909_0930_q4_roadmap_review', 'md', '# Hello');
+        $event = $this->eventAt('2026-09-09 09:30:00');
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertSee('Copy as Markdown')
+            ->assertSee('Print / Save as PDF');
+    }
+
+    public function test_the_copy_and_print_actions_are_absent_when_missing(): void
+    {
+        $this->configureDirectory();
+        $event = $this->eventAt('2026-09-09 09:30:00', 'Nothing recorded');
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertDontSee('Copy as Markdown')
+            ->assertDontSee('Print / Save as PDF');
+    }
+
+    public function test_the_copy_and_print_actions_are_absent_when_broken(): void
+    {
+        $this->configureDirectory();
+        $event = $this->eventAt('2026-09-09 09:30:00');
+        MeetingTranscript::factory()->forOccurrence($event)->broken()->create([
+            'path' => "{$this->tempDir}/20260909_0930_gone.md",
+        ]);
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertDontSee('Copy as Markdown')
+            ->assertDontSee('Print / Save as PDF');
+    }
+
+    public function test_the_copy_and_print_actions_are_absent_when_unreadable(): void
+    {
+        if (posix_geteuid() === 0) {
+            $this->markTestSkipped('Cannot test unreadable permissions running as root.');
+        }
+
+        $this->configureDirectory();
+        $path = $this->seedFile('locked', 'md', 'secret');
+        chmod($path, 0000);
+        $event = $this->eventAt('2026-09-09 09:30:00');
+        MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $path]);
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertDontSee('Copy as Markdown')
+            ->assertDontSee('Print / Save as PDF');
+
+        chmod($path, 0644);
+    }
+
+    public function test_the_copy_and_print_actions_are_absent_when_rejected(): void
+    {
+        $this->configureDirectory();
+        $event = $this->eventAt('2026-09-09 09:30:00');
+        $outside = realpath(sys_get_temp_dir()).'/kbms-outside-'.uniqid().'.md';
+        file_put_contents($outside, 'x');
+        MeetingTranscript::factory()->forOccurrence($event)->convention()->create(['path' => $outside]);
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertDontSee('Copy as Markdown')
+            ->assertDontSee('Print / Save as PDF');
+
+        unlink($outside);
+    }
+
+    public function test_the_copy_and_print_actions_are_absent_when_suppressed(): void
+    {
+        $this->configureDirectory();
+        $event = $this->eventAt('2026-09-09 09:30:00');
+        MeetingTranscript::factory()->forOccurrence($event)->suppressed()->create();
+
+        Livewire::test(TranscriptPanel::class, ['occurrence' => $event])
+            ->assertDontSee('Copy as Markdown')
+            ->assertDontSee('Print / Save as PDF');
+    }
+
+    public function test_the_print_link_targets_a_new_tab_with_noopener(): void
+    {
+        $this->configureDirectory();
+        $this->seedFile('20260909_0930_q4_roadmap_review', 'md', '# Hello');
+        $event = $this->eventAt('2026-09-09 09:30:00');
+
+        $html = Livewire::test(TranscriptPanel::class, ['occurrence' => $event])->html();
+
+        $this->assertStringContainsString(route('meetings.transcript.print', $event->occurrenceKey()->toRouteKey()), $html);
+        $this->assertMatchesRegularExpression('/target="_blank"\s+rel="noopener"/', $html);
+    }
 }
