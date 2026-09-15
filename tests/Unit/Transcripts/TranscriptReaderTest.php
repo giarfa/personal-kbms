@@ -171,6 +171,107 @@ class TranscriptReaderTest extends TestCase
         $this->assertFalse($content->isMarkdown);
     }
 
+    public function test_read_unbounded_returns_the_complete_file_including_the_tail_past_the_cap(): void
+    {
+        config(['kbms.transcript_preview_bytes' => 10]);
+        $tail = 'THE-VERY-END';
+        $path = $this->file('whole.txt', str_repeat('a', 200).$tail);
+
+        $content = $this->reader()->readUnbounded($path);
+
+        $this->assertInstanceOf(TranscriptContent::class, $content);
+        $this->assertFalse($content->truncated);
+        $this->assertSame(212, $content->bytesRead);
+        $this->assertSame(212, $content->totalBytes);
+        $this->assertStringContainsString($tail, (string) $content->rendered);
+    }
+
+    public function test_read_still_truncates_the_same_file_readunbounded_reads_complete(): void
+    {
+        config(['kbms.transcript_preview_bytes' => 10]);
+        $path = $this->file('both-paths.txt', str_repeat('a', 200));
+
+        $bounded = $this->reader()->read($path);
+        $unbounded = $this->reader()->readUnbounded($path);
+
+        $this->assertInstanceOf(TranscriptContent::class, $bounded);
+        $this->assertInstanceOf(TranscriptContent::class, $unbounded);
+        $this->assertTrue($bounded->truncated);
+        $this->assertFalse($unbounded->truncated);
+        $this->assertSame(10, $bounded->bytesRead);
+        $this->assertSame(200, $unbounded->bytesRead);
+    }
+
+    public function test_read_unbounded_on_txt_is_escaped_plain_text_not_markdown(): void
+    {
+        $path = $this->file('plain.txt', '# Not a heading');
+
+        $content = $this->reader()->readUnbounded($path);
+
+        $this->assertInstanceOf(TranscriptContent::class, $content);
+        $this->assertFalse($content->isMarkdown);
+        $this->assertStringNotContainsString('<h1>', (string) $content->rendered);
+    }
+
+    public function test_read_unbounded_on_md_renders_through_the_markdown_renderer(): void
+    {
+        $path = $this->file('heading.md', '# A heading');
+
+        $content = $this->reader()->readUnbounded($path);
+
+        $this->assertInstanceOf(TranscriptContent::class, $content);
+        $this->assertTrue($content->isMarkdown);
+        $this->assertStringContainsString('<h1>', (string) $content->rendered);
+    }
+
+    public function test_verify_returns_null_for_a_healthy_file(): void
+    {
+        $path = $this->file('healthy.md', 'ok');
+
+        $this->assertNull($this->reader()->verify($path));
+    }
+
+    public function test_verify_returns_rejected_for_a_path_outside_the_base(): void
+    {
+        $this->assertSame(TranscriptState::Rejected, $this->reader()->verify('/etc/passwd'));
+    }
+
+    public function test_verify_returns_rejected_for_a_symlink_escaping_the_base(): void
+    {
+        $outsideDir = realpath(sys_get_temp_dir()).'/kbms-reader-symlink-outside-'.uniqid();
+        mkdir($outsideDir, 0755, true);
+        $outsideFile = $outsideDir.'/secret.md';
+        file_put_contents($outsideFile, 'x');
+
+        $link = $this->tempDir.'/escape.md';
+        symlink($outsideFile, $link);
+
+        $this->assertSame(TranscriptState::Rejected, $this->reader()->verify($link));
+
+        unlink($link);
+        unlink($outsideFile);
+        rmdir($outsideDir);
+    }
+
+    public function test_verify_returns_broken_for_a_contained_but_absent_file(): void
+    {
+        $path = $this->tempDir.'/gone.md';
+
+        $this->assertSame(TranscriptState::Broken, $this->reader()->verify($path));
+    }
+
+    public function test_verify_returns_unreadable_for_a_chmod_000_file(): void
+    {
+        if (posix_geteuid() === 0) {
+            $this->markTestSkipped('Cannot test unreadable permissions running as root.');
+        }
+
+        $path = $this->file('locked3.md', 'secret');
+        chmod($path, 0000);
+
+        $this->assertSame(TranscriptState::Unreadable, $this->reader()->verify($path));
+    }
+
     public function test_file_get_contents_appears_nowhere_in_the_reader(): void
     {
         $source = file_get_contents(app_path('Transcripts/TranscriptReader.php'));

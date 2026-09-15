@@ -1,0 +1,493 @@
+code: US-017
+plan_body: |-
+  ## Technical Solution
+
+  Two surfaces, two exits, no new dependency. Everything below reuses seams that already exist — `TranscriptsDirectory` for containment, `TranscriptReader` for the state ladder, `MarkdownRenderer` as the single converter, `OccurrenceKey` for identity. Nothing here introduces a second rendering path, a PDF engine, or a `KBMS_*` key.
+
+  **Routes** (all inherit the global `EnsureLoopbackRequest`; all bound through the existing `Route::bind('occurrence', …)` so `UID` + `RECURRENCE-ID` identity is the route's identity — a sibling occurrence of a recurring series can never be addressed by accident):
+
+  | Route | Name | Controller | Returns |
+  | --- | --- | --- | --- |
+  | `GET meetings/{occurrence}/note/print` | `meetings.note.print` | `MeetingNotePrintController` | chrome-free print view of the stored note |
+  | `GET meetings/{occurrence}/transcript/print` | `meetings.transcript.print` | `MeetingTranscriptPrintController` | chrome-free print view of the full transcript |
+  | `GET meetings/{occurrence}/transcript/source` | `meetings.transcript.source` | `MeetingTranscriptSourceController` | `text/plain; charset=utf-8`, the file verbatim and complete |
+
+  Single-action invokable controllers, matching `MeetingController` / `CalendarEventsController`.
+
+  **Reading the full file.** `TranscriptReader::read()` stays exactly as it is — it is the preview, and `KBMS_TRANSCRIPT_PREVIEW_BYTES` is its bound. The state ladder it walks (`Rejected` → `Broken` → `Unreadable`) is extracted into `TranscriptReader::verify(string $path): ?TranscriptState` (null when the path is usable), so the print view, the raw route and the preview cannot drift apart on what "readable" means. A new `TranscriptReader::readUnbounded(string $path): TranscriptContent|TranscriptState` runs the same verification and then reads the whole file (`truncated: false`, `bytesRead === totalBytes`). Both public methods delegate to one private read that takes an explicit byte limit or none — the fixed `fread($handle, $limit + 1)` truncation-detection trick stays on the bounded path only.
+
+  **Resolving a surface for an occurrence.** `App\Transcripts\TranscriptExporter` answers "what, if anything, can leave the tool for this occurrence" for both transcript routes:
+
+  - `pathFor(OccurrenceKey): string|TranscriptState` — persisted row only, then `verify()`. No row → `Missing`; tombstone row (`path === null`) → `Suppressed`; otherwise the verified absolute path. Deliberately does **not** fall back to convention candidates: the export actions are only offered from a `Linked` panel, which means a row exists, and a route that silently resolves a file the page never showed is a worse failure than a stated one.
+  - `forOccurrence(OccurrenceKey): TranscriptExport|TranscriptState` — the above plus `readUnbounded()`, wrapped in a readonly `TranscriptExport{path, content}` with a `filename()` accessor for the print header.
+
+  The note needs no such service: `MeetingNote::query()->forOccurrence(…)->first()` in the controller, and an absent row or a blank body is the note's own unavailable reason.
+
+  **Print views.** A dedicated `resources/views/layouts/print.blade.php`: no sidebar, no `flux:header`, no breadcrumbs, no Livewire panels, no `app.js`. It loads `resources/css/app.css` through Vite for the `kb-md` typography and the `--kb-*` tokens, and it deliberately omits `@fluxAppearance` — the `dark` class is therefore never applied and the page renders light-on-white regardless of the app's theme when the export was triggered. A single inline `window.addEventListener('load', () => window.print())` opens the browser dialog; macOS *Save as PDF* does the rest.
+
+  Three page views: `pages/print/note.blade.php`, `pages/print/transcript.blade.php`, `pages/print/unavailable.blade.php`. The first two open with `<x-meeting.print-header>` — meeting title, date and time, and for a transcript the source filename. This header is exactly the asymmetry FR-025 asks for against the verbatim clipboard payload; it is not a bug to reconcile. The header component carries its own simplified when-line rather than sharing the detail page's `kb-page-head` (which also renders todo glyphs, cancelled state and span labels) — the print header is a different, deliberately plainer artifact, and coupling them would drag page chrome onto paper.
+
+  Body rendering repeats no logic: a note goes through `MarkdownRenderer`, and a transcript is echoed from `TranscriptContent::$rendered`, which is already `MarkdownRenderer` output for `.md` and `e()`-escaped text for `.txt`. The `.txt` branch keeps the monospace treatment the in-page preview uses. There is no second converter anywhere in this spec.
+
+  **Unavailable is a stated page, not a blank one.** Every refusal renders `pages/print/unavailable.blade.php` in the print layout with the reason spelled out and **without** auto-invoking `window.print()`, at HTTP 404. The wording comes from the same vocabulary the panel already uses per state — missing, gone, not readable, rejected, suppressed, empty note — because `states.html` settled that these must not collapse into one message, and a PDF is exactly where a collapsed message does the most damage.
+
+  **Copying as Markdown.** One Alpine behaviour, `resources/js/copy-export.js` (registered on `alpine:init` like `launch-shortcut.js`), two payload sources:
+
+  - **Note** — `$wire.body`. The live editor value, which is what autosave persists; no round trip, no staleness window, and nothing prepended.
+  - **Transcript** — `fetch()` of `meetings.transcript.source`, cached on the component after the first call. The file is not in component state and must not be: embedding an unbounded transcript in the DOM would ride along on every Livewire request payload.
+
+  The write itself feature-detects: `navigator.clipboard?.writeText` when the browser exposes it, otherwise a hidden `<textarea>` + `document.execCommand('copy')`. On `http://personal-kbms.test` the fallback **is** the live path — `.test` over HTTP is not a secure context (only `localhost` and `127.0.0.1` are exempt), so `navigator.clipboard` is undefined there. The Clipboard API branch still exists and still runs wherever it is available; this is a fallback, not a replacement.
+
+  `execCommand('copy')` requires transient user activation, so the transcript fetch happens inside the click handler and its result is cached: the common case resolves in single-digit milliseconds, far inside the activation window, and a rare expiry surfaces as a reported failure with the payload already cached, so the next click succeeds. A failed or rejected write sets an error state on the button — it never leaves a "Copied" confirmation on a clipboard that received nothing.
+
+  **Where the actions live.** Notes panel: rendered when `trim($body) !== ''`, so the actions appear and disappear with the live editor content. Transcript panel: rendered only when `$state === TranscriptState::Linked` — `Broken`, `Unreadable`, `Rejected`, `Suppressed`, `Missing`, `Ambiguous` and `NotConfigured` offer nothing rather than offering something that fails. Print is an `<a target="_blank" rel="noopener">` styled as a Flux button, matching the external-link convention already asserted in tests.
+
+  **What this spec does not do:** no combined meeting brief, no PDF package, no new `.env` key, no bound on the exported artifact, no consent machinery, and no change to what the in-page preview shows.
+
+  ## Architecture & quality notes
+
+  - **N+1 / query shape:** each print route runs one occurrence lookup (route binding) plus one note or transcript row lookup. No loops, no relations, no eager-load surface. The raw route streams with `response()->file()` rather than materialising the file in PHP memory.
+  - **SOLID:** `TranscriptReader` keeps its single responsibility (turn a path into content-or-state); `TranscriptExporter` adds occurrence→surface resolution and owns nothing else; controllers stay thin and hold no domain rules.
+  - **Security (Lars):** containment is re-verified at request time on every route, never trusted from the persisted row — `KBMS_TRANSCRIPTS_PATH` is a `.env` value that can move under a stored absolute path. The raw route serves `text/plain` with an explicit charset so a `.md` file can never be interpreted as HTML by the browser. No route accepts a path parameter: the only input is the occurrence route key.
+  - **Privacy (Violet):** this is the first capability whose purpose is to move content off the machine. No machinery is added — disproportionate for a single-operator local tool — but the mockup README's current claim that "there is no export or share affordance anywhere, and that absence is intentional" becomes false the moment this ships and must be rewritten, not deleted, in TASK-08.
+  - **Larastan level 5:** `TranscriptReader::verify()` returning `?TranscriptState` and the union returns on the exporter need accurate PHPDoc; `php artisan larapilot:quality` runs before every task commit.
+
+  ## Git & Branching
+
+  - Mode: `GITFLOW` (from `settings.git_mode`) — Gitflow **without** automatic push
+  - Branch: `feature/US-017-share-note-transcript` from `develop`
+  - TASK-00: bootstrap the branch and draft the internal PR description locally
+  - Per task: exactly one Conventional Commit, `type(US-017): TASK-NN summary`; never batch two tasks into one commit
+  - Push and remote PR: **skipped** — nothing leaves the machine unless the operator asks in-session
+  - Merge to `develop` only after human `larapilot-review` approval
+
+  ## Test Data Strategy
+
+  - **No new model, migration, factory or seeder.** This spec adds routes, views, a stylesheet block, one JS module and two read-side classes; it touches no schema and no Eloquent attribute.
+  - Existing `CalendarEventFactory`, `MeetingNoteFactory` and `MeetingTranscriptFactory` cover every fixture these tests need; `TranscriptPanelTest`'s temp-directory helpers (`configureDirectory()` / `seedFile()`) are the established pattern for on-disk transcript fixtures and are reused rather than reinvented.
+  - One new fixture shape is required: a transcript **larger than `kbms.transcript_preview_bytes`**, written in the test by lowering the config bound rather than by committing a large file.
+  - `php artisan migrate:fresh --seed` is unaffected; no seeder needs updating. Any task that turns out to need a schema change is out of this plan's scope and goes back through `larapilot-spec`.
+
+  ## Test Strategy
+
+  - Bar: `NORMAL` (from `settings.testing`) — PHPUnit feature and unit tests. **No** Playwright, Dusk, Pest browser, or viewport matrix.
+  - Tests are class-based PHPUnit under `tests/Feature` and `tests/Unit`, created with `php artisan make:test --phpunit`, matching the existing suite.
+  - **Unit (TASK-02):** `readUnbounded()` returns the whole file past the preview bound with `truncated === false`; `verify()` returns `Rejected` / `Broken` / `Unreadable` distinctly; `TranscriptExporter` maps no-row to `Missing` and a tombstone row to `Suppressed`.
+  - **Feature (TASK-07):** each print route — 200 with header and body on the happy path; 404 with the **distinct** stated reason for empty note, no link, tombstone, deleted file, unreadable file, and escaped path; a file deleted *after* the row was written still yields the stated page (request-time verification); a transcript past the preview bound prints complete; the raw route returns the file byte-for-byte with `text/plain`; and — the highest-value assertion in this spec per the PRD — one occurrence of a recurring series never prints a sibling's note.
+  - **Livewire (TASK-07):** the notes panel renders neither action with a blank body and both once a body exists; the transcript panel renders both actions only in `Linked` and none in `Broken` / `Unreadable` / `Rejected` / `Suppressed` / `Missing`.
+  - Assert the **distinguishing strings**, not just status codes — the standing contract from the mockups' test section.
+  - **Manual test handoff (Anne).** The clipboard path cannot be covered at this bar: `execCommand`, secure-context detection and transient user activation all live in the browser. Before review, on `http://personal-kbms.test`: copy a note and paste it back into the editor unchanged; copy a transcript larger than 2 MiB and check the tail arrived; confirm the transient "Copied" state and that a denied clipboard permission reports a failure instead of a confirmation; print both surfaces and check the header, the absence of app chrome, and legibility on white paper with the app in **dark** mode; keyboard-only pass over both new action pairs.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and internal PR'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for US-017: create the feature branch from `develop` and prepare the internal PR description toward `develop`. Do **not** push — `settings.git_mode` is `GITFLOW`.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop`
+      2. `git checkout -b feature/US-017-share-note-transcript`
+      3. Draft the internal PR title (`US-017: Share a meeting's note and transcript as Markdown and PDF`) and body listing the planned tasks; keep it local
+      4. Anchor commit: `chore(US-017): TASK-00 bootstrap feature branch` (empty commit allowed)
+
+      ## Completion Criteria
+      - [x] Branch `feature/US-017-share-note-transcript` exists locally off `develop`
+      - [x] PR title/body drafted toward `develop`, unpushed
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-017): TASK-00 bootstrap feature branch` (empty commit allowed)
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: prepare locally — open remotely only if the operator asks
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 0.5
+    dependencies: {}
+    commit:
+      sha: c3989c6a1de47c026a486fc871c2b99981142c6b
+      short_sha: c3989c6
+      subject: 'chore(US-017): TASK-00 bootstrap feature branch with spec and plan'
+      committed_at: '2026-09-15T18:39:40+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/c3989c6a1de47c026a486fc871c2b99981142c6b'
+  -
+    id: TASK-01
+    title: 'Unbounded transcript read, shared verification, export resolution'
+    body: |-
+      ## Description
+      Give the reader an unbounded read and a shared verification step, and add the occurrence→transcript resolution both export routes need. The preview path keeps its `KBMS_TRANSCRIPT_PREVIEW_BYTES` bound untouched.
+
+      ## Files Involved
+      - app/Transcripts/TranscriptReader.php
+      - app/Transcripts/TranscriptExporter.php (new)
+      - app/Transcripts/TranscriptExport.php (new)
+
+      ## Steps
+      1. Extract the containment/existence/readability ladder from `read()` into `public function verify(string $absolutePath): ?TranscriptState` — `Rejected` when `TranscriptsDirectory::contains()` fails, `Broken` when not a file, `Unreadable` when unreadable or when `filesize`/`filemtime` fail. Null means usable. Keep the existing class docblock's reasoning intact and extend it rather than replacing it.
+      2. Route both reads through one private method taking an explicit `?int $limit`. `read()` passes `config('kbms.transcript_preview_bytes')` and keeps the `fread($handle, $limit + 1)` truncation probe plus the `mb_strcut` UTF-8 boundary cut; the unbounded path reads the stream whole and sets `truncated: false`, `bytesRead === totalBytes`.
+      3. Add `public function readUnbounded(string $absolutePath): TranscriptContent|TranscriptState` — same verification, same `MarkdownRenderer` for `.md`, same `e()` escaping for `.txt`. **No second converter.**
+      4. Add readonly `TranscriptExport{string $path, TranscriptContent $content}` with `filename(): string` returning `basename($path)`.
+      5. Add `TranscriptExporter` (constructor-injected `TranscriptReader`) with `pathFor(OccurrenceKey): string|TranscriptState` — `Missing` when no `MeetingTranscript` row, `Suppressed` when the row's `path` is null (the manual-unlink tombstone), otherwise `verify()` the stored path and return it — and `forOccurrence(OccurrenceKey): TranscriptExport|TranscriptState` layering `readUnbounded()` on top. Deliberately no convention-candidate fallback: document that in the class docblock.
+      6. `vendor/bin/pint --dirty --format agent` and `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] `read()` behaviour is byte-for-byte unchanged — existing `TranscriptReaderTest` passes untouched
+      - [x] `readUnbounded()` returns the whole file, never truncated, for a file past the preview bound
+      - [x] `verify()` is the single source of the `Rejected` / `Broken` / `Unreadable` distinction
+      - [x] `TranscriptExporter` resolves from the persisted row only and states why in its docblock
+      - [x] Pint clean, Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model, migration or schema change
+
+      ## Git Deliverables
+      - Commit: `feat(US-017): TASK-01 add unbounded transcript read and export resolution`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-00
+    commit:
+      sha: 6e40027f089fc2f98b5d32dabeb4d6700be99863
+      short_sha: '6e40027'
+      subject: 'feat(US-017): TASK-01 add unbounded transcript read and export resolution'
+      committed_at: '2026-09-15T18:42:57+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/6e40027f089fc2f98b5d32dabeb4d6700be99863'
+  -
+    id: TASK-02
+    title: 'Unit tests for the unbounded read and export resolution'
+    body: |-
+      ## Description
+      Unit coverage for the new read and resolution seams, before any route depends on them.
+
+      ## Files Involved
+      - tests/Unit/Transcripts/TranscriptReaderTest.php
+      - tests/Unit/Transcripts/TranscriptExporterTest.php (new)
+
+      ## Steps
+      1. Reuse the existing temp-directory fixture helpers in `TranscriptReaderTest`; do not introduce a second fixture style.
+      2. `readUnbounded()`: a file larger than a deliberately lowered `kbms.transcript_preview_bytes` comes back complete — assert the **tail** of the content is present and `truncated === false` and `bytesRead === totalBytes`. Assert `read()` on the same file still truncates, so the two paths are proven independent.
+      3. `readUnbounded()` on a `.txt` path returns `isMarkdown === false` with escaped content; on `.md` it returns rendered Markdown — the same contract as the preview.
+      4. `verify()`: distinct `Rejected` (path outside the base, including a symlink escaping it), `Broken` (contained but absent), `Unreadable` (chmod 000), and null for a healthy file.
+      5. `TranscriptExporter`: `Missing` with no row, `Suppressed` for a null-path tombstone row, a verified path for a healthy row, and the row's verification state for a broken/unreadable/escaped stored path.
+      6. `php artisan test --filter=Transcript`
+
+      ## Completion Criteria
+      - [x] New unit tests pass; existing reader tests still pass unmodified in intent
+      - [x] Every `TranscriptState` the exporter can emit is asserted by case, not by "not null"
+      - [x] Pint clean, Larastan level 5 clean
+
+      ## Git Deliverables
+      - Commit: `test(US-017): TASK-02 cover unbounded reads and export resolution`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-01
+    commit:
+      sha: 1773b210cdd0a892aa021534be0f68dc26f3a95f
+      short_sha: 1773b21
+      subject: 'test(US-017): TASK-02 cover unbounded reads and export resolution'
+      committed_at: '2026-09-15T18:43:57+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1773b210cdd0a892aa021534be0f68dc26f3a95f'
+  -
+    id: TASK-03
+    title: 'Print routes, controllers and chrome-free print views'
+    body: |-
+      ## Description
+      Add the two print routes, their single-action controllers, the chrome-free print layout, the meeting header component, and the stated-unavailable page.
+
+      ## Files Involved
+      - routes/web.php
+      - app/Http/Controllers/MeetingNotePrintController.php (new)
+      - app/Http/Controllers/MeetingTranscriptPrintController.php (new)
+      - resources/views/layouts/print.blade.php (new)
+      - resources/views/pages/print/note.blade.php (new)
+      - resources/views/pages/print/transcript.blade.php (new)
+      - resources/views/pages/print/unavailable.blade.php (new)
+      - resources/views/components/meeting/print-header.blade.php (new)
+
+      ## Steps
+      1. `php artisan make:controller MeetingNotePrintController --invokable --no-interaction` and the same for `MeetingTranscriptPrintController`.
+      2. Register `GET meetings/{occurrence}/note/print` → `meetings.note.print` and `GET meetings/{occurrence}/transcript/print` → `meetings.transcript.print`, using the existing `{occurrence}` binding so `UID` + `RECURRENCE-ID` identity is preserved. They inherit `EnsureLoopbackRequest` from the global stack — do not re-declare it.
+      3. Note controller: load the occurrence's `MeetingNote`; a missing row or a blank body renders `pages.print.unavailable` at 404 with the empty-note reason. Otherwise render the note body through `MarkdownRenderer`.
+      4. Transcript controller: `TranscriptExporter::forOccurrence()`; a `TranscriptState` renders `pages.print.unavailable` at 404 with **that state's own wording** — missing, gone, not readable, rejected, suppressed must not collapse into one sentence. Verification happens on this request, so a file deleted after the detail page loaded produces the stated page, never a blank or partial document.
+      5. `layouts/print.blade.php`: minimal `<html lang>` with no `dark` class, `<meta name="robots" content="noindex, nofollow">`, a per-surface `<title>`, `@vite(['resources/css/app.css'])`, **no** `@fluxAppearance`, **no** `app.js`, no sidebar/header/breadcrumbs/nav/buttons. Inline `window.addEventListener('load', () => window.print())` on the two content views only — the unavailable page must **not** auto-print.
+      6. `components/meeting/print-header.blade.php`: meeting title, date and time (all-day and multi-day handled like the detail page's head, but without todo glyphs, tags or CTAs), timezone from `config('kbms.timezone')`, and an optional source filename slot for the transcript. Semantic `kb-print__*` classes only — the stylesheet lands in TASK-04.
+      7. Transcript view echoes `{!! $content->rendered !!}` inside `kb-md` for Markdown or the monospace print class for `.txt`; it must never re-render the raw file through a converter of its own.
+      8. `php artisan test --filter=Meeting` (smoke), `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] Both print routes render for a healthy note and a healthy linked transcript
+      - [x] The printed document carries the meeting name, date and time — and the source filename for a transcript
+      - [x] Every refusal renders the stated reason at 404 in the print layout without invoking the print dialog
+      - [x] No application chrome on any print view — no nav, breadcrumbs, or action buttons
+      - [x] The views render legibly with the app in dark mode, because the layout never applies the `dark` class
+      - [x] Pint clean, Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-017): TASK-03 add chrome-free print views for note and transcript`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 3.5
+    dependencies:
+      - TASK-01
+    commit:
+      sha: 8ea7c7f4ca879dd1bee2df4a3a82fcf46e4015d2
+      short_sha: 8ea7c7f
+      subject: 'feat(US-017): TASK-03 add chrome-free print views for note and transcript'
+      committed_at: '2026-09-15T19:36:12+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/8ea7c7f4ca879dd1bee2df4a3a82fcf46e4015d2'
+  -
+    id: TASK-04
+    title: 'Print stylesheet for the exported surfaces'
+    body: |-
+      ## Description
+      Style the print surface for paper: a `kb-print*` block plus `@media print` rules, derived from the existing `kb-*` vocabulary rather than a parallel design layer (recorded decision `print layout mockups` — no mockup round).
+
+      ## Files Involved
+      - resources/css/app.css
+
+      ## Steps
+      1. Append a `kb-print` section after the existing component blocks, following the file's established ordering and comment style: `.kb-print` page frame, `.kb-print__head` (title, meta line, source filename), `.kb-print__meta`, `.kb-print__body`, `.kb-print--mono` for `.txt` transcripts reusing `--kb-mono`.
+      2. Reuse `.kb-md` for rendered Markdown — do not restate its typography.
+      3. `@media print`: sensible page margins, `print-color-adjust` where a token background matters, `orphans`/`widows`, avoid breaking inside `pre`/`code`/table rows, no fixed positioning, and no background fills that waste ink. Force black-on-white body text explicitly so a token drift cannot produce grey-on-grey on paper.
+      4. Screen rendering of the print route (the tab the operator sees before the dialog) must also be readable — this is not a print-only stylesheet.
+      5. `npm run build` to confirm the bundle compiles; check both surfaces in the browser's print preview.
+
+      ## Completion Criteria
+      - [x] Print preview shows a clean, chrome-free page with a legible header for both surfaces
+      - [x] Output is black-on-white regardless of the app's theme when the export was triggered
+      - [x] Code blocks and tables do not split awkwardly across pages
+      - [x] No Flux or kit token is redefined — additive `--kb-*` and `kb-*` only
+      - [x] `npm run build` succeeds
+
+      ## Test Data
+      - N/A — stylesheet only
+
+      ## Git Deliverables
+      - Commit: `feat(US-017): TASK-04 add print stylesheet for exported surfaces`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Joe
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-03
+    commit:
+      sha: a6f4202be9e8b639419ebca192ffdbded7a97517
+      short_sha: a6f4202
+      subject: 'feat(US-017): TASK-04 add print stylesheet for exported surfaces'
+      committed_at: '2026-09-15T19:37:16+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a6f4202be9e8b639419ebca192ffdbded7a97517'
+  -
+    id: TASK-05
+    title: 'Verbatim transcript source route for the clipboard'
+    body: |-
+      ## Description
+      Serve the transcript's verbatim bytes for the clipboard path — complete, unbounded, and re-verified at request time. Runs in parallel with TASK-03; no shared files.
+
+      ## Files Involved
+      - routes/web.php
+      - app/Http/Controllers/MeetingTranscriptSourceController.php (new)
+
+      ## Steps
+      1. `php artisan make:controller MeetingTranscriptSourceController --invokable --no-interaction`
+      2. Register `GET meetings/{occurrence}/transcript/source` → `meetings.transcript.source`.
+      3. Resolve with `TranscriptExporter::pathFor()`. A `TranscriptState` returns a `text/plain` body naming that state's reason at 404 — the copy button surfaces it as a failure rather than pretending a copy happened.
+      4. On success stream with `response()->file($path, ['Content-Type' => 'text/plain; charset=utf-8'])`. Explicit charset, never `text/markdown` or `text/html`: a transcript is untrusted third-party content and must not be interpretable as markup by the browser. Do not read the file into PHP memory — a transcript has no size bound here by design.
+      5. `KBMS_TRANSCRIPT_PREVIEW_BYTES` must not appear anywhere on this path.
+      6. `php artisan larapilot:quality`
+
+      ## Completion Criteria
+      - [x] The route returns the file byte-for-byte, complete, with `text/plain; charset=utf-8`
+      - [x] Containment and readability are re-verified on this request, not trusted from the row
+      - [x] Every refusal names its own reason at 404
+      - [x] Pint clean, Larastan level 5 clean
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-017): TASK-05 serve verbatim transcript source for the clipboard`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 1
+    dependencies:
+      - TASK-01
+    commit:
+      sha: a36a09e872400f7fabd5c9f3f52dddffea2a4ee4
+      short_sha: a36a09e
+      subject: 'feat(US-017): TASK-05 serve verbatim transcript source for the clipboard'
+      committed_at: '2026-09-15T19:39:18+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a36a09e872400f7fabd5c9f3f52dddffea2a4ee4'
+  -
+    id: TASK-06
+    title: 'Copy and print actions on the note and transcript panels'
+    body: |-
+      ## Description
+      Wire the four actions onto the two panels: `Copy as Markdown` with a secure-context-aware clipboard path, and `Print / Save as PDF` opening the print view in a new tab.
+
+      ## Files Involved
+      - resources/js/copy-export.js (new)
+      - resources/js/app.js
+      - resources/views/livewire/meeting-notes.blade.php
+      - resources/views/livewire/transcript-panel.blade.php
+
+      ## Steps
+      1. `copy-export.js`: register `Alpine.data('kbCopy', …)` on `alpine:init`, mirroring `launch-shortcut.js`'s structure and comment discipline. State machine `idle → copying → copied → idle` on a timer, plus an `error` state.
+      2. Payload resolution by config: `source: 'wire'` reads `this.$wire.body` synchronously (the note — live editor value, nothing prepended, round-trips back into the editor unchanged); `source: 'url'` fetches `meetings.transcript.source` inside the click handler and caches the text on the component for subsequent clicks.
+      3. Write path: use `navigator.clipboard.writeText` when `navigator.clipboard?.writeText` exists, otherwise a hidden `<textarea>` + `select()` + `document.execCommand('copy')`. Comment the reason inline: `http://personal-kbms.test` is not a secure context — only `localhost` and `127.0.0.1` are exempt — so `navigator.clipboard` is undefined there and the fallback is the live path on this origin. Keep the API branch: it is a fallback, not a replacement.
+      4. Any rejection, exception, non-ok fetch, or `execCommand` returning false sets the error state and shows it in place. Never show "Copied" for a write that did not happen.
+      5. Import the module from `resources/js/app.js`.
+      6. Notes panel: inside `kb-panel__actions`, render `Copy as Markdown` (button, `kbCopy` with `source: 'wire'`) and `Print / Save as PDF` (`<a href="{{ route('meetings.note.print', …) }}" target="_blank" rel="noopener">` as a Flux button) **only when** `trim($body) !== ''`, so the pair appears and disappears with the live editor content.
+      7. Transcript panel: the same pair, `source: 'url'`, rendered **only** when `$state === TranscriptState::Linked`. No action in `Missing`, `Ambiguous`, `Broken`, `Unreadable`, `Rejected`, `Suppressed` or `NotConfigured`.
+      8. Both buttons carry accessible names and an `aria-live` region for the copied/failed state; keyboard reachable in the existing focus order. Do not disturb the existing transcript path-copy icon button.
+      9. `npm run build`, then a manual pass on `http://personal-kbms.test`.
+
+      ## Completion Criteria
+      - [x] Both panels expose both actions in the states that permit them, and neither action in the states that do not
+      - [x] Copy places the body verbatim on the clipboard — a note pasted back into the editor is unchanged
+      - [x] A transcript past 2 MiB copies complete
+      - [x] Copy succeeds on `http://personal-kbms.test` via the fallback, and still uses the Clipboard API where it exists
+      - [x] A successful copy shows a transient "Copied" on the button it came from; a failed one reports the failure in place
+      - [x] Print opens a new tab and the browser's print dialog
+      - [x] Pint clean, Larastan level 5 clean, `npm run build` succeeds
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `feat(US-017): TASK-06 add copy and print actions to the note and transcript panels`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Impl
+    status: DONE
+    assignee: Alex
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-03
+      - TASK-05
+    commit:
+      sha: a8664a2e4186f628dc8fa12fbeaf0a4a48382241
+      short_sha: a8664a2
+      subject: 'feat(US-017): TASK-06 add copy and print actions to the note and transcript panels'
+      committed_at: '2026-09-15T19:42:27+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a8664a2e4186f628dc8fa12fbeaf0a4a48382241'
+  -
+    id: TASK-07
+    title: 'Feature tests for export routes, states and recurrence identity'
+    body: |-
+      ## Description
+      Feature coverage for the export routes and the panel affordances, at the `NORMAL` bar, plus the manual handoff for what a browser has to verify.
+
+      ## Files Involved
+      - tests/Feature/MeetingExportTest.php (new)
+      - tests/Feature/MeetingNotesTest.php
+      - tests/Feature/TranscriptPanelTest.php
+
+      ## Steps
+      1. `php artisan make:test --phpunit MeetingExportTest`; reuse `TranscriptPanelTest`'s temp-directory and `seedFile()` patterns for on-disk fixtures.
+      2. Print (note): 200 with the meeting title, date and time and the rendered body; 404 with the empty-note reason for a blank body and for no row at all.
+      3. Print (transcript): 200 with the header, the date/time and the **source filename**; `.md` rendered, `.txt` escaped monospace; a file larger than a lowered `kbms.transcript_preview_bytes` prints **complete** (assert the tail).
+      4. Request-time verification: create a healthy row, delete the file, then request — assert the stated "gone" page at 404, not a blank document. Repeat for unreadable (chmod 000), for a path escaping the base, and for the tombstone row. Assert the **distinct** wording per state, not just the status code.
+      5. Raw source route: byte-for-byte equality with the file on disk, `text/plain; charset=utf-8`, complete past the preview bound; 404 with its reason for each refusal state.
+      6. **Recurrence identity** — the highest-value assertion here: two occurrences of one series, each with its own note and its own linked transcript; assert each print route returns that occurrence's content and never the sibling's. Address both through `OccurrenceKey::toRouteKey()`.
+      7. A cancelled occurrence still exports — sharing never gates on upstream feed state.
+      8. Livewire: extend `MeetingNotesTest` (no actions with a blank body; both present once a body exists) and `TranscriptPanelTest` (both actions in `Linked`; neither in `Broken`, `Unreadable`, `Rejected`, `Suppressed`, `Missing`). Assert the `rel="noopener"` and `target="_blank"` on the print link, matching the standing external-CTA convention.
+      9. No Playwright, Dusk, Pest browser or viewport suite — `settings.testing` is `NORMAL`.
+      10. `php artisan test`, then `php artisan larapilot:quality`.
+      11. Write the **manual test handoff** into the review notes: on `http://personal-kbms.test` — paste a copied note back into the editor unchanged; copy a >2 MiB transcript and check the tail; confirm the transient "Copied" and that a denied clipboard reports failure rather than success; print both surfaces with the app in **dark** mode and check header, absent chrome, and white-paper legibility; keyboard-only pass over both action pairs.
+
+      ## Completion Criteria
+      - [x] Full suite green
+      - [x] Every acceptance criterion reachable from PHP is asserted, by distinguishing string where one exists
+      - [x] Recurring-series identity asserted on both print routes
+      - [x] Manual handoff steps written down for review
+      - [x] Pint clean, Larastan level 5 clean
+
+      ## Git Deliverables
+      - Commit: `test(US-017): TASK-07 cover export routes, states and recurrence identity`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: update the local PR notes
+    type: Test
+    status: DONE
+    assignee: Anne
+    estimate_hours: 2.5
+    dependencies:
+      - TASK-04
+      - TASK-06
+    commit:
+      sha: 6a777b4754ad432adca53c2c6aabac67d88e4ad8
+      short_sha: 6a777b4
+      subject: 'test(US-017): TASK-07 cover export routes, states and recurrence identity'
+      committed_at: '2026-09-15T19:45:14+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/6a777b4754ad432adca53c2c6aabac67d88e4ad8'
+  -
+    id: TASK-08
+    title: 'Document the export surface in the mockups and changelog'
+    body: |-
+      ## Description
+      Record the new surface where the project records surfaces: the mockup README's visual contract and copy rules, and the changelog. The print view is a new visual surface, so `.ai/rules/views.md` makes this mandatory, not optional.
+
+      ## Files Involved
+      - .larapilot/mockups/kbms-app/README.md
+      - CHANGELOG.md
+      - README.md (only if a section turns out to be inaccurate)
+
+      ## Steps
+      1. Add the `kb-print*` vocabulary to the README's implementation mapping table: which class maps to which Blade view, that the print layout deliberately omits `@fluxAppearance` so paper is always light, and that `kb-md` is reused rather than restated.
+      2. **Rewrite Violet's paragraph.** It currently reads "there is no export or share affordance anywhere, and that absence is intentional" — that statement stops being true when this ships. Replace it with the FR-025 position: export exists, deliberately per surface, and the household exemption now rests on the operator's judgement at the moment of sharing. Do not delete the paragraph; the reasoning still has to be on the record.
+      3. Add the two export actions to Marika's copy notes — the exact button labels, the transient "Copied" wording, and the rule that a failed copy reports the failure rather than claiming success.
+      4. Extend the README's test contract section with the manual clipboard/print pass from TASK-07.
+      5. `CHANGELOG.md` → `## [Unreleased]` → `### Added`: one entry in the file's established voice covering both surfaces, the verbatim clipboard payload versus the headed printed document, the unbounded export, request-time verification, the `.test` secure-context fallback, and the deliberate absences — no PDF package, no combined meeting brief, no new `KBMS_*` key.
+      6. Confirm `README.md` needs no change (no new `.env` key, no new command); update only if something is now inaccurate.
+
+      ## Completion Criteria
+      - [x] Mockup README documents the print surface and its `kb-*` vocabulary
+      - [x] The "no export affordance" claim is corrected rather than dropped
+      - [x] `CHANGELOG.md` Unreleased carries the feature in the file's existing style
+      - [x] No new configuration key is introduced anywhere in the docs
+
+      ## Test Data
+      - N/A — documentation only
+
+      ## Git Deliverables
+      - Commit: `docs(US-017): TASK-08 record the export surface in the mockups and changelog`
+      - Push: **skip** (`git_mode: GITFLOW`)
+      - PR: finalise the local PR description
+    type: Impl
+    status: DONE
+    assignee: Albert
+    estimate_hours: 1
+    dependencies:
+      - TASK-06
+    commit:
+      sha: eb4a2e9e8aeece66ee3ccde0b12aab676eb52c5a
+      short_sha: eb4a2e9
+      subject: 'docs(US-017): TASK-08 record the export surface in the mockups and changelog'
+      committed_at: '2026-09-15T19:46:38+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/eb4a2e9e8aeece66ee3ccde0b12aab676eb52c5a'
+updated_at: '2026-09-15T19:52:10+02:00'

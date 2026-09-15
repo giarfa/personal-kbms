@@ -144,6 +144,7 @@ class MeetingNotes extends Component
             // otherwise re-run the Markdown conversion for a view the operator
             // is not looking at.
             'preview' => $this->mode === 'preview' ? app(MarkdownRenderer::class)->render($this->body) : null,
+            'printUrl' => route('meetings.note.print', $this->occurrenceKey()->toRouteKey()),
         ]);
     }
 }

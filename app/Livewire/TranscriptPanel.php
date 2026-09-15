@@ -191,6 +191,8 @@ class TranscriptPanel extends Component
             // stay visible rather than described from a stale row.
             'sizeLabel' => $this->formatBytes($result->totalBytes),
             'modifiedLabel' => $this->formatModified($result->modifiedAt),
+            'printUrl' => route('meetings.transcript.print', $this->occurrenceKey()->toRouteKey()),
+            'sourceUrl' => route('meetings.transcript.source', $this->occurrenceKey()->toRouteKey()),
         ];
     }
 

@@ -20,6 +20,11 @@ use Illuminate\Support\HtmlString;
  * Reuses MarkdownRenderer rather than a second converter — a transcript is
  * more obviously untrusted third-party content than a note the operator
  * typed themselves.
+ *
+ * `readUnbounded()` (US-017) shares the same containment/readability ladder
+ * and the same renderer, and differs only in the limit passed to the shared
+ * read: `null` reads the stream whole, for an export that must never be cut
+ * at the preview bound.
  */
 final class TranscriptReader
 {
@@ -35,6 +40,31 @@ final class TranscriptReader
      */
     public function read(string $absolutePath): TranscriptContent|TranscriptState
     {
+        return $this->verify($absolutePath) ?? $this->readWithLimit(
+            $absolutePath,
+            max(0, (int) config('kbms.transcript_preview_bytes')),
+        );
+    }
+
+    /**
+     * The complete file, never truncated — for an export leaving the tool
+     * rather than a bounded in-page preview. Same verification ladder, same
+     * renderer/escaping contract as `read()`.
+     */
+    public function readUnbounded(string $absolutePath): TranscriptContent|TranscriptState
+    {
+        return $this->verify($absolutePath) ?? $this->readWithLimit($absolutePath, null);
+    }
+
+    /**
+     * The containment/existence/readability ladder shared by `read()` and
+     * `readUnbounded()`. Null means the path is usable; a `TranscriptState`
+     * is the specific reason it is not — `Rejected` for a path outside the
+     * base, `Broken` for one that is contained but absent, `Unreadable` for
+     * one that exists but cannot be opened or stat'd.
+     */
+    public function verify(string $absolutePath): ?TranscriptState
+    {
         if (! $this->directory->contains($absolutePath)) {
             return TranscriptState::Rejected;
         }
@@ -47,6 +77,16 @@ final class TranscriptReader
             return TranscriptState::Unreadable;
         }
 
+        return null;
+    }
+
+    /**
+     * `$limit` of `null` reads the stream whole (`readUnbounded()`); any
+     * other value keeps the `fread($handle, $limit + 1)` truncation probe
+     * and the `mb_strcut` UTF-8 boundary cut `read()` has always used.
+     */
+    private function readWithLimit(string $absolutePath, ?int $limit): TranscriptContent|TranscriptState
+    {
         $totalBytes = filesize($absolutePath);
         $modifiedAt = filemtime($absolutePath);
 
@@ -60,16 +100,27 @@ final class TranscriptReader
             return TranscriptState::Unreadable;
         }
 
-        $limit = max(0, (int) config('kbms.transcript_preview_bytes'));
-        $chunk = fread($handle, $limit + 1);
-        fclose($handle);
+        if ($limit === null) {
+            $chunk = stream_get_contents($handle);
+            fclose($handle);
 
-        if ($chunk === false) {
-            return TranscriptState::Unreadable;
+            if ($chunk === false) {
+                return TranscriptState::Unreadable;
+            }
+
+            $truncated = false;
+            $bounded = $chunk;
+        } else {
+            $chunk = fread($handle, $limit + 1);
+            fclose($handle);
+
+            if ($chunk === false) {
+                return TranscriptState::Unreadable;
+            }
+
+            $truncated = strlen($chunk) > $limit;
+            $bounded = $truncated ? mb_strcut($chunk, 0, $limit, 'UTF-8') : $chunk;
         }
-
-        $truncated = strlen($chunk) > $limit;
-        $bounded = $truncated ? mb_strcut($chunk, 0, $limit, 'UTF-8') : $chunk;
 
         $isMarkdown = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION)) === 'md';
 

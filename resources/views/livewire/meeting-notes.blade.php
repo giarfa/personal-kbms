@@ -24,6 +24,19 @@
                 <flux:button size="sm" variant="outline" wire:click="retry">{{ __('Retry') }}</flux:button>
             @endif
 
+            @if (trim($body) !== '')
+                <span role="status" aria-live="polite">
+                    <flux:button
+                        size="sm"
+                        variant="ghost"
+                        x-data="kbCopy({ source: 'wire' })"
+                        x-on:click="copy"
+                        x-text="state === 'copied' ? @js(__('Copied')) : (state === 'error' ? @js(__('Copy failed')) : @js(__('Copy as Markdown')))"
+                    >{{ __('Copy as Markdown') }}</flux:button>
+                </span>
+                <flux:button size="sm" variant="ghost" :href="$printUrl" target="_blank" rel="noopener">{{ __('Print / Save as PDF') }}</flux:button>
+            @endif
+
             <div class="kb-tabs" role="tablist" aria-label="{{ __('Note editor mode') }}">
                 <button type="button" role="tab" aria-selected="{{ $mode === 'write' ? 'true' : 'false' }}" wire:click="switchMode('write')">{{ __('Write') }}</button>
                 <button type="button" role="tab" aria-selected="{{ $mode === 'preview' ? 'true' : 'false' }}" wire:click="switchMode('preview')">{{ __('Preview') }}</button>

@@ -15,6 +15,16 @@ use App\Transcripts\TranscriptState;
                 <span class="kb-tag @if ($linkSource === TranscriptLinkSource::Convention) kb-tag--transcript @else kb-tag--ok @endif">
                     {{ $linkSource === TranscriptLinkSource::Convention ? __('Linked by convention') : __('Linked manually') }}
                 </span>
+                <span role="status" aria-live="polite">
+                    <flux:button
+                        size="sm"
+                        variant="ghost"
+                        x-data="kbCopy({ source: 'url', url: @js($sourceUrl) })"
+                        x-on:click="copy"
+                        x-text="state === 'copied' ? @js(__('Copied')) : (state === 'error' ? @js(__('Copy failed')) : @js(__('Copy as Markdown')))"
+                    >{{ __('Copy as Markdown') }}</flux:button>
+                </span>
+                <flux:button size="sm" variant="ghost" :href="$printUrl" target="_blank" rel="noopener">{{ __('Print / Save as PDF') }}</flux:button>
                 <flux:modal.trigger name="transcript-picker">
                     <flux:button size="sm" variant="outline">{{ __('Relink…') }}</flux:button>
                 </flux:modal.trigger>
