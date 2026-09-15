@@ -219,6 +219,38 @@ class SeriesNeighbourLookupTest extends TestCase
         $this->assertSame(2, $queries);
     }
 
+    /**
+     * A counted query is not a bounded one: loading the whole series and
+     * picking the neighbour in PHP would also cost two queries and pass every
+     * behavioural assertion above. The bound is the point — the detail page
+     * of a standing meeting held weekly for three years must not read three
+     * years of rows to find last week's.
+     */
+    public function test_each_direction_is_a_bounded_lookup_on_the_indexed_column(): void
+    {
+        foreach (range(1, 20) as $week) {
+            $this->occurrence(CarbonImmutable::parse('2026-01-05')->addWeeks($week)->toDateString());
+        }
+
+        $current = CalendarEvent::query()->where('source_uid', self::SERIES_UID)->orderBy('starts_at')->skip(10)->first();
+        $this->assertNotNull($current);
+
+        /** @var list<string> $statements */
+        $statements = [];
+        DB::listen(function ($query) use (&$statements): void {
+            $statements[] = $query->sql;
+        });
+
+        $this->lookup()->forOccurrence($current);
+
+        $this->assertCount(2, $statements);
+
+        foreach ($statements as $sql) {
+            $this->assertStringContainsString('"source_uid" = ?', $sql);
+            $this->assertStringContainsString('limit 1', $sql);
+        }
+    }
+
     public function test_a_timed_neighbour_is_labelled_with_its_own_date_and_time(): void
     {
         $this->occurrence('2026-09-01', '14:30');
