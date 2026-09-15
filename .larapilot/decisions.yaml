@@ -1325,4 +1325,17 @@ decisions:
     source: chat
     spec: US-017
     supersedes: null
-updated_at: '2026-09-15T20:18:19+02:00'
+  -
+    id: 6b1c177837a2417b
+    ts: '2026-09-15T20:22:58+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-settings
+    topic: 'git mode'
+    label: 'git mode'
+    value: 'GITFLOW_PUSH — feature branches push after each task; PR creation stays manual because the GitHub forge toggle is deliberately OFF. Changed after US-017 needed merge and push asked for by hand. Other settings reaffirmed unchanged: effort STANDARD, backlog STANDARD, testing NORMAL, auto_approve YES, lucille/decision_log ON, all other opt-ins OFF (dashboard_auth and api_auth skipped as redundant behind EnsureLoopbackRequest).'
+    question: null
+    rationale: null
+    source: askquestion
+    spec: null
+    supersedes: null
+updated_at: '2026-09-15T20:22:58+02:00'
