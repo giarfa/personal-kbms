@@ -1201,7 +1201,7 @@ specs:
       objective: 'The meeting detail page is the single place the operator reads, annotates, links and now shares everything known about one occurrence'
     priority: MEDIUM
     points: 2
-    status: 'IN PROGRESS'
+    status: REVIEW
     body: |
       #### US-018: Step to the previous or next occurrence of a series
 
@@ -1231,6 +1231,7 @@ specs:
     status_history:
       - { status: PLANNED, at: '2026-09-15T20:28:41+02:00' }
       - { status: 'IN PROGRESS', at: '2026-09-15T20:28:44+02:00' }
+      - { status: REVIEW, at: '2026-09-15T20:42:11+02:00' }
     rework: false
   -
     code: US-019
