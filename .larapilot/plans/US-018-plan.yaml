@@ -218,12 +218,12 @@ tasks:
       7. `php artisan larapilot:quality` and `npm run build`
 
       ## Completion Criteria
-      - [ ] Both controls render on a recurring occurrence, each labelled with the neighbour's own date and time
-      - [ ] Each available control is an `<a href>` to `meetings.show` with `target="_blank"` and `rel="noopener"`
-      - [ ] At the mirror's edge the control renders disabled with its reason wired through `aria-describedby`
-      - [ ] A one-off occurrence renders neither control
-      - [ ] Layout intact at 375 / 768 / 1280 px (manual smoke)
-      - [ ] Pint + Larastan level 5 pass
+      - [x] Both controls render on a recurring occurrence, each labelled with the neighbour's own date and time
+      - [x] Each available control is an `<a href>` to `meetings.show` with `target="_blank"` and `rel="noopener"`
+      - [x] At the mirror's edge the control renders disabled with its reason wired through `aria-describedby`
+      - [x] A one-off occurrence renders neither control
+      - [x] Layout intact at 375 / 768 / 1280 px (manual smoke)
+      - [x] Pint + Larastan level 5 pass
 
       ## Test Data
       - N/A — no model/schema changes in this task
@@ -233,11 +233,17 @@ tasks:
       - Push: `origin feature/US-018-series-neighbour-links`
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
       - TASK-02
+    commit:
+      sha: 9b7f9373952e7ade5cc66589fa54c87d7ee80ea3
+      short_sha: 9b7f937
+      subject: 'feat(US-018): TASK-03 render previous/next occurrence controls'
+      committed_at: '2026-09-15T20:32:48+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/9b7f9373952e7ade5cc66589fa54c87d7ee80ea3'
   -
     id: TASK-04
     title: 'Feature tests for the detail page controls'
@@ -258,21 +264,27 @@ tasks:
       7. Record the manual verification steps from the plan's Test Strategy as a **Manual tests recommended** note in the handoff (`settings.testing: NORMAL` — no browser automation)
 
       ## Completion Criteria
-      - [ ] All six AC rendering cases asserted and green
-      - [ ] Link shape, accessible name, and disabled-reason wording asserted
-      - [ ] Query count on the detail page proven constant in series length
-      - [ ] Full `php artisan test` suite green
+      - [x] All six AC rendering cases asserted and green
+      - [x] Link shape, accessible name, and disabled-reason wording asserted
+      - [x] Query count on the detail page proven constant in series length
+      - [x] Full `php artisan test` suite green
 
       ## Git Deliverables
       - Commit: `test(US-018): TASK-04 cover previous/next occurrence controls`
       - Push: `origin feature/US-018-series-neighbour-links`
       - PR: update the local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1.5
     dependencies:
       - TASK-03
+    commit:
+      sha: 1a87104d60d8c69cc6d4941cca0480e11cc9b74e
+      short_sha: 1a87104
+      subject: 'test(US-018): TASK-04 cover previous/next occurrence controls'
+      committed_at: '2026-09-15T20:34:05+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/1a87104d60d8c69cc6d4941cca0480e11cc9b74e'
   -
     id: TASK-05
     title: 'Amend the UI contract and the changelog'
@@ -308,4 +320,4 @@ tasks:
     estimate_hours: 0.5
     dependencies:
       - TASK-04
-updated_at: '2026-09-15T20:31:26+02:00'
+updated_at: '2026-09-15T20:34:08+02:00'
