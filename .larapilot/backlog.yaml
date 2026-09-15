@@ -1135,7 +1135,7 @@ specs:
       objective: 'The meeting detail page is the single place the operator reads, annotates, links and now shares everything known about one occurrence'
     priority: MEDIUM
     points: 3
-    status: PLANNED
+    status: 'IN PROGRESS'
     body: |
       #### US-017: Share a meeting's note and transcript as Markdown and PDF
 
@@ -1182,6 +1182,7 @@ specs:
       - Per `.ai/rules/views.md`, the print view is a new visual surface: update `.larapilot/mockups/kbms-app/README.md` with its `kb-*` vocabulary as part of delivery. No mockup round was requested (recorded decision `print layout mockups`)
     status_history:
       - { status: PLANNED, at: '2026-09-14T23:14:30+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-15T18:39:43+02:00' }
     rework: false
   -
     code: US-018
