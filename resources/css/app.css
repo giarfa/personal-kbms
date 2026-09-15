@@ -755,6 +755,34 @@
     color: var(--muted-foreground);
 }
 
+/* Series navigation (US-018) — previous / next occurrence of the same series.
+   Pushed to opposite ends so direction is legible before either label is read;
+   each side stacks its control above the reason it is inert, if it is. */
+.kb-series-nav {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.kb-series-nav__side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.kb-series-nav__side--next {
+    align-items: flex-end;
+    text-align: right;
+}
+
+.kb-series-nav__side .kb-note-inline {
+    max-width: 18rem;
+}
+
 .kb-detail {
     display: grid;
     gap: 1rem;
@@ -1216,6 +1244,20 @@
 }
 
 @media (max-width: 767px) {
+    .kb-series-nav {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .kb-series-nav__side--next {
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .kb-series-nav__side .kb-note-inline {
+        max-width: none;
+    }
+
     .kb-row {
         grid-template-columns: 1fr;
         gap: 0.375rem;

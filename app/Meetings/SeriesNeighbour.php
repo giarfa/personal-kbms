@@ -91,6 +91,18 @@ final readonly class SeriesNeighbour
     }
 
     /**
+     * What an inert control says on its face, where there is no destination
+     * to name. The visible text of an available control is its `label()`
+     * instead — the date and time are the reason to reach for it.
+     */
+    public function directionLabel(): string
+    {
+        return $this->direction === SeriesDirection::Previous
+            ? __('Previous occurrence')
+            : __('Next occurrence');
+    }
+
+    /**
      * Why the control is inert. Speaks about the mirror only.
      */
     public function reason(): ?string

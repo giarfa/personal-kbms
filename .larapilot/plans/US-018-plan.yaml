@@ -87,8 +87,8 @@ tasks:
       4. Draft the internal PR title (`US-018: Step to the previous or next occurrence of a series`) and body locally — link the plan and list the planned tasks. `settings.github` is `NO`, so do not open the PR with `gh`
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-018-series-neighbour-links` exists and tracks `origin`
-      - [ ] PR title/body drafted toward `develop`
+      - [x] Branch `feature/US-018-series-neighbour-links` exists and tracks `origin`
+      - [x] PR title/body drafted toward `develop`
 
       ## Test Data
       - N/A — no model/schema changes in this task
@@ -98,10 +98,16 @@ tasks:
       - Push: `origin feature/US-018-series-neighbour-links`
       - PR: prepared locally (remote forge integrations are off)
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.25
     dependencies: {}
+    commit:
+      sha: ad841e77a8492747a53ce477c6a4adc5b00c720f
+      short_sha: ad841e7
+      subject: 'chore(US-018): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-15T20:28:48+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/ad841e77a8492747a53ce477c6a4adc5b00c720f'
   -
     id: TASK-01
     title: 'Series neighbour lookup and its value objects'
@@ -125,11 +131,11 @@ tasks:
       7. `php artisan larapilot:quality`
 
       ## Completion Criteria
-      - [ ] `forOccurrence()` returns `null` for `recurrence_id === ''` and a pair otherwise, including for a series with exactly one stored occurrence
-      - [ ] Each direction costs exactly one `LIMIT 1` query filtered on `source_uid`; the series is never loaded
-      - [ ] Ties on `starts_at` break deterministically on `recurrence_id`; an occurrence is never its own neighbour
-      - [ ] Cancelled occurrences are returned as neighbours, unmarked by the lookup
-      - [ ] Pint + Larastan level 5 pass
+      - [x] `forOccurrence()` returns `null` for `recurrence_id === ''` and a pair otherwise, including for a series with exactly one stored occurrence
+      - [x] Each direction costs exactly one `LIMIT 1` query filtered on `source_uid`; the series is never loaded
+      - [x] Ties on `starts_at` break deterministically on `recurrence_id`; an occurrence is never its own neighbour
+      - [x] Cancelled occurrences are returned as neighbours, unmarked by the lookup
+      - [x] Pint + Larastan level 5 pass
 
       ## Test Data
       - N/A — no model/schema changes in this task
@@ -139,11 +145,17 @@ tasks:
       - Push: `origin feature/US-018-series-neighbour-links`
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
       - TASK-00
+    commit:
+      sha: 211b81313e46875bb4320a4a374ba96bc110f04e
+      short_sha: 211b813
+      subject: 'feat(US-018): TASK-01 add series neighbour lookup'
+      committed_at: '2026-09-15T20:30:15+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/211b81313e46875bb4320a4a374ba96bc110f04e'
   -
     id: TASK-02
     title: 'Unit tests for series adjacency and labelling'
@@ -163,20 +175,26 @@ tasks:
       6. `php artisan test --compact --filter=SeriesNeighbourLookupTest`
 
       ## Completion Criteria
-      - [ ] Every case above asserted and green
-      - [ ] Tests use existing factory states — no duplicated factory definitions
-      - [ ] No browser/E2E tooling added (`settings.testing: NORMAL`)
+      - [x] Every case above asserted and green
+      - [x] Tests use existing factory states — no duplicated factory definitions
+      - [x] No browser/E2E tooling added (`settings.testing: NORMAL`)
 
       ## Git Deliverables
       - Commit: `test(US-018): TASK-02 cover series neighbour adjacency and labels`
       - Push: `origin feature/US-018-series-neighbour-links`
       - PR: update the local PR notes
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies:
       - TASK-01
+    commit:
+      sha: 41ffcc5ef78e4ca70ea28614694ee03f3e2278f7
+      short_sha: 41ffcc5
+      subject: 'test(US-018): TASK-02 cover series neighbour adjacency and labels'
+      committed_at: '2026-09-15T20:31:24+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/41ffcc5ef78e4ca70ea28614694ee03f3e2278f7'
   -
     id: TASK-03
     title: 'Render the previous/next controls on the meeting detail page'
@@ -290,4 +308,4 @@ tasks:
     estimate_hours: 0.5
     dependencies:
       - TASK-04
-updated_at: '2026-09-15T20:28:41+02:00'
+updated_at: '2026-09-15T20:31:26+02:00'

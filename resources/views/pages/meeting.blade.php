@@ -58,6 +58,10 @@
         </div>
     @endif
 
+    @if ($neighbours)
+        <x-meeting.series-nav :neighbours="$neighbours" />
+    @endif
+
     <div class="kb-detail">
         <x-meeting.mirror-panel :row="$row" />
 
