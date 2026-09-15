@@ -50,6 +50,15 @@ final readonly class SeriesNeighbour
         return $this->event !== null;
     }
 
+    /**
+     * Direction as a question the renderer can ask, so the view never has to
+     * import the enum to place a glyph.
+     */
+    public function isPrevious(): bool
+    {
+        return $this->direction === SeriesDirection::Previous;
+    }
+
     public function routeKey(): ?string
     {
         return $this->event?->occurrenceKey()->toRouteKey();
@@ -68,8 +77,8 @@ final readonly class SeriesNeighbour
         $start = CarbonImmutable::instance($this->event->starts_at);
 
         $date = $start->year === $this->referenceYear
-            ? $start->format('D j M')
-            : $start->format('D j M Y');
+            ? $start->translatedFormat('D j M')
+            : $start->translatedFormat('D j M Y');
 
         return $this->event->is_all_day
             ? $date.' · '.__('all day')
@@ -83,9 +92,16 @@ final readonly class SeriesNeighbour
      */
     public function accessibleName(): string
     {
+        // An absent direction has no destination to name; the renderer uses
+        // `directionLabel()` there. Returning the direction alone keeps this
+        // from composing a sentence with a hole in it for a later caller.
+        if ($this->event === null) {
+            return $this->directionLabel();
+        }
+
         $replacements = ['when' => $this->label()];
 
-        return $this->direction === SeriesDirection::Previous
+        return $this->isPrevious()
             ? __('Previous occurrence, :when (opens in a new tab)', $replacements)
             : __('Next occurrence, :when (opens in a new tab)', $replacements);
     }
@@ -97,7 +113,7 @@ final readonly class SeriesNeighbour
      */
     public function directionLabel(): string
     {
-        return $this->direction === SeriesDirection::Previous
+        return $this->isPrevious()
             ? __('Previous occurrence')
             : __('Next occurrence');
     }
@@ -111,7 +127,7 @@ final readonly class SeriesNeighbour
             return null;
         }
 
-        return $this->direction === SeriesDirection::Previous
+        return $this->isPrevious()
             ? __('The mirror holds no earlier occurrence of this series.')
             : __('The mirror holds no later occurrence of this series.');
     }

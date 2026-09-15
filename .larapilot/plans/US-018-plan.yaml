@@ -303,9 +303,9 @@ tasks:
       4. No baseline README or `.env.example` change — this spec adds no configuration surface
 
       ## Completion Criteria
-      - [ ] Mockup README describes the control, its disabled shape, and the one-off case
-      - [ ] Both non-obvious rules stated in the contract
-      - [ ] `CHANGELOG.md` `[Unreleased] / Added` entry present
+      - [x] Mockup README describes the control, its disabled shape, and the one-off case
+      - [x] Both non-obvious rules stated in the contract
+      - [x] `CHANGELOG.md` `[Unreleased] / Added` entry present
 
       ## Test Data
       - N/A — documentation only
@@ -315,9 +315,15 @@ tasks:
       - Push: `origin feature/US-018-series-neighbour-links`
       - PR: update the local PR notes
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Albert
     estimate_hours: 0.5
     dependencies:
       - TASK-04
-updated_at: '2026-09-15T20:34:08+02:00'
+    commit:
+      sha: a5414133b7dd43d774c1b4aaa6d65d0bc0056f2e
+      short_sha: a541413
+      subject: 'docs(US-018): TASK-05 record series navigation in the UI contract and changelog'
+      committed_at: '2026-09-15T20:34:37+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/a5414133b7dd43d774c1b4aaa6d65d0bc0056f2e'
+updated_at: '2026-09-15T20:34:39+02:00'

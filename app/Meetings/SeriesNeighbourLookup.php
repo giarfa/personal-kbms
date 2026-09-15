@@ -15,9 +15,19 @@ use Illuminate\Database\Eloquent\Builder;
  * which contradicts keeping the row rather than hiding it (FR-004).
  *
  * Each direction is one `LIMIT 1` query filtered on `source_uid`, the leading
- * column of the existing `(source_uid, recurrence_id)` unique index. The
- * series itself is never loaded, so the detail page's cost does not grow with
- * how long the standing meeting has been running.
+ * column of the existing `(source_uid, recurrence_id)` unique index, and one
+ * model is hydrated per direction however long the series is.
+ *
+ * Be precise about what that does and does not buy: the index serves the
+ * `source_uid` equality only, so `EXPLAIN QUERY PLAN` shows a `TEMP B-TREE FOR
+ * ORDER BY` — SQLite sorts the matched series rows to satisfy the ordering
+ * before applying the limit. The page therefore costs two `LIMIT 1` queries
+ * rather than anything proportional to the series *in PHP*, but the sort
+ * inside SQLite is proportional to the series. A `(source_uid, starts_at,
+ * recurrence_id)` composite index would make this a true keyset seek; it is
+ * deliberately not added here, because US-018 scopes the lookup to the
+ * existing index and the sync window already bounds a series to the low
+ * hundreds of rows.
  */
 final class SeriesNeighbourLookup
 {

@@ -21,8 +21,6 @@ class MeetingController extends Controller
             'row' => new AgendaRow($occurrence, $lookup->forOccurrence($occurrence)),
             'outlookLink' => $links->for($occurrence),
             'teamsUrl' => $links->teamsUrl($occurrence),
-            // Null for a one-off meeting, which is what the view reads as
-            // "render no series navigation at all" (US-018).
             'neighbours' => $neighbours->forOccurrence($occurrence),
         ]);
     }

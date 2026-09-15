@@ -3,7 +3,6 @@
 namespace Tests\Unit\Meetings;
 
 use App\Meetings\SeriesDirection;
-use App\Meetings\SeriesNeighbour;
 use App\Meetings\SeriesNeighbourLookup;
 use App\Models\CalendarEvent;
 use Carbon\Carbon;
@@ -43,7 +42,7 @@ class SeriesNeighbourLookupTest extends TestCase
     private function occurrence(string $date, string $time = '09:00', string $uid = self::SERIES_UID): CalendarEvent
     {
         return CalendarEvent::factory()
-            ->occurrenceOf($uid, $date.'T'.str_replace(':', '', $time).'00Z')
+            ->occurrenceOf($uid, $date.'T'.$time.':00Z')
             ->at(CarbonImmutable::parse($date.' '.$time, 'Europe/Rome'), 30)
             ->create();
     }
@@ -119,7 +118,7 @@ class SeriesNeighbourLookupTest extends TestCase
     public function test_a_cancelled_sibling_is_returned_rather_than_skipped(): void
     {
         $cancelled = CalendarEvent::factory()
-            ->occurrenceOf(self::SERIES_UID, '20260901T090000Z')
+            ->occurrenceOf(self::SERIES_UID, '2026-09-01T09:00:00Z')
             ->at(CarbonImmutable::parse('2026-09-01 09:00', 'Europe/Rome'), 30)
             ->cancelled()
             ->create();
@@ -178,11 +177,11 @@ class SeriesNeighbourLookupTest extends TestCase
     public function test_a_tie_on_start_time_resolves_deterministically_and_never_onto_itself(): void
     {
         $early = CalendarEvent::factory()
-            ->occurrenceOf(self::SERIES_UID, '20260908T090000Z')
+            ->occurrenceOf(self::SERIES_UID, '2026-09-08T09:00:00Z')
             ->at(CarbonImmutable::parse('2026-09-08 09:00', 'Europe/Rome'), 30)
             ->create();
         $late = CalendarEvent::factory()
-            ->occurrenceOf(self::SERIES_UID, '20260915T090000Z')
+            ->occurrenceOf(self::SERIES_UID, '2026-09-15T09:00:00Z')
             ->at(CarbonImmutable::parse('2026-09-08 09:00', 'Europe/Rome'), 30)
             ->create();
 
@@ -198,25 +197,6 @@ class SeriesNeighbourLookupTest extends TestCase
         $this->assertFalse($fromEarly->previous->isAvailable());
         $this->assertSame($early->id, $fromLate->previous->event?->id);
         $this->assertFalse($fromLate->next->isAvailable());
-    }
-
-    public function test_each_direction_costs_one_query_regardless_of_series_length(): void
-    {
-        foreach (range(1, 20) as $week) {
-            $this->occurrence(CarbonImmutable::parse('2026-01-05')->addWeeks($week)->toDateString());
-        }
-
-        $current = CalendarEvent::query()->where('source_uid', self::SERIES_UID)->orderBy('starts_at')->skip(10)->first();
-        $this->assertNotNull($current);
-
-        $queries = 0;
-        DB::listen(function () use (&$queries): void {
-            $queries++;
-        });
-
-        $this->lookup()->forOccurrence($current);
-
-        $this->assertSame(2, $queries);
     }
 
     /**
@@ -246,8 +226,8 @@ class SeriesNeighbourLookupTest extends TestCase
         $this->assertCount(2, $statements);
 
         foreach ($statements as $sql) {
-            $this->assertStringContainsString('"source_uid" = ?', $sql);
-            $this->assertStringContainsString('limit 1', $sql);
+            $this->assertMatchesRegularExpression('/source_uid.{0,2} = \?/', $sql);
+            $this->assertStringContainsStringIgnoringCase('limit 1', $sql);
         }
     }
 
@@ -266,7 +246,7 @@ class SeriesNeighbourLookupTest extends TestCase
     public function test_an_all_day_neighbour_is_labelled_without_a_clock_time(): void
     {
         CalendarEvent::factory()
-            ->occurrenceOf(self::SERIES_UID, '20260915')
+            ->occurrenceOf(self::SERIES_UID, '2026-09-15')
             ->create([
                 'starts_at' => '2026-09-15 00:00:00',
                 'ends_at' => '2026-09-16 00:00:00',
@@ -308,7 +288,11 @@ class SeriesNeighbourLookupTest extends TestCase
         $this->assertNotNull($neighbours);
         $this->assertSame('', $neighbours->previous->label());
         $this->assertSame(SeriesDirection::Previous, $neighbours->previous->direction);
-        $this->assertInstanceOf(SeriesNeighbour::class, $neighbours->next);
         $this->assertNull($neighbours->next->routeKey());
+
+        // …and the accessible name degrades to the bare direction rather than
+        // composing "Previous occurrence,  (opens in a new tab)".
+        $this->assertSame('Previous occurrence', $neighbours->previous->accessibleName());
+        $this->assertSame('Next occurrence', $neighbours->next->accessibleName());
     }
 }

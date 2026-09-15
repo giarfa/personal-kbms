@@ -9,7 +9,7 @@
 <nav class="kb-series-nav" aria-label="{{ __('Occurrences of this series') }}">
     @foreach ([$neighbours->previous, $neighbours->next] as $neighbour)
         @php
-            $isPrevious = $neighbour->direction === \App\Meetings\SeriesDirection::Previous;
+            $isPrevious = $neighbour->isPrevious();
             $reasonId = 'series-'.$neighbour->direction->value.'-reason';
         @endphp
 

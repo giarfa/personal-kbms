@@ -16,12 +16,20 @@ class MeetingSeriesNavigationTest extends TestCase
 
     private const SERIES_UID = 'weekly-standup-uid';
 
+    private int $queries = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         Carbon::setTestNow(Carbon::parse('2026-09-08 12:00:00', 'Europe/Rome'));
         config(['kbms.outlook_url_template' => null]);
+
+        // Registered once: a listener added per countQueries() call would keep
+        // mutating earlier counters and inflate anything measured after it.
+        DB::listen(function (): void {
+            $this->queries++;
+        });
     }
 
     protected function tearDown(): void
@@ -34,7 +42,7 @@ class MeetingSeriesNavigationTest extends TestCase
     private function occurrence(string $date, string $time = '09:00', string $uid = self::SERIES_UID): CalendarEvent
     {
         return CalendarEvent::factory()
-            ->occurrenceOf($uid, $date.'T'.str_replace(':', '', $time).'00Z')
+            ->occurrenceOf($uid, $date.'T'.$time.':00Z')
             ->at(CarbonImmutable::parse($date.' '.$time, 'Europe/Rome'), 30)
             ->create();
     }
@@ -71,8 +79,7 @@ class MeetingSeriesNavigationTest extends TestCase
 
         $html = (string) $this->visit($current)->assertOk()->getContent();
 
-        preg_match('#<nav class="kb-series-nav".*?</nav>#s', $html, $matches);
-        $nav = $matches[0] ?? '';
+        $nav = $this->seriesNav($html);
 
         $this->assertStringContainsString('<a href=', $nav);
         $this->assertStringContainsString('target="_blank"', $nav);
@@ -131,8 +138,7 @@ class MeetingSeriesNavigationTest extends TestCase
 
         $html = (string) $this->visit($only)->assertOk()->getContent();
 
-        preg_match('#<nav class="kb-series-nav".*?</nav>#s', $html, $matches);
-        $nav = $matches[0] ?? '';
+        $nav = $this->seriesNav($html);
 
         $this->assertStringContainsString('The mirror holds no earlier occurrence of this series.', $nav);
         $this->assertStringContainsString('The mirror holds no later occurrence of this series.', $nav);
@@ -150,7 +156,7 @@ class MeetingSeriesNavigationTest extends TestCase
     public function test_a_cancelled_occurrence_is_reachable_and_unmarked_by_the_control(): void
     {
         $cancelled = CalendarEvent::factory()
-            ->occurrenceOf(self::SERIES_UID, '20260901T090000Z')
+            ->occurrenceOf(self::SERIES_UID, '2026-09-01T09:00:00Z')
             ->at(CarbonImmutable::parse('2026-09-01 09:00', 'Europe/Rome'), 30)
             ->cancelled()
             ->create();
@@ -158,8 +164,7 @@ class MeetingSeriesNavigationTest extends TestCase
 
         $html = (string) $this->visit($current)->assertOk()->getContent();
 
-        preg_match('#<nav class="kb-series-nav".*?</nav>#s', $html, $matches);
-        $nav = $matches[0] ?? '';
+        $nav = $this->seriesNav($html);
 
         $this->assertStringContainsString(route('meetings.show', $cancelled->occurrenceKey()->toRouteKey()), $nav);
         $this->assertStringNotContainsString('Cancelled', $nav);
@@ -198,9 +203,11 @@ class MeetingSeriesNavigationTest extends TestCase
     }
 
     /**
-     * Two LIMIT 1 lookups, however long the standing meeting has been
-     * running. A neighbour found by loading the series would pass every
-     * assertion above and fail this one.
+     * The page must not gain a query per sibling. This pins the count only —
+     * an implementation that fetched the whole series in one query and picked
+     * the neighbour in PHP would pass here too. The bound itself is pinned
+     * where it is decided, by the `limit 1` assertion in
+     * `SeriesNeighbourLookupTest::test_each_direction_is_a_bounded_lookup_on_the_indexed_column`.
      */
     public function test_the_page_cost_does_not_grow_with_the_length_of_the_series(): void
     {
@@ -226,15 +233,24 @@ class MeetingSeriesNavigationTest extends TestCase
         );
     }
 
+    /**
+     * The rendered series navigation, failing loudly rather than returning an
+     * empty string — every "does not contain" assertion below would otherwise
+     * pass vacuously the day the markup shifts.
+     */
+    private function seriesNav(string $html): string
+    {
+        $this->assertSame(1, preg_match('#<nav class="kb-series-nav".*?</nav>#s', $html, $matches));
+
+        return $matches[0];
+    }
+
     private function countQueries(callable $render): int
     {
-        $queries = 0;
-        DB::listen(function () use (&$queries): void {
-            $queries++;
-        });
+        $this->queries = 0;
 
         $render();
 
-        return $queries;
+        return $this->queries;
     }
 }
