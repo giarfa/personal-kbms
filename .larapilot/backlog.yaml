@@ -1201,7 +1201,7 @@ specs:
       objective: 'The meeting detail page is the single place the operator reads, annotates, links and now shares everything known about one occurrence'
     priority: MEDIUM
     points: 2
-    status: TODO
+    status: 'IN PROGRESS'
     body: |
       #### US-018: Step to the previous or next occurrence of a series
 
@@ -1228,6 +1228,10 @@ specs:
       - [ ] The accessible name carries direction *and* destination (for example "Previous occurrence, Mon 8 Sep 09:00") and announces that the link opens in a new tab; a disabled control's reason remains reachable to a screen reader
       - [ ] Each direction is a single indexed lookup served by the leading column of the `(source_uid, recurrence_id)` unique index — the full series is never loaded, and no N+1 is introduced on the detail page
       - [ ] Feature tests cover: both neighbours present, first stored occurrence (previous disabled), last stored occurrence (next disabled), a cancelled occurrence as a neighbour, a single-occurrence series (both disabled), and a one-off meeting (neither control rendered)
+    status_history:
+      - { status: PLANNED, at: '2026-09-15T20:28:41+02:00' }
+      - { status: 'IN PROGRESS', at: '2026-09-15T20:28:44+02:00' }
+    rework: false
   -
     code: US-019
     title: 'Keyboard shortcut to launch a Claude Code session'
