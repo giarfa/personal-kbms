@@ -230,10 +230,10 @@ tasks:
       8. `php artisan test --filter=IcsParserTest` and `php artisan test --filter=OutlookLinkBuilderTest`.
 
       ## Completion Criteria
-      - [ ] All six boundary cases covered by named tests that read as the contract
-      - [ ] A URL legitimately ending in `.` `,` `;` `)` is proven preserved
-      - [ ] `teamsUrl()` accepts a trimmed URL and still rejects a non-http(s) scheme
-      - [ ] Both filtered runs green
+      - [x] All six boundary cases covered by named tests that read as the contract
+      - [x] A URL legitimately ending in `.` `,` `;` `)` is proven preserved
+      - [x] `teamsUrl()` accepts a trimmed URL and still rejects a non-http(s) scheme
+      - [x] Both filtered runs green
 
       ## Test Data
       - N/A — reuses the TASK-01 fixture and existing `CalendarEvent` factory states
@@ -243,11 +243,17 @@ tasks:
       - Push: `origin feature/US-020-teams-join-url-delimiter`
       - PR: update the prepared body with TASK-02
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies:
       - TASK-01
+    commit:
+      sha: c76dceb580d1a891c53dec796ab353eae70f9bbd
+      short_sha: c76dceb
+      subject: 'test(US-020): TASK-02 pin the Teams link trimming boundary'
+      committed_at: '2026-09-16T11:25:00+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/c76dceb580d1a891c53dec796ab353eae70f9bbd'
   -
     id: TASK-03
     title: 'Resync the mirror, verify the healed rows and record the fix'
@@ -296,4 +302,4 @@ tasks:
     estimate_hours: 0.75
     dependencies:
       - TASK-02
-updated_at: '2026-09-16T11:24:24+02:00'
+updated_at: '2026-09-16T11:25:04+02:00'
