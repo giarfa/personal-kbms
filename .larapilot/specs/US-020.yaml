@@ -6,7 +6,7 @@ epic:
   objective: 'Defects found after a spec reaches DONE are fixed with the same discipline as greenfield work, and the guarantee that was missing is recorded so it cannot go missing again'
 priority: HIGH
 points: 2
-status: 'IN PROGRESS'
+status: REVIEW
 body: |
   #### US-020: Fix — the Teams join link captures the closing angle bracket of its wrapper
 
@@ -65,4 +65,7 @@ status_history:
   -
     status: 'IN PROGRESS'
     at: '2026-09-16T11:21:50+02:00'
+  -
+    status: REVIEW
+    at: '2026-09-16T11:30:16+02:00'
 rework: false
