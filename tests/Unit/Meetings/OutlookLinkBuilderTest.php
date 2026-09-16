@@ -102,4 +102,12 @@ class OutlookLinkBuilderTest extends TestCase
 
         $this->assertNull($this->builder()->teamsUrl($event));
     }
+
+    public function test_a_trimmed_wrapped_teams_url_is_accepted(): void
+    {
+        $trimmed = 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_wrapped001%40thread.v2/0?context=%7b%22Tid%22%3a%2205001249-320e-4144-af6d-4bf9030aa9b6%22%7d';
+        $event = CalendarEvent::factory()->make(['join_url' => $trimmed]);
+
+        $this->assertSame($trimmed, $this->builder()->teamsUrl($event));
+    }
 }

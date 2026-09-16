@@ -15,7 +15,7 @@ use Throwable;
 
 final class IcsParser
 {
-    private const TEAMS_LINK_PATTERN = '#https://teams\.microsoft\.com/l/meetup-join/\S+#i';
+    private const TEAMS_LINK_PATTERN = '#https://teams\.microsoft\.com/l/meetup-join/[^\s<>"^`{}|\[\]\\\\]+#i';
 
     /**
      * Parse an iCalendar body into individually addressable occurrences,
@@ -223,10 +223,28 @@ final class IcsParser
         $description = isset($vevent->DESCRIPTION) ? (string) $vevent->DESCRIPTION : '';
 
         if (preg_match(self::TEAMS_LINK_PATTERN, $description, $matches) === 1) {
-            return $matches[0];
+            return $this->stripEscapedWrapper($matches[0]);
         }
 
         return null;
+    }
+
+    /**
+     * Outlook's own HTML-escaped wrapper (`&gt;`) survives the character
+     * class in TEAMS_LINK_PATTERN because `&`, `g`, `t`, `;` are all valid
+     * URL characters. Trim it as a guarded trailing suffix, re-checking the
+     * pattern so this never eats characters that are legitimately part of
+     * the URL.
+     */
+    private function stripEscapedWrapper(string $url): string
+    {
+        $trimmed = preg_replace('/(?:&gt;)+$/i', '', $url);
+
+        if ($trimmed === null || preg_match(self::TEAMS_LINK_PATTERN, $trimmed) !== 1) {
+            return $url;
+        }
+
+        return $trimmed;
     }
 
     private function stripMailto(string $value): ?string

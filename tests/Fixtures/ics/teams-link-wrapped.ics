@@ -1,0 +1,70 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Personal KBMS//Test Fixtures//EN
+BEGIN:VEVENT
+UID:uid-wrapped-001
+DTSTAMP:20260301T000000Z
+DTSTART;TZID=Europe/Rome:20260302T100000
+DTEND;TZID=Europe/Rome:20260302T110000
+SUMMARY:Wrapped Teams link\, reported shape
+DESCRIPTION:Need help?<https://aka.ms/JoinTeamsMeeting?omkt=en-GB> | Syst
+ em reference<https://teams.microsoft.com/l/meetup-join/19%3ameeting_wra
+ pped001%40thread.v2/0?context=%7b%22Tid%22%3a%2205001249-320e-4144-af6d
+ -4bf9030aa9b6%22%7d>\nFor organisers: Meeting options<https://teams.mic
+ rosoft.com/meetingOptions/?organizerId=6f0a1c2e-1111-2222-3333-abcdefab
+ cdef>
+END:VEVENT
+BEGIN:VEVENT
+UID:uid-wrapped-002
+DTSTAMP:20260301T000000Z
+DTSTART;TZID=Europe/Rome:20260303T100000
+DTEND;TZID=Europe/Rome:20260303T110000
+SUMMARY:HTML-escaped wrapper
+DESCRIPTION:Need help?<https://aka.ms/JoinTeamsMeeting?omkt=en-GB> | Syst
+ em reference<https://teams.microsoft.com/l/meetup-join/19%3ameeting_wra
+ pped001%40thread.v2/0?context=%7b%22Tid%22%3a%2205001249-320e-4144-af6d
+ -4bf9030aa9b6%22%7d&gt;\nFor organisers: Meeting options<https://teams.
+ microsoft.com/meetingOptions/?organizerId=6f0a1c2e-1111-2222-3333-abcde
+ fabcdef>
+END:VEVENT
+BEGIN:VEVENT
+UID:uid-wrapped-003
+DTSTAMP:20260301T000000Z
+DTSTART;TZID=Europe/Rome:20260304T100000
+DTEND;TZID=Europe/Rome:20260304T110000
+SUMMARY:Two meetup-join links\, first wins
+DESCRIPTION:Primary link<https://teams.microsoft.com/l/meetup-join/19%3a
+ meeting_first%40thread.v2/0?context=%7b%22Tid%22%3a%2205001249%22%7d> a
+ nd backup https://teams.microsoft.com/l/meetup-join/19%3ameeting_second
+ %40thread.v2/0?context=%7b%22Tid%22%3a%2205001249%22%7d
+END:VEVENT
+BEGIN:VEVENT
+UID:uid-wrapped-004
+DTSTAMP:20260301T000000Z
+DTSTART;TZID=Europe/Rome:20260305T100000
+DTEND;TZID=Europe/Rome:20260305T110000
+SUMMARY:Legitimate trailing punctuation
+DESCRIPTION:Join here: https://teams.microsoft.com/l/meetup-join/19%3ame
+ eting_punct.\,\;)
+END:VEVENT
+BEGIN:VEVENT
+UID:uid-wrapped-005
+DTSTAMP:20260301T000000Z
+DTSTART;TZID=Europe/Rome:20260306T100000
+DTEND;TZID=Europe/Rome:20260306T110000
+SUMMARY:Minimum shape\, wrapped
+DESCRIPTION:Join<https://teams.microsoft.com/l/meetup-join/a> now
+END:VEVENT
+BEGIN:VEVENT
+UID:uid-wrapped-006
+DTSTAMP:20260301T000000Z
+DTSTART;TZID=Europe/Rome:20260307T100000
+DTEND;TZID=Europe/Rome:20260307T110000
+SUMMARY:Property wins over wrapped description link
+X-MICROSOFT-SKYPETEAMSMEETINGURL:https://teams.microsoft.com/l/meetup-jo
+ in/19%3ameeting_property%7d
+DESCRIPTION:Do not use this one<https://teams.microsoft.com/l/meetup-joi
+ n/19%3ameeting_decoy%40thread.v2/0?context=%7b%22Tid%22%3a%2205001249%2
+ 2%7d>
+END:VEVENT
+END:VCALENDAR

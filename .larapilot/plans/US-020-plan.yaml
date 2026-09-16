@@ -132,8 +132,8 @@ tasks:
       5. Draft the PR title `US-020: Fix the Teams join link capturing its wrapper's closing angle bracket` and a body linking this plan and listing TASK-01…TASK-03. The GitHub forge toggle is OFF (decision `6b1c177837a2417b`), so hand the title/body to the operator to open — do not attempt `gh pr create`.
 
       ## Completion Criteria
-      - [ ] Branch `feature/US-020-teams-join-url-delimiter` exists and tracks `origin`
-      - [ ] PR title and body prepared and shown to the operator
+      - [x] Branch `feature/US-020-teams-join-url-delimiter` exists and tracks `origin`
+      - [x] PR title and body prepared and shown to the operator
 
       ## Test Data
       - N/A — no model or schema changes in this task
@@ -143,10 +143,16 @@ tasks:
       - Push: `origin feature/US-020-teams-join-url-delimiter`
       - PR: prepared locally, opened by the operator (forge integration OFF)
     type: Impl
-    status: TODO
+    status: DONE
     assignee: Sarah
     estimate_hours: 0.25
     dependencies: {}
+    commit:
+      sha: 35dc86803a6431eca91875469c3c994cfe955867
+      short_sha: 35dc868
+      subject: 'chore(US-020): TASK-00 bootstrap feature branch'
+      committed_at: '2026-09-16T11:22:17+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/35dc86803a6431eca91875469c3c994cfe955867'
   -
     id: TASK-01
     title: 'Stop the Teams link match at characters a URL cannot contain'
@@ -175,27 +181,33 @@ tasks:
       7. `vendor/bin/pint --dirty --format agent` and `php artisan larapilot:quality`.
 
       ## Completion Criteria
-      - [ ] A `DESCRIPTION` wrapping the link in angle brackets yields a `join_url` ending `%7d` with no trailing `>`
-      - [ ] The bare, unwrapped link in `cancelled.ics` is still captured whole and unchanged
-      - [ ] `X-MICROSOFT-SKYPETEAMSMEETINGURL` still takes precedence and its value is returned verbatim
-      - [ ] `tests/Fixtures/ics/teams-link-wrapped.ics` carries the link as the live feed emits it — wrapped, folded, with text following the closing bracket
-      - [ ] `php artisan test --filter=IcsParserTest` green; Pint and Larastan level 5 clean
+      - [x] A `DESCRIPTION` wrapping the link in angle brackets yields a `join_url` ending `%7d` with no trailing `>`
+      - [x] The bare, unwrapped link in `cancelled.ics` is still captured whole and unchanged
+      - [x] `X-MICROSOFT-SKYPETEAMSMEETINGURL` still takes precedence and its value is returned verbatim
+      - [x] `tests/Fixtures/ics/teams-link-wrapped.ics` carries the link as the live feed emits it — wrapped, folded, with text following the closing bracket
+      - [x] `php artisan test --filter=IcsParserTest` green; Pint and Larastan level 5 clean
 
       ## Test Data
-      - [ ] `tests/Fixtures/ics/teams-link-wrapped.ics` created with all six events
-      - [ ] `tests/Fixtures/ics/cancelled.ics` left unchanged — it is the bare-link guard
-      - [ ] N/A for Eloquent factories/seeders — no model or schema change
+      - [x] `tests/Fixtures/ics/teams-link-wrapped.ics` created with all six events
+      - [x] `tests/Fixtures/ics/cancelled.ics` left unchanged — it is the bare-link guard
+      - [x] N/A for Eloquent factories/seeders — no model or schema change
 
       ## Git Deliverables
       - Commit: `fix(US-020): TASK-01 stop the Teams link match at characters a URL cannot contain`
       - Push: `origin feature/US-020-teams-join-url-delimiter`
       - PR: update the prepared body with TASK-01
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
       - TASK-00
+    commit:
+      sha: 70cd9b08399e7681d0c04817975dfaea9917a1d8
+      short_sha: 70cd9b0
+      subject: 'fix(US-020): TASK-01 stop the Teams link match at characters a URL cannot contain'
+      committed_at: '2026-09-16T11:24:19+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/70cd9b08399e7681d0c04817975dfaea9917a1d8'
   -
     id: TASK-02
     title: 'Pin the trimming boundary with a test matrix'
@@ -218,10 +230,10 @@ tasks:
       8. `php artisan test --filter=IcsParserTest` and `php artisan test --filter=OutlookLinkBuilderTest`.
 
       ## Completion Criteria
-      - [ ] All six boundary cases covered by named tests that read as the contract
-      - [ ] A URL legitimately ending in `.` `,` `;` `)` is proven preserved
-      - [ ] `teamsUrl()` accepts a trimmed URL and still rejects a non-http(s) scheme
-      - [ ] Both filtered runs green
+      - [x] All six boundary cases covered by named tests that read as the contract
+      - [x] A URL legitimately ending in `.` `,` `;` `)` is proven preserved
+      - [x] `teamsUrl()` accepts a trimmed URL and still rejects a non-http(s) scheme
+      - [x] Both filtered runs green
 
       ## Test Data
       - N/A — reuses the TASK-01 fixture and existing `CalendarEvent` factory states
@@ -231,11 +243,17 @@ tasks:
       - Push: `origin feature/US-020-teams-join-url-delimiter`
       - PR: update the prepared body with TASK-02
     type: Test
-    status: TODO
+    status: DONE
     assignee: Anne
     estimate_hours: 1
     dependencies:
       - TASK-01
+    commit:
+      sha: c76dceb580d1a891c53dec796ab353eae70f9bbd
+      short_sha: c76dceb
+      subject: 'test(US-020): TASK-02 pin the Teams link trimming boundary'
+      committed_at: '2026-09-16T11:25:00+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/c76dceb580d1a891c53dec796ab353eae70f9bbd'
   -
     id: TASK-03
     title: 'Resync the mirror, verify the healed rows and record the fix'
@@ -264,12 +282,12 @@ tasks:
       7. No PRD edit — decision `acfb777dc90ee720`.
 
       ## Completion Criteria
-      - [ ] Full suite green; `larapilot:quality` clean
-      - [ ] `kbms:sync-calendar --sync --force` completed successfully
-      - [ ] Zero rows with `starts_at >= 2026-06-18` and a `join_url` containing `>`, count recorded for the review notes
-      - [ ] Out-of-window remainder counted and reported as accepted residue
-      - [ ] Security position recorded accurately (scheme guard, no host guard, no regression)
-      - [ ] `CHANGELOG.md` Unreleased carries the `### Fixed` entry
+      - [x] Full suite green; `larapilot:quality` clean
+      - [x] `kbms:sync-calendar --sync --force` completed successfully
+      - [x] Zero rows with `starts_at >= 2026-06-18` and a `join_url` containing `>`, count recorded for the review notes
+      - [x] Out-of-window remainder counted and reported as accepted residue
+      - [x] Security position recorded accurately (scheme guard, no host guard, no regression)
+      - [x] `CHANGELOG.md` Unreleased carries the `### Fixed` entry
 
       ## Test Data
       - N/A — no model or schema changes; the resync writes through the existing ingestion path
@@ -279,9 +297,15 @@ tasks:
       - Push: `origin feature/US-020-teams-join-url-delimiter`
       - PR: update the prepared body with TASK-03 and the verification counts
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 0.75
     dependencies:
       - TASK-02
-updated_at: '2026-09-16T11:06:05+02:00'
+    commit:
+      sha: 5137502e43d3a894ed150f7232ee5659f765c2d4
+      short_sha: '5137502'
+      subject: 'fix(US-020): TASK-03 resync the mirror and record the healed join links'
+      committed_at: '2026-09-16T11:27:16+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/5137502e43d3a894ed150f7232ee5659f765c2d4'
+updated_at: '2026-09-16T11:27:21+02:00'
