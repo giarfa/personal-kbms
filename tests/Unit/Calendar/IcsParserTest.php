@@ -140,6 +140,62 @@ class IcsParserTest extends TestCase
         $this->assertFalse(str_contains($wrapped->joinUrl, '>'));
     }
 
+    public function test_an_html_escaped_wrapper_is_stripped_from_a_description_teams_link(): void
+    {
+        $occurrences = $this->parse('teams-link-wrapped.ics', '2026-01-01', '2026-12-31');
+        $wrapped = collect($occurrences)->firstWhere('sourceUid', 'uid-wrapped-001');
+        $escaped = collect($occurrences)->firstWhere('sourceUid', 'uid-wrapped-002');
+
+        $this->assertSame($wrapped->joinUrl, $escaped->joinUrl);
+        $this->assertFalse(str_contains($escaped->joinUrl, '&gt;'));
+        $this->assertFalse(str_contains($escaped->joinUrl, '>'));
+    }
+
+    public function test_punctuation_that_belongs_to_the_teams_link_is_preserved(): void
+    {
+        $occurrences = $this->parse('teams-link-wrapped.ics', '2026-01-01', '2026-12-31');
+        $punctuated = collect($occurrences)->firstWhere('sourceUid', 'uid-wrapped-004');
+
+        // Pins the boundary: a blanket rtrim() of trailing punctuation would
+        // truncate this legitimately, so assert the full string.
+        $this->assertSame(
+            'https://teams.microsoft.com/l/meetup-join/19%3ameeting_punct.,;)',
+            $punctuated->joinUrl,
+        );
+    }
+
+    public function test_the_first_teams_link_in_a_description_still_wins(): void
+    {
+        $occurrences = $this->parse('teams-link-wrapped.ics', '2026-01-01', '2026-12-31');
+        $twoLinks = collect($occurrences)->firstWhere('sourceUid', 'uid-wrapped-003');
+
+        $this->assertSame(
+            'https://teams.microsoft.com/l/meetup-join/19%3ameeting_first%40thread.v2/0?context=%7b%22Tid%22%3a%2205001249%22%7d',
+            $twoLinks->joinUrl,
+        );
+        $this->assertFalse(str_contains($twoLinks->joinUrl, 'meeting_second'));
+    }
+
+    public function test_a_minimum_shape_teams_link_survives_trimming(): void
+    {
+        $occurrences = $this->parse('teams-link-wrapped.ics', '2026-01-01', '2026-12-31');
+        $minimum = collect($occurrences)->firstWhere('sourceUid', 'uid-wrapped-005');
+
+        $this->assertSame('https://teams.microsoft.com/l/meetup-join/a', $minimum->joinUrl);
+    }
+
+    public function test_the_skype_teams_meeting_url_property_wins_over_a_wrapped_description_link(): void
+    {
+        $occurrences = $this->parse('teams-link-wrapped.ics', '2026-01-01', '2026-12-31');
+        $withProperty = collect($occurrences)->firstWhere('sourceUid', 'uid-wrapped-006');
+
+        $this->assertSame(
+            'https://teams.microsoft.com/l/meetup-join/19%3ameeting_property%7d',
+            $withProperty->joinUrl,
+        );
+        $this->assertFalse(str_contains($withProperty->joinUrl, 'meeting_decoy'));
+    }
+
     public function test_content_hash_is_stable_and_changes_when_the_summary_changes(): void
     {
         $occurrences = $this->parse('recurring-weekly.ics', '2026-01-01', '2026-12-31');

@@ -181,27 +181,33 @@ tasks:
       7. `vendor/bin/pint --dirty --format agent` and `php artisan larapilot:quality`.
 
       ## Completion Criteria
-      - [ ] A `DESCRIPTION` wrapping the link in angle brackets yields a `join_url` ending `%7d` with no trailing `>`
-      - [ ] The bare, unwrapped link in `cancelled.ics` is still captured whole and unchanged
-      - [ ] `X-MICROSOFT-SKYPETEAMSMEETINGURL` still takes precedence and its value is returned verbatim
-      - [ ] `tests/Fixtures/ics/teams-link-wrapped.ics` carries the link as the live feed emits it — wrapped, folded, with text following the closing bracket
-      - [ ] `php artisan test --filter=IcsParserTest` green; Pint and Larastan level 5 clean
+      - [x] A `DESCRIPTION` wrapping the link in angle brackets yields a `join_url` ending `%7d` with no trailing `>`
+      - [x] The bare, unwrapped link in `cancelled.ics` is still captured whole and unchanged
+      - [x] `X-MICROSOFT-SKYPETEAMSMEETINGURL` still takes precedence and its value is returned verbatim
+      - [x] `tests/Fixtures/ics/teams-link-wrapped.ics` carries the link as the live feed emits it — wrapped, folded, with text following the closing bracket
+      - [x] `php artisan test --filter=IcsParserTest` green; Pint and Larastan level 5 clean
 
       ## Test Data
-      - [ ] `tests/Fixtures/ics/teams-link-wrapped.ics` created with all six events
-      - [ ] `tests/Fixtures/ics/cancelled.ics` left unchanged — it is the bare-link guard
-      - [ ] N/A for Eloquent factories/seeders — no model or schema change
+      - [x] `tests/Fixtures/ics/teams-link-wrapped.ics` created with all six events
+      - [x] `tests/Fixtures/ics/cancelled.ics` left unchanged — it is the bare-link guard
+      - [x] N/A for Eloquent factories/seeders — no model or schema change
 
       ## Git Deliverables
       - Commit: `fix(US-020): TASK-01 stop the Teams link match at characters a URL cannot contain`
       - Push: `origin feature/US-020-teams-join-url-delimiter`
       - PR: update the prepared body with TASK-01
     type: Fix
-    status: TODO
+    status: DONE
     assignee: Alex
     estimate_hours: 1.5
     dependencies:
       - TASK-00
+    commit:
+      sha: 70cd9b08399e7681d0c04817975dfaea9917a1d8
+      short_sha: 70cd9b0
+      subject: 'fix(US-020): TASK-01 stop the Teams link match at characters a URL cannot contain'
+      committed_at: '2026-09-16T11:24:19+02:00'
+      url: 'https://github.com/giarfa/personal-kbms/commit/70cd9b08399e7681d0c04817975dfaea9917a1d8'
   -
     id: TASK-02
     title: 'Pin the trimming boundary with a test matrix'
@@ -290,4 +296,4 @@ tasks:
     estimate_hours: 0.75
     dependencies:
       - TASK-02
-updated_at: '2026-09-16T11:22:23+02:00'
+updated_at: '2026-09-16T11:24:24+02:00'
