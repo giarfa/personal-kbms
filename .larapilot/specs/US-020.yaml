@@ -6,7 +6,7 @@ epic:
   objective: 'Defects found after a spec reaches DONE are fixed with the same discipline as greenfield work, and the guarantee that was missing is recorded so it cannot go missing again'
 priority: HIGH
 points: 2
-status: REVIEW
+status: DONE
 body: |
   #### US-020: Fix — the Teams join link captures the closing angle bracket of its wrapper
 
@@ -46,18 +46,18 @@ body: |
   `join_url` is part of the occurrence content hash (`app/Calendar/ParsedOccurrence.php:39`), so the **915** affected occurrences with `starts_at >= 2026-06-18` self-heal on the first `kbms:sync-calendar` after the parser fix. The **25** occurrences already older than `KBMS_ICS_WINDOW_PAST_DAYS` are never re-parsed and keep their malformed link permanently — accepted by the operator, decision journal `f2afd78b2c6575f1`.
 
   **Acceptance Criteria**
-  - [ ] A `DESCRIPTION` containing `<https://teams.microsoft.com/l/meetup-join/…%7d>` yields a `join_url` ending `%7d`, with no trailing `>`
-  - [ ] A bare, unwrapped link in `DESCRIPTION` is still captured whole and unchanged — the existing passing behaviour must not regress
-  - [ ] A link ending in a character that is legitimately part of the URL is not truncated: `…%7d` keeps its `d`, and a URL whose final path segment ends in `.` `,` `;` `)` as real syntax is preserved (Anne to pin the boundary explicitly)
-  - [ ] The `X-MICROSOFT-SKYPETEAMSMEETINGURL` branch is untouched and still takes precedence over the description scan
-  - [ ] `tests/Fixtures/ics/` gains a fixture whose description carries the link **as the real feed emits it** — angle-bracket wrapped, with text following it — and the parser test asserts against that shape
-  - [ ] Regression test covers the exact reported URL: input with the trailing `>`, expected output without it (Anne)
-  - [ ] After one `php artisan kbms:sync-calendar`, no `calendar_events` row with `starts_at >= 2026-06-18` has a `join_url` containing `>` — verified and the count reported in the review notes
-  - [ ] No security regression — `OutlookLinkBuilder::isSafeUrl()` still rejects any non-Teams or non-https value, and the trimming cannot be used to reach a different host (Lars)
-  - [ ] `php artisan larapilot:quality` (Pint + Larastan level 5) passes
-  - [ ] **Edge case:** a `DESCRIPTION` with **two** Teams links returns the first, as today — the fix must not change which link wins, only where it ends
-  - [ ] **Edge case:** a description whose link is immediately followed by the HTML entity `&gt;` rather than a literal `>` produces a clean URL
-  - [ ] **Edge case:** a `join_url` of exactly the minimum shape (`…/meetup-join/` plus one character) survives trimming without being emptied
+  - [x] A `DESCRIPTION` containing `<https://teams.microsoft.com/l/meetup-join/…%7d>` yields a `join_url` ending `%7d`, with no trailing `>`
+  - [x] A bare, unwrapped link in `DESCRIPTION` is still captured whole and unchanged — the existing passing behaviour must not regress
+  - [x] A link ending in a character that is legitimately part of the URL is not truncated: `…%7d` keeps its `d`, and a URL whose final path segment ends in `.` `,` `;` `)` as real syntax is preserved (Anne to pin the boundary explicitly)
+  - [x] The `X-MICROSOFT-SKYPETEAMSMEETINGURL` branch is untouched and still takes precedence over the description scan
+  - [x] `tests/Fixtures/ics/` gains a fixture whose description carries the link **as the real feed emits it** — angle-bracket wrapped, with text following it — and the parser test asserts against that shape
+  - [x] Regression test covers the exact reported URL: input with the trailing `>`, expected output without it (Anne)
+  - [x] After one `php artisan kbms:sync-calendar`, no `calendar_events` row with `starts_at >= 2026-06-18` has a `join_url` containing `>` — verified and the count reported in the review notes
+  - [x] No security regression — `OutlookLinkBuilder::isSafeUrl()` still rejects any non-Teams or non-https value, and the trimming cannot be used to reach a different host (Lars)
+  - [x] `php artisan larapilot:quality` (Pint + Larastan level 5) passes
+  - [x] **Edge case:** a `DESCRIPTION` with **two** Teams links returns the first, as today — the fix must not change which link wins, only where it ends
+  - [x] **Edge case:** a description whose link is immediately followed by the HTML entity `&gt;` rather than a literal `>` produces a clean URL
+  - [x] **Edge case:** a `join_url` of exactly the minimum shape (`…/meetup-join/` plus one character) survives trimming without being emptied
 status_history:
   -
     status: PLANNED
@@ -68,4 +68,13 @@ status_history:
   -
     status: REVIEW
     at: '2026-09-16T11:30:16+02:00'
+  -
+    status: DONE
+    at: '2026-09-16T14:02:18+02:00'
 rework: false
+merge_commit:
+  sha: 016841ba989e15fe5eb69451e7930c1f11ea03b3
+  short_sha: 016841b
+  subject: "docs(US-020): confirm Robert's sub-agent pass matched the inline review"
+  committed_at: '2026-09-16T11:31:04+02:00'
+  url: 'https://github.com/giarfa/personal-kbms/commit/016841ba989e15fe5eb69451e7930c1f11ea03b3'
