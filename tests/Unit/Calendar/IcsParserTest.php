@@ -128,6 +128,18 @@ class IcsParserTest extends TestCase
         $this->assertSame('https://teams.microsoft.com/l/meetup-join/19%3ameeting_fallback456', $cancelled[0]->joinUrl);
     }
 
+    public function test_a_wrapped_description_teams_link_drops_the_closing_angle_bracket(): void
+    {
+        $occurrences = $this->parse('teams-link-wrapped.ics', '2026-01-01', '2026-12-31');
+        $wrapped = collect($occurrences)->firstWhere('sourceUid', 'uid-wrapped-001');
+
+        $this->assertSame(
+            'https://teams.microsoft.com/l/meetup-join/19%3ameeting_wrapped001%40thread.v2/0?context=%7b%22Tid%22%3a%2205001249-320e-4144-af6d-4bf9030aa9b6%22%7d',
+            $wrapped->joinUrl,
+        );
+        $this->assertFalse(str_contains($wrapped->joinUrl, '>'));
+    }
+
     public function test_content_hash_is_stable_and_changes_when_the_summary_changes(): void
     {
         $occurrences = $this->parse('recurring-weekly.ics', '2026-01-01', '2026-12-31');
