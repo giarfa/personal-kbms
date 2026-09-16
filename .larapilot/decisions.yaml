@@ -1351,4 +1351,30 @@ decisions:
     source: chat
     spec: US-018
     supersedes: null
-updated_at: '2026-09-15T20:42:28+02:00'
+  -
+    id: f2afd78b2c6575f1
+    ts: '2026-09-16T10:55:54+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-bug
+    topic: 'teams join url backfill strategy'
+    label: 'teams join url backfill strategy'
+    value: 'Re-sync only — no data migration; the parser fix plus a forced resync heals occurrences inside the ICS window'
+    question: null
+    rationale: 'Operator accepts that the 25 affected occurrences already older than KBMS_ICS_WINDOW_PAST_DAYS (starts_at < 2026-06-18) keep their malformed join_url permanently. join_url is part of the content hash, so the 915 in-window rows self-heal on the next sync.'
+    source: askquestion
+    spec: null
+    supersedes: null
+  -
+    id: acfb777dc90ee720
+    ts: '2026-09-16T10:55:57+02:00'
+    user: 'git:giarfa <giarfa@outlook.com>'
+    phase: larapilot-bug
+    topic: 'teams join url bug prd gap'
+    label: 'teams join url bug prd gap'
+    value: 'Implementation fix only — no PRD edit'
+    question: null
+    rationale: 'US-003 already requires join_url capture from URL / X-MICROSOFT-SKYPETEAMSMEETINGURL / a Teams link in the description; correct extraction is implied, not a new requirement.'
+    source: askquestion
+    spec: null
+    supersedes: null
+updated_at: '2026-09-16T10:55:57+02:00'

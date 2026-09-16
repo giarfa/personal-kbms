@@ -1,0 +1,287 @@
+code: US-020
+plan_body: |-
+  ## Technical Solution
+
+  The defect is one character wide and lives in one method. `IcsParser::readJoinUrl()` matches the description with `TEAMS_LINK_PATTERN = '#https://teams\.microsoft\.com/l/meetup-join/\S+#i'` and returns `$matches[0]` verbatim. `\S+` accepts every non-whitespace character, so Outlook's own wrapper — confirmed in the live mirror as `System reference<https://teams.microsoft.com/l/meetup-join/…%7d>\nFor organisers: …` — ends up inside the match. 940 of the 942 stored `join_url` values end in a literal `>`; the two clean ones came through `X-MICROSOFT-SKYPETEAMSMEETINGURL`, which is a structured property and never touched the regex.
+
+  ### 1. Stop the match at characters a URL cannot contain
+
+  Replace the trailing `\S+` with an explicit negated class:
+
+  ```php
+  private const TEAMS_LINK_PATTERN = '#https://teams\.microsoft\.com/l/meetup-join/[^\s<>"^`{}|\[\]\\\\]+#i';
+  ```
+
+  The excluded set is exactly RFC 3986's forbidden ASCII outside the authority: whitespace, `<`, `>`, `"`, `^`, backtick, `{`, `}`, `|`, `[`, `]`, and backslash. None of them can appear unescaped in a valid URL, so excluding them is not a heuristic — a match that stops at one of them has stopped at the end of the URL by definition. This alone fixes the reported bug: the wrapper's closing `>` is no longer matchable, and so is never captured, in the wrapped case *and* in the `Need help?<…>` / `Meeting options<…>` links that surround it in the same description.
+
+  Note `%7b`/`%7d` in the `?context=` parameter are percent-encoded braces, so excluding literal `{`/`}` costs nothing; the reported URL keeps its `%7d` ending intact.
+
+  ### 2. Remove an HTML-escaped wrapper, and only that
+
+  A client that HTML-escapes the description emits `…%7d&gt;` instead of `…%7d>`. Every character of `&gt;` is legal in a URL, so no character class can reject it — it has to be removed after the match, as a suffix, with a guard:
+
+  ```php
+  if (preg_match(self::TEAMS_LINK_PATTERN, $description, $matches) === 1) {
+      return $this->stripEscapedWrapper($matches[0]);
+  }
+  ```
+
+  ```php
+  /**
+   * A client that HTML-escapes Outlook's wrapper emits `…%7d&gt;` where another
+   * emits `…%7d>`. The literal `>` can never enter the match — the pattern's
+   * character class excludes it — but the escaped form is built from characters
+   * a URL may legitimately carry, so it is removed here, at the end, and only
+   * when what remains is still a complete meetup-join link.
+   */
+  private function stripEscapedWrapper(string $url): string
+  {
+      $trimmed = preg_replace('/(?:&gt;)+$/i', '', $url) ?? $url;
+
+      return preg_match(self::TEAMS_LINK_PATTERN, $trimmed) === 1 ? $trimmed : $url;
+  }
+  ```
+
+  Re-running the pattern over the trimmed value is what satisfies the minimum-shape criterion without a length check: the pattern requires at least one character after `meetup-join/`, so a strip that would empty the path fails its own re-match and the original match is returned untouched.
+
+  ## The boundary, pinned (Anne)
+
+  The spec's implementation notes suggested stripping a trailing delimiter *set* — `)`, `]`, `>`, `"`, `'`, `,`, `.`, `;` — while acceptance criterion 3 requires that a URL whose final segment legitimately ends in `.` `,` `;` `)` is **preserved**. Those two cannot both hold. The criterion is binding and the notes are explicitly non-prescriptive, so the boundary is drawn by *possibility*, not by *likelihood*:
+
+  | Class | Characters | Treatment |
+  | --- | --- | --- |
+  | Cannot occur in a URL | whitespace `<` `>` `"` `^` `` ` `` `{` `}` `|` `[` `]` `\` | **Never matched** — excluded by the character class, so they end the match instead of being trimmed off it |
+  | HTML-escaped wrapper | trailing `&gt;` | **Stripped**, suffix-only, guarded by a re-match |
+  | Valid URL characters | `.` `,` `;` `:` `)` `'` `!` `?` `&` `~` and everything else RFC 3986 permits | **Always preserved**, wherever they sit, including last |
+
+  The consequence is stated plainly so nobody re-litigates it at review: a Teams link written in prose as `(https://teams.microsoft.com/l/meetup-join/…)` keeps its closing `)`. That is the deliberate cost of never truncating a URL at a character that may belong to it. The live feed does not produce that shape; it produces the angle-bracket wrapper, which this fix handles structurally.
+
+  ## Deliberately not changed
+
+  - **Which link wins.** The `X-MICROSOFT-SKYPETEAMSMEETINGURL` branch keeps absolute precedence, and within a description the *first* `meetup-join` match still wins. This fix moves only where a match ends.
+  - **`OutlookLinkBuilder`.** No read-time normalisation — decision journal `f2afd78b2c6575f1`. The parser is the single place a `join_url` is shaped.
+  - **No data migration.** Same decision: the 915 in-window occurrences self-heal on resync because `join_url` is inside `ParsedOccurrence::contentHash()`; the 25 occurrences older than `KBMS_ICS_WINDOW_PAST_DAYS` keep their malformed value, accepted by the operator.
+  - **No new config key, no new model, no schema change.**
+
+  ## Git & Branching
+
+  - Mode: **GITFLOW_PUSH** (`settings.git_mode`)
+  - Branch: `feature/US-020-teams-join-url-delimiter`, cut from `develop` in TASK-00
+  - One Conventional Commit per task; push after each task commit
+  - PR toward `develop`: title and body prepared in TASK-00 and kept current, **opened by the operator by hand** — the GitHub forge toggle is deliberately OFF (decision journal `6b1c177837a2417b`)
+  - Merge into `develop` only after `/larapilot-review` approval
+
+  ## Test Data Strategy
+
+  - **No model, migration, factory or seeder change** — this spec touches a parser and its fixtures only. `migrate:fresh --seed` is not a gate here.
+  - The test data that matters is an **ICS fixture**: `tests/Fixtures/ics/teams-link-wrapped.ics`, carrying the description shape the live feed actually emits — folded `DESCRIPTION` lines, the link inside angle brackets, and more text after the closing bracket.
+  - `tests/Fixtures/ics/cancelled.ics` is left **unchanged on purpose**: its bare, unwrapped link is now the explicit non-regression guard for acceptance criterion 2.
+  - Existing Eloquent factories (`CalendarEvent::factory()`) are reused as-is by any feature-level assertion.
+
+  ## Test Strategy
+
+  Bar: **NORMAL** (`settings.testing`). PHPUnit only — no Playwright, Dusk, Pest browser, or viewport suite. New tests go in the existing `tests/Unit/Calendar/IcsParserTest.php` via its `parse()` fixture helper; create anything new with `php artisan make:test --phpunit`.
+
+  - **TASK-01** ships the fix together with the fixture and the one regression test that pins the reported URL — the commit is green when it lands.
+  - **TASK-02** is Anne's boundary matrix: HTML-escaped wrapper, punctuation preservation, first-link-wins, minimum shape, `X-MICROSOFT-SKYPETEAMSMEETINGURL` precedence, bare-link non-regression, and one `OutlookLinkBuilder::teamsUrl()` assertion proving a trimmed URL still passes the scheme guard.
+  - **TASK-03** runs the full suite, `php artisan larapilot:quality` (Pint + Larastan level 5), the forced resync, and the SQL verification of the healed row count.
+
+  Manual test handoff for the operator (one step, after TASK-03): open a meeting whose link came from the description and press **Join Teams meeting** — Teams must open the meeting, not an error page.
+
+  ## Backfill & verification
+
+  After the parser change lands, one run heals the window:
+
+  ```bash
+  php artisan kbms:sync-calendar --sync --force
+  ```
+
+  `--force` ignores the stored ETag/Last-Modified so the feed body is re-fetched and re-parsed even though nothing changed upstream; `--sync` keeps it inline so the result is observable in the same terminal. Every re-parsed occurrence produces a different `contentHash()` (the malformed `join_url` was part of it), so `EventSynchronizer` writes the corrected value.
+
+  Verification query, whose result is recorded in the review notes:
+
+  ```sql
+  SELECT COUNT(*) AS total,
+         SUM(CASE WHEN join_url LIKE '%>' THEN 1 ELSE 0 END) AS still_broken
+  FROM calendar_events
+  WHERE join_url IS NOT NULL AND starts_at >= '2026-06-18';
+  ```
+
+  Expected: `still_broken = 0`. The out-of-window remainder (`starts_at < 2026-06-18`, 25 rows) is reported separately and left alone.
+
+  ## Observations logged, not actioned (for a future spec)
+
+  1. `OutlookLinkBuilder::isSafeUrl()` checks the **scheme only** (`http`/`https`) — it does not constrain the host, and it accepts plain `http`. Acceptance criterion 8 should be read against what the code actually guarantees: no scheme regression, and trimming a suffix can never change a URL's host. Lars states it in those terms in TASK-03 rather than asserting a host check that does not exist.
+  2. This feed's description now carries a **newer** primary link — `Join: https://teams.microsoft.com/meet/{id}?p={passcode}` — while the harvested one is the `l/meetup-join/` link labelled *System reference*. Both open the meeting, and this spec must not change which link wins. Whether the shorter `meet/` form should be preferred is a separate product question.
+tasks:
+  -
+    id: TASK-00
+    title: 'Bootstrap feature branch and internal PR'
+    body: |-
+      ## Description
+      Bootstrap Gitflow for US-020: create the feature branch from `develop`, push it, and prepare the internal PR description toward `develop`.
+
+      ## Files Involved
+      - (git only — no application files)
+
+      ## Steps
+      1. `git checkout develop && git pull`
+      2. `git checkout -b feature/US-020-teams-join-url-delimiter`
+      3. `git commit --allow-empty -m "chore(US-020): TASK-00 bootstrap feature branch"`
+      4. `git push -u origin feature/US-020-teams-join-url-delimiter`
+      5. Draft the PR title `US-020: Fix the Teams join link capturing its wrapper's closing angle bracket` and a body linking this plan and listing TASK-01…TASK-03. The GitHub forge toggle is OFF (decision `6b1c177837a2417b`), so hand the title/body to the operator to open — do not attempt `gh pr create`.
+
+      ## Completion Criteria
+      - [ ] Branch `feature/US-020-teams-join-url-delimiter` exists and tracks `origin`
+      - [ ] PR title and body prepared and shown to the operator
+
+      ## Test Data
+      - N/A — no model or schema changes in this task
+
+      ## Git Deliverables
+      - Commit: `chore(US-020): TASK-00 bootstrap feature branch` (empty commit)
+      - Push: `origin feature/US-020-teams-join-url-delimiter`
+      - PR: prepared locally, opened by the operator (forge integration OFF)
+    type: Impl
+    status: TODO
+    assignee: Sarah
+    estimate_hours: 0.25
+    dependencies: {}
+  -
+    id: TASK-01
+    title: 'Stop the Teams link match at characters a URL cannot contain'
+    body: |-
+      ## Description
+      Fix: stop the description Teams-link match at characters a URL cannot contain, strip an HTML-escaped wrapper as a guarded suffix, and land the real-shape fixture plus the regression test in the same green commit.
+
+      ## Files Involved
+      - app/Calendar/IcsParser.php
+      - tests/Fixtures/ics/teams-link-wrapped.ics (new)
+      - tests/Unit/Calendar/IcsParserTest.php
+
+      ## Steps
+      1. Replace `TEAMS_LINK_PATTERN`'s trailing `\S+` with the negated class `[^\s<>"^`{}|\[\]\\\\]+` (RFC 3986's forbidden ASCII outside the authority). Verify the PHP single-quoted escaping of the backslash and the brackets with an actual run, not by eye.
+      2. Add `private function stripEscapedWrapper(string $url): string` — `preg_replace('/(?:&gt;)+$/i', '', $url) ?? $url`, returned **only** when `preg_match(self::TEAMS_LINK_PATTERN, $trimmed) === 1`, otherwise the original match. Call it from `readJoinUrl()` on `$matches[0]`. Leave the `X-MICROSOFT-SKYPETEAMSMEETINGURL` branch above it completely untouched.
+      3. Write the docblock stated in the plan on `stripEscapedWrapper()` — it is the record of why one delimiter is trimmed and the rest are structural. PHPDoc, not inline comments, per the PHP conventions.
+      4. Create `tests/Fixtures/ics/teams-link-wrapped.ics` with six non-recurring `VEVENT`s inside March 2026, mirroring the live feed: **folded** `DESCRIPTION` lines (continuation lines starting with a single space), iCalendar-escaped `,` and `;` where they occur.
+         - `uid-wrapped-001` — the reported shape: `…Need help?<https://aka.ms/JoinTeamsMeeting?omkt=en-GB> | System reference<https://teams.microsoft.com/l/meetup-join/19%3ameeting_wrapped001%40thread.v2/0?context=%7b%22Tid%22%3a%2205001249-320e-4144-af6d-4bf9030aa9b6%22%7d>` **followed by** `\nFor organisers: Meeting options<https://teams.microsoft.com/meetingOptions/?organizerId=…>`
+         - `uid-wrapped-002` — same link ending `%7d&gt;` instead of `%7d>`
+         - `uid-wrapped-003` — two `meetup-join` links: a wrapped `…_first…` then a bare `…_second`
+         - `uid-wrapped-004` — a link whose final segment legitimately ends in punctuation: `…/meetup-join/19%3ameeting_punct.\,\;)`
+         - `uid-wrapped-005` — minimum shape, wrapped: `<https://teams.microsoft.com/l/meetup-join/a>`
+         - `uid-wrapped-006` — `X-MICROSOFT-SKYPETEAMSMEETINGURL:https://teams.microsoft.com/l/meetup-join/19%3ameeting_property%7d` **plus** a wrapped, different link in the `DESCRIPTION`
+      5. Add `test_a_wrapped_description_teams_link_drops_the_closing_angle_bracket()` to `IcsParserTest` using the existing `parse()` helper: assert `uid-wrapped-001`'s `joinUrl` is exactly the reported URL ending `%7d`, and assert `str_contains($joinUrl, '>') === false`.
+      6. `php artisan test --filter=IcsParserTest` — the new test and every pre-existing one (including the bare-link assertion against `cancelled.ics`) must pass in the same run.
+      7. `vendor/bin/pint --dirty --format agent` and `php artisan larapilot:quality`.
+
+      ## Completion Criteria
+      - [ ] A `DESCRIPTION` wrapping the link in angle brackets yields a `join_url` ending `%7d` with no trailing `>`
+      - [ ] The bare, unwrapped link in `cancelled.ics` is still captured whole and unchanged
+      - [ ] `X-MICROSOFT-SKYPETEAMSMEETINGURL` still takes precedence and its value is returned verbatim
+      - [ ] `tests/Fixtures/ics/teams-link-wrapped.ics` carries the link as the live feed emits it — wrapped, folded, with text following the closing bracket
+      - [ ] `php artisan test --filter=IcsParserTest` green; Pint and Larastan level 5 clean
+
+      ## Test Data
+      - [ ] `tests/Fixtures/ics/teams-link-wrapped.ics` created with all six events
+      - [ ] `tests/Fixtures/ics/cancelled.ics` left unchanged — it is the bare-link guard
+      - [ ] N/A for Eloquent factories/seeders — no model or schema change
+
+      ## Git Deliverables
+      - Commit: `fix(US-020): TASK-01 stop the Teams link match at characters a URL cannot contain`
+      - Push: `origin feature/US-020-teams-join-url-delimiter`
+      - PR: update the prepared body with TASK-01
+    type: Fix
+    status: TODO
+    assignee: Alex
+    estimate_hours: 1.5
+    dependencies:
+      - TASK-00
+  -
+    id: TASK-02
+    title: 'Pin the trimming boundary with a test matrix'
+    body: |-
+      ## Description
+      Pin the trimming boundary with an explicit test matrix, so the next person who touches the pattern learns from a failing test rather than from a dead Teams page.
+
+      ## Files Involved
+      - tests/Unit/Calendar/IcsParserTest.php
+      - tests/Unit/Meetings/OutlookLinkBuilderTest.php
+
+      ## Steps
+      1. Reuse `tests/Fixtures/ics/teams-link-wrapped.ics` from TASK-01 via the existing `parse()` helper — add no second fixture and no inline ICS strings.
+      2. `test_an_html_escaped_wrapper_is_stripped_from_a_description_teams_link()` — `uid-wrapped-002` yields the same URL as `uid-wrapped-001`'s shape, with no `&gt;` and no `>`.
+      3. `test_punctuation_that_belongs_to_the_teams_link_is_preserved()` — `uid-wrapped-004` keeps its trailing `.`, `,`, `;` and `)` verbatim. Assert the full string, not a `str_ends_with`, and state the intent in the test name: this is the boundary the spec asked to pin, and it must fail loudly if someone later adds a blanket `rtrim()`.
+      4. `test_the_first_teams_link_in_a_description_still_wins()` — `uid-wrapped-003` returns the *first* link, cleanly ended; the second is not returned.
+      5. `test_a_minimum_shape_teams_link_survives_trimming()` — `uid-wrapped-005` yields `https://teams.microsoft.com/l/meetup-join/a`, not an empty string and not `null`.
+      6. `test_the_skype_teams_meeting_url_property_wins_over_a_wrapped_description_link()` — `uid-wrapped-006` returns the property's value verbatim, proving the precedence branch never reaches the trimming path.
+      7. In `OutlookLinkBuilderTest`, add a case building a `CalendarEvent` whose `join_url` is a trimmed wrapped URL and assert `teamsUrl()` returns it — the fix produces values the existing scheme guard still accepts, and a `javascript:` `join_url` is still rejected (keep or extend whatever negative case already exists rather than duplicating it).
+      8. `php artisan test --filter=IcsParserTest` and `php artisan test --filter=OutlookLinkBuilderTest`.
+
+      ## Completion Criteria
+      - [ ] All six boundary cases covered by named tests that read as the contract
+      - [ ] A URL legitimately ending in `.` `,` `;` `)` is proven preserved
+      - [ ] `teamsUrl()` accepts a trimmed URL and still rejects a non-http(s) scheme
+      - [ ] Both filtered runs green
+
+      ## Test Data
+      - N/A — reuses the TASK-01 fixture and existing `CalendarEvent` factory states
+
+      ## Git Deliverables
+      - Commit: `test(US-020): TASK-02 pin the Teams link trimming boundary`
+      - Push: `origin feature/US-020-teams-join-url-delimiter`
+      - PR: update the prepared body with TASK-02
+    type: Test
+    status: TODO
+    assignee: Anne
+    estimate_hours: 1
+    dependencies:
+      - TASK-01
+  -
+    id: TASK-03
+    title: 'Resync the mirror, verify the healed rows and record the fix'
+    body: |-
+      ## Description
+      Heal the mirror with one forced resync, verify the corrected row count, record the security position accurately, and note the fix in the changelog.
+
+      ## Files Involved
+      - CHANGELOG.md
+      - (no application code)
+
+      ## Steps
+      1. Full suite: `php artisan test --compact` — 641+ tests green, no skips introduced by this spec.
+      2. `php artisan larapilot:quality` — Pint plus Larastan level 5 clean.
+      3. `php artisan kbms:sync-calendar --sync --force` — `--force` bypasses the stored ETag/Last-Modified so the unchanged feed is re-fetched and re-parsed; `--sync` keeps it inline. Capture the run's output.
+      4. Verify and record both counts:
+         ```sql
+         SELECT COUNT(*) AS total,
+                SUM(CASE WHEN join_url LIKE '%>' THEN 1 ELSE 0 END) AS still_broken
+         FROM calendar_events
+         WHERE join_url IS NOT NULL AND starts_at >= '2026-06-18';
+         ```
+         `still_broken` must be `0`. Run the mirror query for `starts_at < '2026-06-18'` and report that remainder (expected 25) as the accepted, out-of-window residue — decision `f2afd78b2c6575f1`.
+      5. Lars' security note for the review record, stated against what the code actually does: `OutlookLinkBuilder::isSafeUrl()` constrains the **scheme** (`http`/`https`) and nothing else — it does not check the host — and removing a suffix from a matched URL cannot change its scheme or its host, so there is no regression. Do **not** claim a host check the code does not perform.
+      6. `CHANGELOG.md` → `## [Unreleased]` → add a `### Fixed` section (create it if absent, ordered after `### Added` per Keep a Changelog) with one entry in the project's established voice: the Teams join link harvested from a meeting description no longer carries the closing angle bracket of Outlook's own wrapper, so the button opens the meeting instead of a Teams page Microsoft does not recognise; the match now ends at characters a URL cannot contain, an HTML-escaped `&gt;` wrapper is removed as a guarded suffix, and punctuation that legitimately belongs to a URL is preserved; occurrences inside the sync window heal on the next `kbms:sync-calendar`, occurrences already older than `KBMS_ICS_WINDOW_PAST_DAYS` keep their stored value.
+      7. No PRD edit — decision `acfb777dc90ee720`.
+
+      ## Completion Criteria
+      - [ ] Full suite green; `larapilot:quality` clean
+      - [ ] `kbms:sync-calendar --sync --force` completed successfully
+      - [ ] Zero rows with `starts_at >= 2026-06-18` and a `join_url` containing `>`, count recorded for the review notes
+      - [ ] Out-of-window remainder counted and reported as accepted residue
+      - [ ] Security position recorded accurately (scheme guard, no host guard, no regression)
+      - [ ] `CHANGELOG.md` Unreleased carries the `### Fixed` entry
+
+      ## Test Data
+      - N/A — no model or schema changes; the resync writes through the existing ingestion path
+
+      ## Git Deliverables
+      - Commit: `fix(US-020): TASK-03 resync the mirror and record the healed join links`
+      - Push: `origin feature/US-020-teams-join-url-delimiter`
+      - PR: update the prepared body with TASK-03 and the verification counts
+    type: Fix
+    status: TODO
+    assignee: Alex
+    estimate_hours: 0.75
+    dependencies:
+      - TASK-02
+updated_at: '2026-09-16T11:06:05+02:00'

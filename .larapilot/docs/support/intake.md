@@ -62,3 +62,24 @@
 - **PRD:** requirement gap confirmed — FR-008 and FR-011 clarified to record that the queued job must resolve the same configuration the panel offered, and that the doctor must verify the worker's **live** configuration rather than mere reachability; PRD Revision History row added 2026-09-14
 - **Security:** No — Lars consulted. Nothing escapes a boundary and no input is trusted differently; the defect is a silent, misattributed failure across a process boundary.
 - **Housekeeping:** `app/Launcher/LauncherScript.php` carries two uncommitted duplicate `\Log::debug()` lines from the operator's own debugging, flooding `laravel.log`. Not part of the defect — remove before the fix branch.
+
+## BUG-20260916-teams-join-url-trailing-delimiter
+
+- **Reported:** 2026-09-16
+- **Severity:** High
+- **Environment:** Local (the only environment this product has)
+- **Summary:** The **Join Teams meeting** button points at a URL with one trailing character too many. The stored `join_url` ends `…%7d>` and the browser percent-encodes that `>` into the href as `%3E`, so the link resolves to a Teams URL Microsoft does not recognise. Every meeting whose join link was harvested from the `DESCRIPTION` free text is affected — **940 of 942** rows carrying a `join_url` (155 distinct URLs, occurrences spanning `2026-06-15` → `2027-03-15`).
+- **Steps to reproduce:**
+  1. Open any meeting whose Teams link came from the description, e.g. `/meetings/MDQwMDAwMDA4MjAwRTAwMDc0QzVCNzEwMUE4MkUwMDgwMDAwMDAwMDdBNjAxQ0Q4RkQzQUREMDEwMDAwMDAwMDAwMDAwMDAwMTAwMDAwMDAzNjg0QzAyRUNEMzFFNzQ3QUU2RjY3NzcxRENGM0YyRA.MjAyNi0wOS0xNlQwODowMDowMFo`.
+  2. Inspect the **Join Teams meeting** anchor (`resources/views/components/meeting/external-links.blade.php:16`) or press it.
+  3. The href ends `…%22%7d%3E` where the working Teams link ends `…%22%7d`.
+- **Expected / Actual:**
+  - Expected: `https://teams.microsoft.com/l/meetup-join/19%3ameeting_NjhkMjAyZWYtYTRkYy00MjcxLTgzNTAtZDgzMTdhMzYzNmI4%40thread.v2/0?context=%7b%22Tid%22%3a%22…%22%2c%22Oid%22%3a%22…%22%7d`
+  - Actual: the same URL with a trailing `%3E` appended.
+- **Root cause (confirmed in-session):** `app/Calendar/IcsParser.php:18` — `TEAMS_LINK_PATTERN = '#https://teams\.microsoft\.com/l/meetup-join/\S+#i'`. `\S+` is greedy over *every* non-whitespace character, so when Outlook wraps the link in its customary angle brackets (`<https://teams.microsoft.com/…>`) inside `DESCRIPTION`, the closing `>` is captured as part of the match. `readJoinUrl()` returns `$matches[0]` verbatim with no delimiter trimming. The `X-MICROSOFT-SKYPETEAMSMEETINGURL` branch above it is unaffected — it reads a structured property, which is why 2 rows are clean.
+- **Evidence:** `DB::table('calendar_events')->where('join_url','like','%>%')->count()` → **940**; `whereNotNull('join_url')->count()` → **942**. `OutlookLinkBuilder::joinUrl()` (`app/Meetings/OutlookLinkBuilder.php:34`) passes the value through `isSafeUrl()` unchanged — scheme and host are valid, so the guard has nothing to object to; it is not the defect and not a security hole.
+- **Affected spec:** US-003 (DONE — FR-001 ICS ingestion; the `join_url` capture AC). US-005 (DONE) renders it but does not produce it.
+- **Routed to:** spec-add US-020 (US-003 and US-005 are both DONE, so `spec-request-changes` was unavailable)
+- **Backfill:** **re-sync only** — operator's explicit choice, decision journal `f2afd78b2c6575f1`. `join_url` is part of the occurrence content hash (`app/Calendar/ParsedOccurrence.php:39`), so the **915** affected occurrences inside the sync window self-heal on the next `kbms:sync-calendar` once the parser is fixed. The **25** occurrences already older than `KBMS_ICS_WINDOW_PAST_DAYS` (`starts_at < 2026-06-18`) are never re-parsed and keep their malformed link permanently — accepted. No data migration, no read-time normalisation.
+- **PRD:** no gap — implementation fix only, decision journal `acfb777dc90ee720`. US-003 already requires `join_url` capture from `URL` / `X-MICROSOFT-SKYPETEAMSMEETINGURL` / a Teams link in the description; extracting it *correctly* is implied, not a new requirement.
+- **Security:** No — Lars consulted. The malformed value never escapes the Teams host, `isSafeUrl()` still constrains scheme and host, and the extra character is inert in an `href`. The defect is a broken primary action, not an injection or escape. Oliver not engaged.

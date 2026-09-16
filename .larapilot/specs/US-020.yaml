@@ -1,0 +1,68 @@
+code: US-020
+title: 'Fix: the Teams join link captures the closing angle bracket of its wrapper'
+epic:
+  code: EP-005
+  title: Maintenance
+  objective: 'Defects found after a spec reaches DONE are fixed with the same discipline as greenfield work, and the guarantee that was missing is recorded so it cannot go missing again'
+priority: HIGH
+points: 2
+status: 'IN PROGRESS'
+body: |
+  #### US-020: Fix — the Teams join link captures the closing angle bracket of its wrapper
+
+  **Epic:** EP-005 | **Priority:** HIGH | **Points:** 2 | **Status:** TODO
+  **Type:** Fix
+  **Severity:** High
+  **Security:** Lars consulted — no. The malformed value never leaves the Teams host, `OutlookLinkBuilder::isSafeUrl()` still constrains scheme and host, and the extra character is inert inside an `href`. The defect is a broken primary action, not an injection or an escape. Oliver not engaged.
+  **Related:** US-003 (ICS ingestion, DONE) — produces the value; US-005 (meeting detail, DONE) — renders it, not at fault
+
+  **Traces to:** FR-001 — the existing US-003 criterion *"`join_url` and `event_url` are captured from the `VEVENT` when present (`URL`, `X-MICROSOFT-SKYPETEAMSMEETINGURL`, or a Teams link in the description)"*. No PRD change: extracting the link correctly is implied by that criterion, not a new requirement (decision journal `acfb777dc90ee720`).
+
+  **User Story**
+  As the operator,
+  I want the **Join Teams meeting** button to open the meeting,
+  so that the one action I take from this product under time pressure does not hand me a dead Teams page thirty seconds before a call.
+
+  **Demonstrates**
+  After implementing this spec, a `VEVENT` whose `DESCRIPTION` wraps its Teams link in angle brackets yields a `join_url` with no trailing delimiter, and after one `php artisan kbms:sync-calendar` the 915 affected in-window occurrences open Teams correctly.
+
+  **Steps to Reproduce**
+  1. Open a meeting whose Teams link was harvested from the description, e.g. `/meetings/MDQwMDAwMDA4MjAwRTAwMDc0QzVCNzEwMUE4MkUwMDgwMDAwMDAwMDdBNjAxQ0Q4RkQzQUREMDEwMDAwMDAwMDAwMDAwMDAwMTAwMDAwMDAzNjg0QzAyRUNEMzFFNzQ3QUU2RjY3NzcxRENGM0YyRA.MjAyNi0wOS0xNlQwODowMDowMFo`.
+  2. Inspect the **Join Teams meeting** anchor (`resources/views/components/meeting/external-links.blade.php:16`).
+  3. The href ends `…%22%7d%3E`; the working Teams link ends `…%22%7d`. Pressing it reaches a Teams URL Microsoft does not recognise.
+
+  **Root cause**
+  `app/Calendar/IcsParser.php:18` — `TEAMS_LINK_PATTERN = '#https://teams\.microsoft\.com/l/meetup-join/\S+#i'`. `\S+` is greedy over every non-whitespace character, so when Outlook wraps the link in its customary angle brackets (`<https://teams.microsoft.com/…>`) inside `DESCRIPTION`, the closing `>` is captured into the match. `readJoinUrl()` returns `$matches[0]` verbatim with no delimiter trimming. The `X-MICROSOFT-SKYPETEAMSMEETINGURL` branch above it reads a structured property and is unaffected — which is why exactly 2 of 942 stored rows are clean.
+
+  **Test gap that let this through**
+  `tests/Fixtures/ics/cancelled.ics:10` carries the description-fallback link as **bare text** (`Join via Teams: https://…`), with no wrapper and nothing after it. `IcsParserTest::test_url_teams_link_and_teams_link_in_description_populate_join_and_event_url` therefore passes against a shape the real Outlook feed does not emit. The fixture, not only the regex, is the defect's hiding place.
+
+  **Implementation notes (for the planner, not prescriptive)**
+  - Trimming trailing delimiters is more robust than enumerating wrappers: a real feed also produces links followed by `)`, `]`, `>`, `"`, `'`, `,`, `.`, `;` and the HTML entity `&gt;`. Prefer stripping a trailing delimiter set over adding one lookahead for `>`.
+  - `DESCRIPTION` in this feed is folded and escaped iCalendar text; sabre/vobject unfolds it, but the link may still be adjacent to a literal `\n` escape or an `&gt;` depending on how the organiser's client wrote it. Whatever is chosen must not truncate a URL at a character that is legitimately part of it — `,` `;` `.` `)` all occur **inside** valid meetup-join URLs, so a blanket `rtrim()` of that set is only safe as a *trailing* strip, never a match terminator.
+  - Do **not** normalise at read time in `OutlookLinkBuilder` and do **not** add a data migration — the operator chose re-sync only (decision journal `f2afd78b2c6575f1`). The fix belongs in the parser.
+
+  **Backfill (decided — do not re-litigate)**
+  `join_url` is part of the occurrence content hash (`app/Calendar/ParsedOccurrence.php:39`), so the **915** affected occurrences with `starts_at >= 2026-06-18` self-heal on the first `kbms:sync-calendar` after the parser fix. The **25** occurrences already older than `KBMS_ICS_WINDOW_PAST_DAYS` are never re-parsed and keep their malformed link permanently — accepted by the operator, decision journal `f2afd78b2c6575f1`.
+
+  **Acceptance Criteria**
+  - [ ] A `DESCRIPTION` containing `<https://teams.microsoft.com/l/meetup-join/…%7d>` yields a `join_url` ending `%7d`, with no trailing `>`
+  - [ ] A bare, unwrapped link in `DESCRIPTION` is still captured whole and unchanged — the existing passing behaviour must not regress
+  - [ ] A link ending in a character that is legitimately part of the URL is not truncated: `…%7d` keeps its `d`, and a URL whose final path segment ends in `.` `,` `;` `)` as real syntax is preserved (Anne to pin the boundary explicitly)
+  - [ ] The `X-MICROSOFT-SKYPETEAMSMEETINGURL` branch is untouched and still takes precedence over the description scan
+  - [ ] `tests/Fixtures/ics/` gains a fixture whose description carries the link **as the real feed emits it** — angle-bracket wrapped, with text following it — and the parser test asserts against that shape
+  - [ ] Regression test covers the exact reported URL: input with the trailing `>`, expected output without it (Anne)
+  - [ ] After one `php artisan kbms:sync-calendar`, no `calendar_events` row with `starts_at >= 2026-06-18` has a `join_url` containing `>` — verified and the count reported in the review notes
+  - [ ] No security regression — `OutlookLinkBuilder::isSafeUrl()` still rejects any non-Teams or non-https value, and the trimming cannot be used to reach a different host (Lars)
+  - [ ] `php artisan larapilot:quality` (Pint + Larastan level 5) passes
+  - [ ] **Edge case:** a `DESCRIPTION` with **two** Teams links returns the first, as today — the fix must not change which link wins, only where it ends
+  - [ ] **Edge case:** a description whose link is immediately followed by the HTML entity `&gt;` rather than a literal `>` produces a clean URL
+  - [ ] **Edge case:** a `join_url` of exactly the minimum shape (`…/meetup-join/` plus one character) survives trimming without being emptied
+status_history:
+  -
+    status: PLANNED
+    at: '2026-09-16T11:06:05+02:00'
+  -
+    status: 'IN PROGRESS'
+    at: '2026-09-16T11:21:50+02:00'
+rework: false
